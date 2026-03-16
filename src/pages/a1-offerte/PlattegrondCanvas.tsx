@@ -61,7 +61,7 @@ function boundingSize(room: Room): { w: number; h: number } {
     const outerRadius = (room.length * PX_PER_M) / 2;
     return { w: outerRadius * 2, h: outerRadius };
   }
-  if (shapeType === 'plus' || shapeType === 'boog' || shapeType === 'ruit') {
+  if (shapeType === 'plus' || shapeType === 'ruit') {
     return { w: room.length * PX_PER_M, h: room.width * PX_PER_M };
   }
   if (shapeType === 'rect' && isNonRect(room)) {
@@ -504,7 +504,7 @@ export default function PlattegrondCanvas({
             const isSelected = room.id === selectedRoomId;
             const area = shapeType === 'circle' ? Math.PI * (room.length / 2) ** 2 : shapeType === 'halfcircle' ? (Math.PI * (room.length / 2) ** 2) / 2 : room.length * room.width;
             const points = qb ? qb.pts : getShapePoints(room.shape, w, h);
-            const showWallNumbers = shapeType === 'rect' || shapeType === 'plus' || shapeType === 'boog' || shapeType === 'ruit';
+            const showWallNumbers = shapeType === 'rect' || shapeType === 'plus' || shapeType === 'ruit';
             const isLooseSpecial = !room.isSubRoom && room.roomType !== 'normal';
             const subRoomCount = rooms.filter(r => r.parentRoomId === room.id).length;
             const parentRoom = room.parentRoomId ? rooms.find(r => r.id === room.parentRoomId) : null;
@@ -656,23 +656,6 @@ export default function PlattegrondCanvas({
                       context.lineTo(0, h - ty);
                       context.lineTo(0, ty);
                       context.lineTo(tx, ty);
-                      context.closePath();
-                      context.fillStrokeShape(shape);
-                    }}
-                    fill={roomFill}
-                    stroke={stroke}
-                    strokeWidth={isSelected ? 2 : 1}
-                    opacity={strokeOpacity}
-                    dash={dashPattern}
-                  />
-                )}
-                {shapeType === 'boog' && (
-                  <Shape
-                    sceneFunc={(context: any, shape: any) => {
-                      context.beginPath();
-                      context.moveTo(w * 0.3, 0);
-                      context.bezierCurveTo(w, 0, w, h, w * 0.3, h);
-                      context.bezierCurveTo(0, h * 0.8, 0, h * 0.2, w * 0.3, 0);
                       context.closePath();
                       context.fillStrokeShape(shape);
                     }}
@@ -967,7 +950,7 @@ export default function PlattegrondCanvas({
                   );
                 })}
 
-                {isSelected && onUpdateRoom && !room.isFinalized && (shapeType === 'rect' || shapeType === 'plus' || shapeType === 'boog' || shapeType === 'ruit') && !placingElement && (() => {
+                {isSelected && onUpdateRoom && !room.isFinalized && (shapeType === 'rect' || shapeType === 'plus' || shapeType === 'ruit') && !placingElement && (() => {
                   const handleSize = 5;
                   const handles: { type: HandleType; x: number; y: number }[] = [
                     { type: 'nw', x: 0, y: 0 },

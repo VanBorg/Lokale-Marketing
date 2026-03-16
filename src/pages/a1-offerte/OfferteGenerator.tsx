@@ -147,6 +147,18 @@ export default function OfferteGenerator() {
   }, []);
 
   const goTo = useCallback((tab: 1 | 2 | 3 | 4) => setActiveTab(tab), []);
+  const tabContentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = tabContentRef.current;
+    if (!el) return;
+    const scrollToCenter = () => {
+      el.scrollLeft = Math.max(0, (el.scrollWidth - el.clientWidth) / 2);
+      el.scrollTop = Math.max(0, (el.scrollHeight - el.clientHeight) / 2);
+    };
+    const id = requestAnimationFrame(scrollToCenter);
+    return () => cancelAnimationFrame(id);
+  }, [activeTab]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)]">
@@ -201,40 +213,45 @@ export default function OfferteGenerator() {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden rounded-b-xl border border-t-0 border-dark-border">
-        {activeTab === 1 && (
-          <TabPlattegrond
-            floors={floors}
-            setFloors={setFloors}
-            activeFloorId={activeFloorId}
-            setActiveFloorId={setActiveFloorId}
-            setActiveTab={goTo}
-          />
-        )}
-        {activeTab === 2 && (
-          <TabElementen
-            floors={floors}
-            setFloors={setFloors}
-            activeFloorId={activeFloorId}
-            setActiveFloorId={setActiveFloorId}
-            setActiveTab={goTo}
-          />
-        )}
-        {activeTab === 3 && (
-          <TabWerkzaamheden
-            floors={floors}
-            setFloors={setFloors}
-            activeFloorId={activeFloorId}
-            setActiveFloorId={setActiveFloorId}
-            setActiveTab={goTo}
-          />
-        )}
-        {activeTab === 4 && (
-          <TabPreview
-            floors={floors}
-            setActiveTab={goTo}
-          />
-        )}
+      <div
+        ref={tabContentRef}
+        className="flex-1 min-h-0 overflow-auto rounded-b-xl border border-t-0 border-dark-border flex flex-col items-center"
+      >
+        <div className="w-full max-w-[1800px] flex-1 flex flex-col min-h-0 min-w-0">
+          {activeTab === 1 && (
+            <TabPlattegrond
+              floors={floors}
+              setFloors={setFloors}
+              activeFloorId={activeFloorId}
+              setActiveFloorId={setActiveFloorId}
+              setActiveTab={goTo}
+            />
+          )}
+          {activeTab === 2 && (
+            <TabElementen
+              floors={floors}
+              setFloors={setFloors}
+              activeFloorId={activeFloorId}
+              setActiveFloorId={setActiveFloorId}
+              setActiveTab={goTo}
+            />
+          )}
+          {activeTab === 3 && (
+            <TabWerkzaamheden
+              floors={floors}
+              setFloors={setFloors}
+              activeFloorId={activeFloorId}
+              setActiveFloorId={setActiveFloorId}
+              setActiveTab={goTo}
+            />
+          )}
+          {activeTab === 4 && (
+            <TabPreview
+              floors={floors}
+              setActiveTab={goTo}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

@@ -13,7 +13,12 @@ const shapeIcons: Record<string, React.ReactNode> = {
   ),
   'l-vorm': (
     <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M3 3 H13 V12 H21 V21 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3 3 H12 V12 H21 V21 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
+  boog: (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M12 3 H21 V21 H12 V12 H3 V3 H12 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
   't-vorm': (
@@ -39,11 +44,6 @@ const shapeIcons: Record<string, React.ReactNode> = {
   'i-vorm': (
     <svg viewBox="0 0 24 24" className="w-6 h-6">
       <path d="M4 5 H20 V9 H15 V15 H20 V19 H4 V15 H9 V9 H4 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  boog: (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M9 3 C20 3 20 21 9 21 C2 18 2 6 9 3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
 };

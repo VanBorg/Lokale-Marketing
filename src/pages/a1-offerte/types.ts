@@ -105,14 +105,14 @@ export function calcTotalWalls(room: Room): number {
 
 export const SHAPES = [
   { id: 'rechthoek', label: 'Rechthoek' },
-  { id: 'langwerpig', label: 'Langwerpig' },
   { id: 'l-vorm', label: 'L-vorm' },
+  { id: 'boog', label: 'Omgekeerde L' },
+  { id: 'langwerpig', label: 'Langwerpig' },
   { id: 'i-vorm', label: 'I-profiel' },
   { id: 't-vorm', label: 'T-vorm' },
   { id: 'u-vorm', label: 'U-vorm' },
   { id: 'trapezium', label: 'Trapezium' },
   { id: 'plus-vorm', label: 'Plus-vorm' },
-  { id: 'boog', label: 'Boog' },
 ] as const;
 
 export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> = {
@@ -135,7 +135,7 @@ export function getShapeType(shape: string): Room['shapeType'] {
   if (shape === 'cirkel') return 'circle';
   if (shape === 'halve-cirkel') return 'halfcircle';
   if (shape === 'plus-vorm') return 'plus';
-  if (shape === 'boog') return 'boog';
+  if (shape === 'boog') return 'rect'; // getekend als L-vorm (polygoon)
   if (shape === 'ruit') return 'ruit';
   return 'rect';
 }
@@ -192,7 +192,8 @@ export function getShapePoints(shape: string, w: number, h: number): number[] {
     case 'ruit':
       return [w / 2, 0, w, h / 2, w / 2, h, 0, h / 2];
     case 'boog':
-      return [0, 0, w, 0, w, h, 0, h];
+      // Omgekeerde L: haak linksboven; extra hoekpunt (0,0) voorkomt schuine hoek
+      return [w * 0.5, 0, w, 0, w, h, w * 0.5, h, w * 0.5, h * 0.5, 0, h * 0.5, 0, 0];
     case 'langwerpig':
     case 'rechthoek':
     default:
