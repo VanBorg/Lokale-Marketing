@@ -31,11 +31,13 @@ export type WallsCustomized = { top: boolean; right: boolean; bottom: boolean; l
 
 export type RoomType = 'normal' | 'wc' | 'badkamer' | 'kast' | 'berging';
 
+export type AttachedWall = 'top' | 'right' | 'bottom' | 'left' | 'inside' | null;
+
 export type Room = {
   id: string;
   name: string;
   shape: string;
-  shapeType: 'rect' | 'circle' | 'halfcircle' | 'plus';
+  shapeType: 'rect' | 'circle' | 'halfcircle' | 'plus' | 'boog' | 'ruit';
   rotation: number;
   length: number;
   width: number;
@@ -45,11 +47,18 @@ export type Room = {
   elements: RoomElement[];
   walls: RoomWalls;
   wallsCustomized: WallsCustomized;
+  wallLengths: { top: number; right: number; bottom: number; left: number };
   slopedCeiling: boolean;
   highestPoint: number;
+  ridgeCeiling: boolean;
+  ridgeHeight: number;
   isFinalized: boolean;
   tasks: RoomTask[];
   roomType: RoomType;
+  parentRoomId: string | null;
+  isSubRoom: boolean;
+  attachedWall: AttachedWall;
+  effectiveArea: number;
 };
 
 export type Floor = { id: string; name: string; rooms: Room[] };
@@ -105,6 +114,8 @@ export const SHAPES = [
   { id: 'cirkel', label: 'Cirkel' },
   { id: 'halve-cirkel', label: 'Halve cirkel' },
   { id: 'vijfhoek', label: 'Vijfhoek' },
+  { id: 'boog', label: 'Boog' },
+  { id: 'ruit', label: 'Ruit' },
 ] as const;
 
 export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> = {
@@ -118,12 +129,16 @@ export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> =
   cirkel: { length: 4, width: 4 },
   'halve-cirkel': { length: 4, width: 2 },
   vijfhoek: { length: 4, width: 3 },
+  boog: { length: 4, width: 3 },
+  ruit: { length: 4, width: 4 },
 };
 
 export function getShapeType(shape: string): Room['shapeType'] {
   if (shape === 'cirkel') return 'circle';
   if (shape === 'halve-cirkel') return 'halfcircle';
   if (shape === 'plus-vorm') return 'plus';
+  if (shape === 'boog') return 'boog';
+  if (shape === 'ruit') return 'ruit';
   return 'rect';
 }
 
@@ -164,6 +179,10 @@ export function getShapePoints(shape: string, w: number, h: number): number[] {
       }
       return pts;
     }
+    case 'ruit':
+      return [w / 2, 0, w, h / 2, w / 2, h, 0, h / 2];
+    case 'boog':
+      return [0, 0, w, 0, w, h, 0, h];
     case 'langwerpig':
     case 'rechthoek':
     default:
@@ -184,3 +203,84 @@ export const ELEMENT_DEFAULTS: Record<
   badkuip: { label: 'Badkuip', width: 1.7, height: 0.8 },
   toilet: { label: 'Toilet', width: 0.4, height: 0.7 },
 };
+
+export const PX_PER_M = 40;
+
+function roomBounds(room: Room) {
+  const w = room.length * PX_PER_M;
+  const h = room.width * PX_PER_M;
+  return { left: room.x, top: room.y, right: room.x + w, bottom: room.y + h, w, h };
+}
+
+export function isOverlapping(container: Room, inner: Room): boolean {
+  const c = roomBounds(container);
+  const i = roomBounds(inner);
+  return i.left >= c.left && i.top >= c.top && i.right <= c.right && i.bottom <= c.bottom;
+}
+
+export function isAdjacent(roomA: Room, roomB: Room, threshold: number = 5): boolean {
+  const a = roomBounds(roomA);
+  const b = roomBounds(roomB);
+
+  const overlapX = a.left < b.right && a.right > b.left;
+  const overlapY = a.top < b.bottom && a.bottom > b.top;
+
+  if (overlapX && Math.abs(a.bottom - b.top) <= threshold) return true;
+  if (overlapX && Math.abs(a.top - b.bottom) <= threshold) return true;
+  if (overlapY && Math.abs(a.right - b.left) <= threshold) return true;
+  if (overlapY && Math.abs(a.left - b.right) <= threshold) return true;
+
+  return false;
+}
+
+export function computeQuadCorners(wl: Room['wallLengths']): number[] {
+  const top = wl.top * PX_PER_M;
+  const right = wl.right * PX_PER_M;
+  const bottom = wl.bottom * PX_PER_M;
+  const left = wl.left * PX_PER_M;
+
+  // TL is always at origin
+  const tlX = 0, tlY = 0;
+  // TR is always at (top, 0)
+  const trX = top, trY = 0;
+
+  if (top === bottom) {
+    return [tlX, tlY, trX, trY, trX, right, tlX, left];
+  }
+
+  // For non-rectangular: solve BL position so left wall and bottom wall lengths are satisfied
+  // BL = (blX, left), BR = (blX + bottom, brY)
+  // left wall: sqrt(blX^2 + left^2) = left (already the height, so blX offset needed)
+  // We place BL directly below TL offset to make left wall = left pixels tall
+  // right wall: from TR to BR
+  const blX = 0;
+  const blY = left;
+  const brX = bottom;
+  // Right wall length must equal 'right' pixels, starting from TR
+  // brY = sqrt(right^2 - (brX - trX)^2) but only if valid
+  const dx = brX - trX;
+  const rSq = right * right - dx * dx;
+  if (rSq < 0) {
+    // Geometry impossible, fall back to rectangle
+    return [tlX, tlY, trX, trY, trX, right, tlX, left];
+  }
+  const brY = Math.sqrt(rSq);
+
+  return [tlX, tlY, trX, trY, brX, brY, blX, blY];
+}
+
+export function detectAttachedWall(special: Room, normal: Room): AttachedWall {
+  const s = roomBounds(special);
+  const n = roomBounds(normal);
+
+  const dTop = Math.abs(s.bottom - n.top);
+  const dBottom = Math.abs(s.top - n.bottom);
+  const dLeft = Math.abs(s.right - n.left);
+  const dRight = Math.abs(s.left - n.right);
+
+  const min = Math.min(dTop, dBottom, dLeft, dRight);
+  if (min === dTop) return 'top';
+  if (min === dBottom) return 'bottom';
+  if (min === dLeft) return 'left';
+  return 'right';
+}

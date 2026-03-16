@@ -51,6 +51,16 @@ const shapeIcons: Record<string, React.ReactNode> = {
       <path d="M12 4 L20 10 L17 20 L7 20 L4 10 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
+  boog: (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M9 3 C20 3 20 21 9 21 C2 18 2 6 9 3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
+  ruit: (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M12 3 L21 12 L12 21 L3 12 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
 };
 
 const ROTATIONS = [0, 90, 180, 270] as const;

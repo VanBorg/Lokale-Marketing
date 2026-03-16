@@ -1,11 +1,41 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType } from '../types';
+import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall } from '../types';
 import RoomShapes from '../RoomShapes';
 import RoomProperties from '../RoomProperties';
 import PlattegrondCanvas from '../PlattegrondCanvas';
 import EtageTabBar from '../components/EtageTabBar';
 
 let counter = 0;
+
+function detectSubRooms(rooms: Room[]): Room[] {
+  const normalRooms = rooms.filter(r => r.roomType === 'normal');
+  let updated = rooms.map(r => {
+    if (r.roomType === 'normal') return r;
+
+    for (const normal of normalRooms) {
+      if (isOverlapping(normal, r)) {
+        return { ...r, parentRoomId: normal.id, isSubRoom: true, attachedWall: 'inside' as const };
+      }
+    }
+    for (const normal of normalRooms) {
+      if (isAdjacent(r, normal)) {
+        const wall = detectAttachedWall(r, normal);
+        return { ...r, parentRoomId: normal.id, isSubRoom: true, attachedWall: wall };
+      }
+    }
+    return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null };
+  });
+
+  updated = updated.map(room => {
+    const insideChildren = updated.filter(
+      r => r.parentRoomId === room.id && r.attachedWall === 'inside',
+    );
+    const subtracted = insideChildren.reduce((sum, c) => sum + c.length * c.width, 0);
+    return { ...room, effectiveArea: room.length * room.width - subtracted };
+  });
+
+  return updated;
+}
 
 type PlacingElement = { type: RoomElement['type']; width: number; height: number } | null;
 
@@ -78,7 +108,7 @@ export default function TabPlattegrond({
       const dims = SHAPE_DEFAULTS[shape] ?? { length: 4, width: 3 };
       const newRoom: Room = {
         id: crypto.randomUUID(),
-        name: `Kamer ${counter}`,
+        name: `Kamer${counter}`,
         shape,
         shapeType: getShapeType(shape),
         rotation: 0,
@@ -88,15 +118,22 @@ export default function TabPlattegrond({
         x: 50 + rooms.length * 30,
         y: 50 + rooms.length * 30,
         elements: [],
+        wallLengths: { top: dims.length, right: dims.width, bottom: dims.length, left: dims.width },
         walls: createDefaultWalls(2.6),
         wallsCustomized: createDefaultWallsCustomized(),
         slopedCeiling: false,
         highestPoint: 2.6,
+        ridgeCeiling: false,
+        ridgeHeight: 2.6,
         isFinalized: false,
         tasks: [],
         roomType: 'normal',
+        parentRoomId: null,
+        isSubRoom: false,
+        attachedWall: null,
+        effectiveArea: dims.length * dims.width,
       };
-      updateActiveFloorRooms(prev => [...prev, newRoom]);
+      updateActiveFloorRooms(prev => detectSubRooms([...prev, newRoom]));
       setSelectedRoomId(newRoom.id);
       setPlacingElement(null);
     },
@@ -117,15 +154,22 @@ export default function TabPlattegrond({
         x: 50 + rooms.length * 30,
         y: 50 + rooms.length * 30,
         elements: [],
+        wallLengths: { top: length, right: width, bottom: length, left: width },
         walls: createDefaultWalls(2.6),
         wallsCustomized: createDefaultWallsCustomized(),
         slopedCeiling: false,
         highestPoint: 2.6,
+        ridgeCeiling: false,
+        ridgeHeight: 2.6,
         isFinalized: false,
         tasks: [],
         roomType: type,
+        parentRoomId: null,
+        isSubRoom: false,
+        attachedWall: null,
+        effectiveArea: length * width,
       };
-      updateActiveFloorRooms(prev => [...prev, newRoom]);
+      updateActiveFloorRooms(prev => detectSubRooms([...prev, newRoom]));
       setSelectedRoomId(newRoom.id);
       setPlacingElement(null);
     },
@@ -134,14 +178,31 @@ export default function TabPlattegrond({
 
   const updateRoom = useCallback(
     (id: string, updates: Partial<Room>) => {
-      updateActiveFloorRooms(prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)));
+      updateActiveFloorRooms(prev =>
+        detectSubRooms(prev.map(r => {
+          if (r.id !== id) return r;
+          const merged = { ...r, ...updates };
+          if (updates.wallLengths) {
+            merged.length = updates.wallLengths.top;
+            merged.width = updates.wallLengths.right;
+          } else {
+            if (updates.length !== undefined) {
+              merged.wallLengths = { ...merged.wallLengths, top: updates.length, bottom: merged.wallLengths.bottom === r.length ? updates.length : merged.wallLengths.bottom };
+            }
+            if (updates.width !== undefined) {
+              merged.wallLengths = { ...merged.wallLengths, right: updates.width, left: merged.wallLengths.left === r.width ? updates.width : merged.wallLengths.left };
+            }
+          }
+          return merged;
+        })),
+      );
     },
     [updateActiveFloorRooms],
   );
 
   const deleteRoom = useCallback(
     (id: string) => {
-      updateActiveFloorRooms(prev => prev.filter(r => r.id !== id));
+      updateActiveFloorRooms(prev => detectSubRooms(prev.filter(r => r.id !== id)));
       setSelectedRoomId(null);
       setPlacingElement(null);
     },
@@ -150,7 +211,9 @@ export default function TabPlattegrond({
 
   const moveRoom = useCallback(
     (id: string, x: number, y: number) => {
-      updateActiveFloorRooms(prev => prev.map(r => (r.id === id ? { ...r, x, y } : r)));
+      updateActiveFloorRooms(prev =>
+        detectSubRooms(prev.map(r => (r.id === id ? { ...r, x, y } : r))),
+      );
     },
     [updateActiveFloorRooms],
   );
@@ -201,7 +264,7 @@ export default function TabPlattegrond({
       y: selectedRoom.y + 20,
     };
     copy.elements = copy.elements.map(el => ({ ...el, id: crypto.randomUUID() }));
-    updateActiveFloorRooms(prev => [...prev, copy]);
+    updateActiveFloorRooms(prev => detectSubRooms([...prev, copy]));
     setSelectedRoomId(copy.id);
   }, [selectedRoom, updateActiveFloorRooms]);
 
@@ -234,7 +297,7 @@ export default function TabPlattegrond({
       if (isCut && cutRoomId) {
         next = next.filter(r => r.id !== cutRoomId);
       }
-      return next;
+      return detectSubRooms(next);
     });
     setSelectedRoomId(pasted.id);
     if (isCut) {
@@ -307,7 +370,7 @@ export default function TabPlattegrond({
             />
 
             {selectedRoom && (
-              <RoomProperties room={selectedRoom} onUpdate={updateRoom} onDelete={deleteRoom} />
+              <RoomProperties room={selectedRoom} rooms={rooms} onUpdate={updateRoom} onDelete={deleteRoom} />
             )}
           </div>
 

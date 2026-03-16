@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Stage as KonvaStage, Layer, Line, Rect, Arc, Circle, Text, Group } from 'react-konva';
 import Konva from 'konva';
 import { Trash2 } from 'lucide-react';
-import { Floor, RoomElement, ELEMENT_DEFAULTS, getShapePoints, getShapeType } from '../types';
+import { Floor, Room, RoomElement, ELEMENT_DEFAULTS, getShapePoints, getShapeType, computeQuadCorners, ROOM_TYPE_ICONS } from '../types';
 import { useTheme } from '../../../hooks/useTheme';
 import KamerSelector from '../components/KamerSelector';
 
@@ -61,6 +61,29 @@ function renderElementContent(
   };
   const fill = elementColors[type] ?? '#9CA3AF';
   return <Rect x={0} y={0} width={isHorizontal ? elW : thickness} height={isHorizontal ? thickness : elW} fill={fill} cornerRadius={2} />;
+}
+
+function miniBounds(room: Room): { w: number; h: number } {
+  const st = room.shapeType ?? getShapeType(room.shape);
+  if (st === 'circle') { const d = room.length * PX_PER_M; return { w: d, h: d }; }
+  if (st === 'halfcircle') { const r = (room.length * PX_PER_M) / 2; return { w: r * 2, h: r }; }
+  const wl = room.wallLengths;
+  if (st === 'rect' && wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
+    const pts = computeQuadCorners(wl);
+    let mx = 0, my = 0;
+    for (let i = 0; i < pts.length; i += 2) { mx = Math.max(mx, pts[i]); my = Math.max(my, pts[i + 1]); }
+    return { w: mx, h: my };
+  }
+  return { w: room.length * PX_PER_M, h: room.width * PX_PER_M };
+}
+
+function miniPoints(room: Room, w: number, h: number): number[] {
+  const wl = room.wallLengths;
+  const st = room.shapeType ?? getShapeType(room.shape);
+  if (st === 'rect' && wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
+    return computeQuadCorners(wl);
+  }
+  return getShapePoints(room.shape, w, h);
 }
 
 const elementTypes = Object.keys(ELEMENT_DEFAULTS) as RoomElement['type'][];
@@ -161,6 +184,49 @@ export default function TabElementen({
     [updateRoomElements, selectedElementId],
   );
 
+  const [miniOpen, setMiniOpen] = useState(true);
+  const miniContainerRef = useRef<HTMLDivElement>(null);
+  const [miniWidth, setMiniWidth] = useState(400);
+
+  useEffect(() => {
+    if (!miniContainerRef.current) return;
+    const measure = () => {
+      const rect = miniContainerRef.current!.getBoundingClientRect();
+      setMiniWidth(rect.width);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(miniContainerRef.current);
+    return () => observer.disconnect();
+  }, [miniOpen]);
+
+  const childRoomsOfSelected = useMemo(
+    () => selectedRoom ? rooms.filter(r => r.parentRoomId === selectedRoom.id) : [],
+    [rooms, selectedRoom],
+  );
+
+  const miniData = useMemo(() => {
+    if (rooms.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const r of rooms) {
+      const { w, h } = miniBounds(r);
+      minX = Math.min(minX, r.x);
+      minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + w);
+      maxY = Math.max(maxY, r.y + h);
+    }
+    const totalW = maxX - minX || 1;
+    const totalH = maxY - minY || 1;
+    const miniH = 180;
+    const pad = 20;
+    const sX = (miniWidth - pad * 2) / totalW;
+    const sY = (miniH - pad * 2) / totalH;
+    const s = Math.min(sX, sY, 3);
+    const oX = (miniWidth - totalW * s) / 2 - minX * s;
+    const oY = (miniH - totalH * s) / 2 - minY * s;
+    return { s, oX, oY, miniH };
+  }, [rooms, miniWidth]);
+
   const roomW = selectedRoom ? selectedRoom.length * PX_PER_M : 0;
   const shapeType = selectedRoom ? (selectedRoom.shapeType ?? getShapeType(selectedRoom.shape)) : 'rect';
   const roomH = selectedRoom
@@ -195,6 +261,11 @@ export default function TabElementen({
           </div>
         ) : (
           <>
+            {childRoomsOfSelected.length > 0 && (
+              <div className="mx-4 mt-3 mb-1 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400">
+                Deze kamer bevat: {childRoomsOfSelected.map(c => c.name).join(', ')}
+              </div>
+            )}
             <div className="p-4 border-b border-dark-border">
               <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-3">
                 Element toevoegen
@@ -216,6 +287,63 @@ export default function TabElementen({
                   );
                 })}
               </div>
+            </div>
+
+            {/* Mini plattegrond overview */}
+            <div className="border-b border-dark-border">
+              <button
+                type="button"
+                onClick={() => setMiniOpen(p => !p)}
+                className="w-full px-4 py-2 text-[11px] font-medium text-light/50 hover:text-light/80 transition-colors cursor-pointer text-left"
+              >
+                {miniOpen ? '▲ Plattegrond verbergen' : '▼ Plattegrond tonen'}
+              </button>
+              {miniOpen && miniData && (
+                <div ref={miniContainerRef} style={{ height: miniData.miniH, background: canvasColors.stageBg }}>
+                  <Stage width={miniWidth} height={miniData.miniH} listening={false}>
+                    <Layer>
+                      <Group x={miniData.oX} y={miniData.oY} scaleX={miniData.s} scaleY={miniData.s}>
+                        {rooms.map(r => {
+                          const st = r.shapeType ?? getShapeType(r.shape);
+                          const { w: rw, h: rh } = miniBounds(r);
+                          const isSel = r.id === selectedRoomId;
+                          const pts = miniPoints(r, rw, rh);
+                          const fill = r.isSubRoom ? '#0D1F2D' : canvasColors.roomFill;
+                          const strokeColor = isSel ? canvasColors.roomStrokeSelected : (r.isSubRoom ? '#1A6BFF' : canvasColors.roomStroke);
+                          return (
+                            <Group key={r.id} x={r.x} y={r.y}>
+                              {st === 'circle' ? (
+                                <Circle x={rw / 2} y={rh / 2} radius={rw / 2} fill={fill} stroke={strokeColor} strokeWidth={isSel ? 2 / miniData.s : 1 / miniData.s} />
+                              ) : st === 'halfcircle' ? (
+                                <Arc x={rw / 2} y={rh / 2} innerRadius={0} outerRadius={rw / 2} angle={180} rotation={-90} fill={fill} stroke={strokeColor} strokeWidth={isSel ? 2 / miniData.s : 1 / miniData.s} />
+                              ) : (
+                                <Line points={pts} closed fill={fill} stroke={strokeColor} strokeWidth={isSel ? 2 / miniData.s : 1 / miniData.s} />
+                              )}
+                              <Text
+                                text={r.name}
+                                x={4}
+                                y={4}
+                                fontSize={10 / miniData.s}
+                                fill={isSel ? canvasColors.textSelected : canvasColors.text}
+                                opacity={isSel ? 1 : 0.5}
+                                fontFamily="DM Sans, sans-serif"
+                              />
+                              {r.roomType !== 'normal' && (
+                                <Text text={ROOM_TYPE_ICONS[r.roomType] || ''} x={rw - 16 / miniData.s} y={4} fontSize={12 / miniData.s} />
+                              )}
+                            </Group>
+                          );
+                        })}
+                      </Group>
+                    </Layer>
+                  </Stage>
+                </div>
+              )}
+              {miniOpen && !miniData && (
+                <div ref={miniContainerRef} className="px-4 py-6 text-center text-xs text-light/30">
+                  Geen kamers om te tonen
+                </div>
+              )}
             </div>
 
             <div ref={canvasContainerRef} className="flex-1 min-h-[300px]" style={{ background: canvasColors.stageBg }}>

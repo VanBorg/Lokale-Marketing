@@ -4,6 +4,7 @@ import RoomWalls from './RoomWalls';
 
 interface RoomPropertiesProps {
   room: Room;
+  rooms: Room[];
   onUpdate: (id: string, updates: Partial<Room>) => void;
   onDelete: (id: string) => void;
 }
@@ -13,14 +14,25 @@ function parseNum(value: string, fallback: number): number {
   return isNaN(n) ? fallback : n;
 }
 
-export default function RoomProperties({ room, onUpdate, onDelete }: RoomPropertiesProps) {
+export default function RoomProperties({ room, rooms, onUpdate, onDelete }: RoomPropertiesProps) {
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showSubRoomConfirm, setShowSubRoomConfirm] = useState(false);
   const floor = room.length * room.width;
   const walls = calcTotalWalls(room);
+  const childRooms = rooms.filter(r => r.parentRoomId === room.id);
+  const insideChildren = childRooms.filter(r => r.attachedWall === 'inside');
+  const insideSubtraction = insideChildren.reduce((sum, c) => sum + c.length * c.width, 0);
+  const netFloor = floor - insideSubtraction;
+  const parentRoom = room.parentRoomId ? rooms.find(r => r.id === room.parentRoomId) : null;
 
   let ceiling = floor;
-  if (room.slopedCeiling && room.highestPoint > room.height) {
+  if (room.ridgeCeiling && room.ridgeHeight > room.height) {
+    const halfWidth = room.width / 2;
+    const rise = room.ridgeHeight - room.height;
+    const slopeLength = Math.sqrt(halfWidth * halfWidth + rise * rise);
+    ceiling = 2 * room.length * slopeLength;
+  } else if (room.slopedCeiling && room.highestPoint > room.height) {
     const angle = Math.atan((room.highestPoint - room.height) / room.width);
     ceiling = floor / Math.cos(angle);
   }
@@ -58,9 +70,6 @@ export default function RoomProperties({ room, onUpdate, onDelete }: RoomPropert
               disabled={room.isFinalized}
               className={`${inputCls} ${room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
-            <span className="text-[10px] text-light/30">
-              = {(room.length * 40).toFixed(0)}px op canvas
-            </span>
           </div>
           <div>
             <label className="block text-xs text-light/50 mb-1">Breedte (m)</label>
@@ -73,9 +82,6 @@ export default function RoomProperties({ room, onUpdate, onDelete }: RoomPropert
               disabled={room.isFinalized}
               className={`${inputCls} ${room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
-            <span className="text-[10px] text-light/30">
-              = {(room.width * 40).toFixed(0)}px op canvas
-            </span>
           </div>
           <div>
             <label className="block text-xs text-light/50 mb-1">Hoogte (m)</label>
@@ -105,10 +111,27 @@ export default function RoomProperties({ room, onUpdate, onDelete }: RoomPropert
         </div>
 
         <div className="rounded-lg bg-dark-card border border-dark-border p-3 space-y-1.5">
-          <div className="flex justify-between text-xs">
-            <span className="text-light/40">Vloer</span>
-            <span className="text-light/60">{floor.toFixed(1)} m²</span>
-          </div>
+          {insideChildren.length > 0 ? (
+            <>
+              <div className="flex justify-between text-xs">
+                <span className="text-light/40">Vloer (bruto)</span>
+                <span className="text-light/60">{floor.toFixed(1)} m²</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-blue-400/60">Aftrek sub-ruimtes</span>
+                <span className="text-blue-400/60">-{insideSubtraction.toFixed(1)} m²</span>
+              </div>
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-light/60">Vloer (netto)</span>
+                <span className="text-light/80">{netFloor.toFixed(1)} m²</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between text-xs">
+              <span className="text-light/40">Vloer</span>
+              <span className="text-light/60">{floor.toFixed(1)} m²</span>
+            </div>
+          )}
           <div className="flex justify-between text-xs">
             <span className="text-light/40">Wanden</span>
             <span className="text-light/60">{walls.toFixed(1)} m²</span>
@@ -118,25 +141,57 @@ export default function RoomProperties({ room, onUpdate, onDelete }: RoomPropert
             <span className="text-light/60">{ceiling.toFixed(1)} m²</span>
           </div>
 
-          <div className="pt-1.5 border-t border-dark-border">
+          <div className="pt-1.5 border-t border-dark-border space-y-1.5">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={room.slopedCeiling}
-                onChange={(e) => onUpdate(room.id, { slopedCeiling: e.target.checked })}
+                onChange={(e) => onUpdate(room.id, {
+                  slopedCeiling: e.target.checked,
+                  ...(e.target.checked ? { ridgeCeiling: false } : {}),
+                })}
                 className="accent-accent w-3.5 h-3.5"
               />
               <span className="text-xs text-light/50">Schuin plafond</span>
             </label>
 
             {room.slopedCeiling && (
-              <div className="mt-2">
+              <div className="ml-5">
                 <label className="block text-[10px] text-light/40 mb-0.5">Hoogste punt (m)</label>
                 <input
                   type="number" step={0.1} min={room.height} value={room.highestPoint || ''}
                   onChange={(e) => {
                     const v = e.target.value;
                     onUpdate(room.id, { highestPoint: v === '' ? 0 : parseNum(v, 0) });
+                  }}
+                  disabled={room.isFinalized}
+                  className={`w-full px-2 py-1 rounded bg-dark border border-dark-border
+                    text-light text-xs focus:outline-none focus:border-accent ${room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''}`}
+                />
+              </div>
+            )}
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={room.ridgeCeiling ?? false}
+                onChange={(e) => onUpdate(room.id, {
+                  ridgeCeiling: e.target.checked,
+                  ...(e.target.checked ? { slopedCeiling: false } : {}),
+                })}
+                className="accent-accent w-3.5 h-3.5"
+              />
+              <span className="text-xs text-light/50">Punt plafond</span>
+            </label>
+
+            {room.ridgeCeiling && (
+              <div className="ml-5">
+                <label className="block text-[10px] text-light/40 mb-0.5">Nokhoogte (hoogste punt) (m)</label>
+                <input
+                  type="number" step={0.1} min={room.height} value={room.ridgeHeight || ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onUpdate(room.id, { ridgeHeight: v === '' ? 0 : parseNum(v, 0) });
                   }}
                   disabled={room.isFinalized}
                   className={`w-full px-2 py-1 rounded bg-dark border border-dark-border
@@ -163,6 +218,14 @@ export default function RoomProperties({ room, onUpdate, onDelete }: RoomPropert
                 );
                 if (!allWallsValid) {
                   setFinalizeError('Vul alle muurhoogtes in. Hoogte moet groter zijn dan 0.');
+                  return;
+                }
+                if (room.isSubRoom && parentRoom && !parentRoom.isFinalized) {
+                  setFinalizeError(`Let op: '${room.name}' is onderdeel van '${parentRoom.name}'. Maak eerst de hoofdkamer definitief.`);
+                  return;
+                }
+                if (childRooms.length > 0) {
+                  setShowSubRoomConfirm(true);
                   return;
                 }
                 onUpdate(room.id, { isFinalized: true });
@@ -229,6 +292,42 @@ export default function RoomProperties({ room, onUpdate, onDelete }: RoomPropert
                   hover:bg-green-500/30 transition-colors cursor-pointer"
               >
                 Ja
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSubRoomConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowSubRoomConfirm(false)}>
+          <div
+            className="rounded-xl bg-dark-card border border-dark-border p-5 shadow-xl max-w-sm mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm text-light/90 mb-4">
+              Je kamer &apos;{room.name}&apos; bevat {childRooms.length} aanliggende ruimte(s): {childRooms.map(c => c.name).join(', ')}.
+              Deze worden meegenomen als onderdeel van deze kamer. Wil je doorgaan?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowSubRoomConfirm(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium
+                  bg-dark-hover text-light/60 border border-dark-border
+                  hover:text-light transition-colors cursor-pointer"
+              >
+                Nee
+              </button>
+              <button
+                onClick={() => {
+                  onUpdate(room.id, { isFinalized: true });
+                  childRooms.forEach(c => onUpdate(c.id, { isFinalized: true }));
+                  setShowSubRoomConfirm(false);
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-medium
+                  bg-green-500/20 text-green-400 border border-green-500/30
+                  hover:bg-green-500/30 transition-colors cursor-pointer"
+              >
+                Ja, doorgaan
               </button>
             </div>
           </div>
