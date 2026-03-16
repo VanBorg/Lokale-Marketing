@@ -107,21 +107,19 @@ export const SHAPES = [
   { id: 'rechthoek', label: 'Rechthoek' },
   { id: 'langwerpig', label: 'Langwerpig' },
   { id: 'l-vorm', label: 'L-vorm' },
+  { id: 'i-vorm', label: 'I-profiel' },
   { id: 't-vorm', label: 'T-vorm' },
   { id: 'u-vorm', label: 'U-vorm' },
   { id: 'trapezium', label: 'Trapezium' },
   { id: 'plus-vorm', label: 'Plus-vorm' },
-  { id: 'cirkel', label: 'Cirkel' },
-  { id: 'halve-cirkel', label: 'Halve cirkel' },
-  { id: 'vijfhoek', label: 'Vijfhoek' },
   { id: 'boog', label: 'Boog' },
-  { id: 'ruit', label: 'Ruit' },
 ] as const;
 
 export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> = {
   rechthoek: { length: 4, width: 3 },
   langwerpig: { length: 6, width: 2 },
   'l-vorm': { length: 4, width: 3 },
+  'i-vorm': { length: 4, width: 3 },
   't-vorm': { length: 5, width: 4 },
   'u-vorm': { length: 5, width: 4 },
   trapezium: { length: 4, width: 3 },
@@ -146,6 +144,18 @@ export function getShapePoints(shape: string, w: number, h: number): number[] {
   switch (shape) {
     case 'l-vorm':
       return [0, 0, w * 0.5, 0, w * 0.5, h * 0.5, w, h * 0.5, w, h, 0, h];
+    case 'i-vorm': {
+      const barH = h * 0.25;
+      const stemW = w * 0.3;
+      const sx = (w - stemW) / 2;
+      const ex = sx + stemW;
+      return [
+        0, 0, w, 0, w, barH, ex, barH,
+        ex, h - barH, w, h - barH, w, h,
+        0, h, 0, h - barH, sx, h - barH,
+        sx, barH, 0, barH,
+      ];
+    }
     case 't-vorm':
       return [
         0, 0, w, 0, w, h * 0.4, w * 0.67, h * 0.4,

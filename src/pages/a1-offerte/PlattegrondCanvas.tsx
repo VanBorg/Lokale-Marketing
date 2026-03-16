@@ -769,23 +769,52 @@ export default function PlattegrondCanvas({
                     fontFamily="DM Sans, sans-serif"
                   />
                 )}
-                <Text
-                  text={
-                    room.isSubRoom && parentRoom
-                      ? `${room.name}\n(onderdeel van ${parentRoom.name})`
+                {(() => {
+                  const labelText =
+                    room.isSubRoom
+                      ? room.name
                       : isLooseSpecial
                         ? `${room.name}\n(los)`
-                        : `${room.name}\n${area.toFixed(1)} m²`
-                  }
-                  x={8}
-                  y={8}
-                  rotation={-rot}
-                  fontSize={12}
-                  fontFamily="DM Sans, sans-serif"
-                  fill={room.isSubRoom ? '#1A6BFF' : isSelected ? canvasColors.textSelected : canvasColors.text}
-                  opacity={isSelected ? 1 : 0.6}
-                  lineHeight={1.4}
-                />
+                        : `${room.name}\n${area.toFixed(1)} m²`;
+                  const lines = labelText.split('\n');
+                  const lineCount = lines.length;
+                  const maxLineLen = Math.max(...lines.map((l) => l.length), 1);
+                  const padH = 10;
+                  const padV = 6;
+                  const boxW = Math.min(Math.max(maxLineLen * 7 + padH * 2, 56), w - 16);
+                  const boxH = lineCount * 15 + padV * 2;
+                  return (
+                    <Group x={cx} y={cy} offsetX={boxW / 2} offsetY={boxH / 2} rotation={-rot}>
+                      <Rect
+                        x={0}
+                        y={0}
+                        width={boxW}
+                        height={boxH}
+                        fill={canvasColors.dimensionLabelBg}
+                        stroke={canvasColors.dimensionLabelText}
+                        strokeWidth={0.5}
+                        cornerRadius={4}
+                        opacity={1}
+                      />
+                      <Text
+                        text={labelText}
+                        x={0}
+                        y={(boxH - lineCount * 15) / 2}
+                        width={boxW}
+                        fontSize={12}
+                        fontFamily="DM Sans, sans-serif"
+                        fill={
+                          room.isSubRoom
+                            ? '#1A6BFF'
+                            : canvasColors.dimensionLabelText
+                        }
+                        align="center"
+                        lineHeight={1.25}
+                        listening={false}
+                      />
+                    </Group>
+                  );
+                })()}
                 {showWallNumbers && (
                   <>
                     <Text text="1" x={w / 2 - 4} y={2} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />

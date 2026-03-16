@@ -36,29 +36,14 @@ const shapeIcons: Record<string, React.ReactNode> = {
       <path d="M9 3 H15 V9 H21 V15 H15 V21 H9 V15 H3 V9 H9 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
-  cirkel: (
+  'i-vorm': (
     <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  'halve-cirkel': (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M3 14 A9 9 0 0 1 21 14 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  vijfhoek: (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M12 4 L20 10 L17 20 L7 20 L4 10 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M4 5 H20 V9 H15 V15 H20 V19 H4 V15 H9 V9 H4 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
   boog: (
     <svg viewBox="0 0 24 24" className="w-6 h-6">
       <path d="M9 3 C20 3 20 21 9 21 C2 18 2 6 9 3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  ruit: (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M12 3 L21 12 L12 21 L3 12 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
 };
