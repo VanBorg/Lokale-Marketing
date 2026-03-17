@@ -1,6 +1,20 @@
-import React from 'react';
-import { ZoomIn, ZoomOut, Undo2, Redo2, Copy, Scissors, ClipboardPaste, CopyPlus } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ZoomIn, ZoomOut, Undo2, Redo2, Copy, Scissors, ClipboardPaste, CopyPlus, Keyboard } from 'lucide-react';
 import { Room } from '../types';
+
+const SHORTCUTS = [
+  { keys: ['Ctrl', 'Z'], description: 'Ongedaan maken' },
+  { keys: ['Ctrl', 'Shift', 'Z'], description: 'Opnieuw' },
+  { keys: ['Ctrl', 'Y'], description: 'Opnieuw' },
+  { keys: ['S'], description: 'Centreer canvas' },
+  { keys: ['Esc'], description: 'Plaatsing annuleren' },
+  { keys: ['Delete'], description: 'Kamer verwijderen' },
+  { keys: ['Ctrl', 'Klik'], description: 'Multi-selectie' },
+  { keys: ['Shift', 'Klik'], description: 'Reeks selecteren' },
+  { keys: ['Ctrl', 'Sleep'], description: 'Marquee selectie' },
+  { keys: ['Scroll'], description: 'Zoom in/uit' },
+  { keys: ['W'], description: 'Wizard: ruimte opvullen' },
+];
 
 interface CanvasToolbarProps {
   rooms: Room[];
@@ -20,6 +34,55 @@ interface CanvasToolbarProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetZoom: () => void;
+}
+
+function ShortcutsButton() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        title="Sneltoetsen"
+        className="p-1.5 rounded text-light/40 hover:text-light hover:bg-dark-hover transition-colors cursor-pointer"
+      >
+        <Keyboard size={15} />
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 mb-2 w-64 rounded-xl bg-dark-card border border-dark-border shadow-xl p-3 z-50">
+          <p className="text-xs font-semibold text-light mb-2">Sneltoetsen</p>
+          <div className="flex flex-col gap-1.5">
+            {SHORTCUTS.map((s, i) => (
+              <div key={i} className="flex items-center justify-between text-[11px]">
+                <span className="text-light/50">{s.description}</span>
+                <span className="flex items-center gap-0.5">
+                  {s.keys.map((k, j) => (
+                    <kbd
+                      key={j}
+                      className="min-w-[22px] px-1.5 py-0.5 rounded bg-dark-hover border border-dark-border text-light/70 text-center text-[10px] font-mono leading-tight"
+                    >
+                      {k}
+                    </kbd>
+                  ))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function CanvasToolbar({
@@ -96,6 +159,8 @@ export default function CanvasToolbar({
           <span>Plafond: <span className="text-light">{totals.ceiling.toFixed(1)} m²</span></span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          <ShortcutsButton />
+          <div className="w-px h-4 bg-dark-border mx-1" />
           {onUndo && (
             <button
               type="button"

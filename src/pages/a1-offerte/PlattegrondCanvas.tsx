@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef, useMemo } from 'react';
-import { Stage as KonvaStage, Layer, Rect } from 'react-konva';
+import { Stage as KonvaStage, Layer, Rect, Line } from 'react-konva';
 import Konva from 'konva';
 import { calcTotalWalls, ensureVertices, syncRoomFromVertices } from './types';
 import { useTheme } from '../../hooks/useTheme';
-import { WallId, DraggingHandle, DraggingVertex, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps } from './canvas/canvasTypes';
-import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize } from './canvas/canvasUtils';
+import { WallId, DraggingHandle, DraggingVertex, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
+import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
 import CanvasGrid from './canvas/CanvasGrid';
 import CanvasRoom from './canvas/CanvasRoom';
 import CanvasToolbar from './canvas/CanvasToolbar';
+import WizardWand from './canvas/WizardWand';
 
 const Stage = KonvaStage as unknown as React.ComponentType<any>;
 
@@ -40,11 +41,17 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { onCancelPlacing?.(); return; }
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.key === 's' || e.key === 'S') {
-        const tag = (document.activeElement as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         e.preventDefault();
         goToCenterRef.current();
+      }
+      if (e.key === 'w' || e.key === 'W') {
+        if (wizardGapsRef.current.length > 0) {
+          e.preventDefault();
+          handleWizardFillRef.current(wizardGapsRef.current[0]);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -65,6 +72,8 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const internalSelectRef = useRef(false);
   const justFinishedDragRef = useRef(false);
   const [modifierHeld, setModifierHeld] = useState(false);
+  const [wizardGaps, setWizardGaps] = useState<GapInfo[]>([]);
+  const [wizardPreview, setWizardPreview] = useState<{ vertices: number[] } | null>(null);
 
   const setDraggingHandle = useCallback((handle: DraggingHandle) => {
     if (handle && !draggingHandle) beginBatch?.();
@@ -103,6 +112,13 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       return next.size === prev.size ? prev : next;
     });
   }, [rooms]);
+
+  useEffect(() => {
+    if (!selectedRoomId) { setWizardGaps([]); return; }
+    const room = rooms.find(r => r.id === selectedRoomId);
+    if (!room || room.isFinalized) { setWizardGaps([]); return; }
+    setWizardGaps(detectRoomGaps(room, rooms));
+  }, [rooms, selectedRoomId]);
 
   const totals = rooms.reduce(
     (acc, r) => ({ floor: acc.floor + r.length * r.width, walls: acc.walls + calcTotalWalls(r), ceiling: acc.ceiling + r.length * r.width }),
@@ -396,6 +412,42 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     });
   }, [rooms, beginBatch]);
 
+  const handleWizardFill = useCallback((gap: GapInfo) => {
+    if (!onUpdateRoom) return;
+    const target = rooms.find(r => r.id === gap.roomId);
+    if (!target) return;
+    beginBatch?.();
+    const fill = computeWizardFill(target, gap);
+    onUpdateRoom(gap.roomId, {
+      vertices: fill.vertices,
+      x: fill.x,
+      y: fill.y,
+      length: fill.length,
+      width: fill.width,
+      wallLengths: fill.wallLengths,
+    });
+    endBatch?.();
+    setWizardGaps([]);
+    setWizardPreview(null);
+  }, [rooms, onUpdateRoom, beginBatch, endBatch]);
+
+  const wizardGapsRef = useRef(wizardGaps);
+  wizardGapsRef.current = wizardGaps;
+  const handleWizardFillRef = useRef(handleWizardFill);
+  handleWizardFillRef.current = handleWizardFill;
+
+  const handleWizardHoverStart = useCallback((gap: GapInfo) => {
+    const target = rooms.find(r => r.id === gap.roomId);
+    if (!target) return;
+    const fill = computeWizardFill(target, gap);
+    const pts = fill.vertices.flatMap(v => [fill.x + v.x * PX_PER_M, fill.y + v.y * PX_PER_M]);
+    setWizardPreview({ vertices: pts });
+  }, [rooms]);
+
+  const handleWizardHoverEnd = useCallback(() => {
+    setWizardPreview(null);
+  }, []);
+
   const combinedMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (marquee) {
       const stage = e.target.getStage();
@@ -417,7 +469,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const isDraggingVertex = draggingVertex !== null;
 
   return (
-    <div ref={containerRef} className="flex-1 flex flex-col min-h-0">
+    <div ref={containerRef} className="flex-1 flex flex-col min-h-0 relative">
       <Stage
         width={size.width} height={size.height} scaleX={scale} scaleY={scale}
         x={stagePos.x} y={stagePos.y}
@@ -468,7 +520,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               onPlaceElement={onPlaceElement} onSetSelectedElement={setSelectedElementId}
               onSetDraggingHandle={setDraggingHandle}
               onSnapHighlight={setSnapHighlight}
-              onDragStartWalls={(roomId, walls) => setDragFromWalls({ roomId, walls })}
+              onDragStartWalls={(roomId, walls) => { setDragFromWalls({ roomId, walls }); setWizardGaps([]); setWizardPreview(null); }}
               onDragEndRoom={() => setDragFromWalls(null)}
               onVertexHandleMouseDown={(vi, wx, wy) => handleVertexHandleMouseDown(room.id, vi, wx, wy)}
             />
@@ -478,6 +530,17 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
             if (!r) return null;
             return <Rect x={r.x} y={r.y} width={r.w} height={r.h} fill="#FF5C1A22" stroke="#FF5C1A" strokeWidth={1} opacity={0.8} listening={false} />;
           })()}
+          {wizardPreview && (
+            <Line
+              points={wizardPreview.vertices}
+              closed
+              fill="rgba(245, 158, 11, 0.15)"
+              stroke="rgba(245, 158, 11, 0.6)"
+              strokeWidth={1.5}
+              dash={[6, 4]}
+              listening={false}
+            />
+          )}
           {marquee && (
             <Rect
               x={Math.min(marquee.startX, marquee.endX)}
@@ -493,6 +556,21 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
           )}
         </Layer>
       </Stage>
+      {wizardGaps.length > 0 && !draggingHandle && !isDraggingVertex && !marquee && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ height: size.height }}>
+          {wizardGaps.map(gap => (
+            <WizardWand
+              key={gap.referenceRoomId}
+              gap={gap}
+              scale={scale}
+              stagePos={stagePos}
+              onFill={handleWizardFill}
+              onHoverStart={handleWizardHoverStart}
+              onHoverEnd={handleWizardHoverEnd}
+            />
+          ))}
+        </div>
+      )}
       <CanvasToolbar
         rooms={rooms} selectedRoom={selectedRoom} clipboard={clipboard}
         placingElement={!!placingElement} scale={scale} totals={totals}

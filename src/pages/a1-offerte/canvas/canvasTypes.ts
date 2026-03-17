@@ -41,6 +41,26 @@ export type DraggingVertex = {
   startRotation: number;
 } | null;
 
+export type FacingEdgePair = {
+  targetEdgeIdx: number;
+  refEdgeIdx: number;
+  gapPx: number;
+  overlapPx: number;
+  axis: 'x' | 'y';
+  targetPos: number;
+  refPos: number;
+  overlapMin: number;
+  overlapMax: number;
+};
+
+export type GapInfo = {
+  roomId: string;
+  referenceRoomId: string;
+  gapAreaM2: number;
+  wizardWorldPos: { x: number; y: number };
+  edgePairs: FacingEdgePair[];
+};
+
 export interface PlattegrondCanvasProps {
   rooms: Room[];
   selectedRoomId: string | null;

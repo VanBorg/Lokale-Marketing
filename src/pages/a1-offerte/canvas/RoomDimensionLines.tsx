@@ -80,23 +80,24 @@ function VertexDimensionLines({
               stroke={lineColor}
               strokeWidth={0.5}
             />
-            <Rect
-              x={mx + ox - 14}
-              y={my + oy - 7}
-              width={28}
-              height={14}
-              fill={canvasColors.dimensionLabelBg}
-              cornerRadius={2}
-            />
-            <Text
-              text={label}
-              x={mx + ox - 12}
-              y={my + oy - 5}
-              fontSize={10}
-              fill={canvasColors.dimensionLabelText}
-              fontFamily="DM Sans, sans-serif"
-              rotation={-rot}
-            />
+            <Group x={mx + ox} y={my + oy} rotation={-rot}>
+              <Rect
+                x={-14}
+                y={-7}
+                width={28}
+                height={14}
+                fill={canvasColors.dimensionLabelBg}
+                cornerRadius={2}
+              />
+              <Text
+                text={label}
+                x={-12}
+                y={-5}
+                fontSize={10}
+                fill={canvasColors.dimensionLabelText}
+                fontFamily="DM Sans, sans-serif"
+              />
+            </Group>
           </React.Fragment>
         );
       })}
@@ -129,16 +130,20 @@ export default function RoomDimensionLines({
           <Line points={[0, cy, w, cy]} stroke={lineColor} strokeWidth={0.5} dash={[3, 2]} />
           <Line points={[0, cy - 4, 0, cy + 4]} stroke={lineColor} strokeWidth={0.5} />
           <Line points={[w, cy - 4, w, cy + 4]} stroke={lineColor} strokeWidth={0.5} />
-          <Rect x={cx - 14} y={cy - 7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
-          <Text text={room.length.toFixed(1)} x={cx - 12} y={cy - 5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+          <Group x={cx} y={cy} rotation={-rot}>
+            <Rect x={-14} y={-7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
+            <Text text={room.length.toFixed(1)} x={-12} y={-5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+          </Group>
         </>
       ) : shapeType === 'halfcircle' ? (
         <>
           <Line points={[0, -20, w, -20]} stroke={lineColor} strokeWidth={0.5} />
           <Line points={[0, -28, 0, -12]} stroke={lineColor} strokeWidth={0.5} />
           <Line points={[w, -28, w, -12]} stroke={lineColor} strokeWidth={0.5} />
-          <Rect x={cx - 14} y={-27} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
-          <Text text={room.length.toFixed(1)} x={cx - 12} y={-25} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+          <Group x={cx} y={-20} rotation={-rot}>
+            <Rect x={-14} y={-7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
+            <Text text={room.length.toFixed(1)} x={-12} y={-5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+          </Group>
         </>
       ) : hasVertices ? (
         <VertexDimensionLines room={room} rot={rot} lineColor={lineColor} canvasColors={canvasColors} />
@@ -153,22 +158,28 @@ export default function RoomDimensionLines({
             <Line points={[0, -20, w, -20]} stroke={lineColor} strokeWidth={0.5} />
             <Line points={[0, -28, 0, -12]} stroke={lineColor} strokeWidth={0.5} />
             <Line points={[w, -28, w, -12]} stroke={lineColor} strokeWidth={0.5} />
-            <Rect x={cx - 14} y={-27} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
-            <Text text={topLabel} x={cx - 12} y={-25} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+            <Group x={cx} y={-20} rotation={-rot}>
+              <Rect x={-14} y={-7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
+              <Text text={topLabel} x={-12} y={-5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+            </Group>
 
             <Line points={[w + 20, 0, w + 20, h]} stroke={lineColor} strokeWidth={0.5} />
             <Line points={[w + 12, 0, w + 28, 0]} stroke={lineColor} strokeWidth={0.5} />
             <Line points={[w + 12, h, w + 28, h]} stroke={lineColor} strokeWidth={0.5} />
-            <Rect x={w + 12} y={cy - 7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
-            <Text text={rightLabel} x={w + 14} y={cy - 5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" rotation={-rot} />
+            <Group x={w + 26} y={cy} rotation={-rot}>
+              <Rect x={-14} y={-7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
+              <Text text={rightLabel} x={-12} y={-5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+            </Group>
 
             {wl.bottom !== wl.top && (
               <>
                 <Line points={[0, h + 20, w, h + 20]} stroke={lineColor} strokeWidth={0.5} />
                 <Line points={[0, h + 12, 0, h + 28]} stroke={lineColor} strokeWidth={0.5} />
                 <Line points={[w, h + 12, w, h + 28]} stroke={lineColor} strokeWidth={0.5} />
-                <Rect x={cx - 14} y={h + 13} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
-                <Text text={bottomLabel} x={cx - 12} y={h + 15} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+                <Group x={cx} y={h + 20} rotation={-rot}>
+                  <Rect x={-14} y={-7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
+                  <Text text={bottomLabel} x={-12} y={-5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+                </Group>
               </>
             )}
 
@@ -177,8 +188,10 @@ export default function RoomDimensionLines({
                 <Line points={[-20, 0, -20, h]} stroke={lineColor} strokeWidth={0.5} />
                 <Line points={[-28, 0, -12, 0]} stroke={lineColor} strokeWidth={0.5} />
                 <Line points={[-28, h, -12, h]} stroke={lineColor} strokeWidth={0.5} />
-                <Rect x={-40} y={cy - 7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
-                <Text text={leftLabel} x={-38} y={cy - 5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" rotation={-rot} />
+                <Group x={-26} y={cy} rotation={-rot}>
+                  <Rect x={-14} y={-7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
+                  <Text text={leftLabel} x={-12} y={-5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
+                </Group>
               </>
             )}
           </>

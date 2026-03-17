@@ -198,6 +198,7 @@ export default function CanvasRoom({
         isSelected={isSelected}
         room={room}
         isLooseSpecial={isLooseSpecial}
+        isSpecialRoom={isSpecialRoom}
         finalizedStripeGreen={room.isFinalized ? finalizedStripeGreen : undefined}
         finalizedStripeLineWidth={room.isFinalized ? finalizedStripeLineWidth : undefined}
         finalizedSolidGreen={room.isFinalized ? finalizedSolidGreen : undefined}

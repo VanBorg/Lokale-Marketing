@@ -17,6 +17,7 @@ interface RoomShapeProps {
   isSelected: boolean;
   room: Room;
   isLooseSpecial: boolean;
+  isSpecialRoom: boolean;
   finalizedStripeGreen?: string;
   finalizedStripeLineWidth?: number;
   finalizedSolidGreen?: string;
@@ -36,6 +37,7 @@ export default function RoomShape({
   isSelected,
   room,
   isLooseSpecial,
+  isSpecialRoom,
   finalizedStripeGreen,
   finalizedStripeLineWidth,
   finalizedSolidGreen,
@@ -175,7 +177,7 @@ export default function RoomShape({
           dash={dashPattern}
         />
       )}
-      {room.isFinalized && finalizedSolidGreen != null && isLooseSpecial && (
+      {room.isFinalized && finalizedSolidGreen != null && isSpecialRoom && (
         <Shape
           sceneFunc={(ctx: any) => {
             ctx.save();
@@ -196,7 +198,7 @@ export default function RoomShape({
           listening={false}
         />
       )}
-      {room.isFinalized && finalizedStripeGreen != null && finalizedStripeLineWidth != null && !isLooseSpecial && (
+      {room.isFinalized && finalizedStripeGreen != null && finalizedStripeLineWidth != null && !isSpecialRoom && (
         <Shape
           sceneFunc={(ctx: any) => {
             ctx.save();

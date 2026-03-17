@@ -149,7 +149,7 @@ export default function RoomLabels({
                 if (len < 1) return null;
                 const inX = -(dy / len) * 12;
                 const inY = (dx / len) * 12;
-                return (
+                  return (
                   <Text
                     key={`wn-${i}`}
                     text={String(i + 1)}
@@ -158,6 +158,7 @@ export default function RoomLabels({
                     fontSize={10}
                     fill={canvasColors.wallNumber}
                     fontFamily="DM Sans, sans-serif"
+                    rotation={-rot}
                   />
                 );
               })}
@@ -166,10 +167,10 @@ export default function RoomLabels({
         }
         return (
           <>
-            <Text text="1" x={w / 2 - 4} y={2} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
-            <Text text="2" x={w - 12} y={h / 2 - 5} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
-            <Text text="3" x={w / 2 - 4} y={h - 14} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
-            <Text text="4" x={2} y={h / 2 - 5} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
+            <Text text="1" x={w / 2 - 4} y={2} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" rotation={-rot} />
+            <Text text="2" x={w - 12} y={h / 2 - 5} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" rotation={-rot} />
+            <Text text="3" x={w / 2 - 4} y={h - 14} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" rotation={-rot} />
+            <Text text="4" x={2} y={h / 2 - 5} fontSize={10} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" rotation={-rot} />
           </>
         );
       })()}

@@ -14,6 +14,15 @@ module.exports = {
       fontFamily: {
         sans: ['"DM Sans"', 'sans-serif'],
       },
+      keyframes: {
+        'wizard-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(245, 158, 11, 0.5)' },
+          '50%': { boxShadow: '0 0 0 6px rgba(245, 158, 11, 0)' },
+        },
+      },
+      animation: {
+        'wizard-pulse': 'wizard-pulse 2s ease-in-out infinite',
+      },
     },
   },
   plugins: [],
