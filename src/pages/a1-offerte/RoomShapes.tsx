@@ -46,6 +46,36 @@ const shapeIcons: Record<string, React.ReactNode> = {
       <path d="M4 5 H20 V9 H15 V15 H20 V19 H4 V15 H9 V9 H4 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
+  'z-vorm': (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M3 3 H12 V10 H21 V21 H12 V14 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
+  'z-vorm-inv': (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M12 3 H21 V14 H12 V21 H3 V10 H12 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
+  's-vorm': (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M3 8 H12 V3 H21 V16 H12 V21 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
+  's-vorm-inv': (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M3 3 H12 V8 H21 V21 H12 V16 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
+  vijfhoek: (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M12 3 L21 10 L18 21 H6 L3 10 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
+  'halve-cirkel': (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M3 19 A9 9 0 0 1 21 19 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
 };
 
 const ROTATIONS = [0, 90, 180, 270] as const;
@@ -91,25 +121,6 @@ export default function RoomShapes({
         ))}
       </div>
 
-      {onAddSpecialRoom && (
-        <div className="mt-4">
-          <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
-            Speciale ruimtes
-          </h3>
-          <div className="grid grid-cols-2 gap-1.5">
-            {SPECIAL_ROOMS.map(sr => (
-              <button
-                key={sr.type}
-                onClick={() => onAddSpecialRoom(sr.type, sr.label, sr.length, sr.width)}
-                className="px-2 py-1.5 rounded-lg text-xs font-medium bg-dark-card border border-dark-border text-blue-400 hover:border-blue-400/40 hover:bg-blue-400/5 transition-colors cursor-pointer"
-              >
-                + {sr.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {selectedRoom && (
         <div className="mt-4">
           <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
@@ -130,6 +141,25 @@ export default function RoomShapes({
                 `}
               >
                 {deg}°
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {onAddSpecialRoom && (
+        <div className="mt-4">
+          <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
+            Speciale ruimtes
+          </h3>
+          <div className="grid grid-cols-2 gap-1.5">
+            {SPECIAL_ROOMS.map(sr => (
+              <button
+                key={sr.type}
+                onClick={() => onAddSpecialRoom(sr.type, sr.label, sr.length, sr.width)}
+                className="px-2 py-1.5 rounded-lg text-xs font-medium bg-dark-card border border-dark-border text-accent hover:border-accent/40 hover:bg-accent/5 transition-colors cursor-pointer"
+              >
+                + {sr.label}
               </button>
             ))}
           </div>

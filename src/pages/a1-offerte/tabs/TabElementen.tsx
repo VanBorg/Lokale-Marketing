@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Stage as KonvaStage, Layer, Line, Rect, Arc, Circle, Text, Group } from 'react-konva';
 import Konva from 'konva';
 import { Trash2 } from 'lucide-react';
-import { Floor, Room, RoomElement, ELEMENT_DEFAULTS, getShapePoints, getShapeType, computeQuadCorners, ROOM_TYPE_ICONS } from '../types';
+import { Floor, Room, RoomElement, ELEMENT_DEFAULTS, getShapePoints, getShapeType, computeQuadCorners, ROOM_TYPE_ICONS, ensureVertices, verticesToPoints, verticesBoundingBox } from '../types';
 import { useTheme } from '../../../hooks/useTheme';
 import KamerSelector from '../components/KamerSelector';
 
@@ -35,8 +35,8 @@ function renderElementContent(
     else { arcX = 0; arcY = elW / 2; arcAngle = 0; }
     return (
       <>
-        <Rect x={0} y={0} width={isHorizontal ? elW : thickness} height={isHorizontal ? thickness : elW} fill="#3B82F6" cornerRadius={1} />
-        <Arc x={arcX} y={arcY} innerRadius={0} outerRadius={arcRadius} angle={90} rotation={arcAngle} fill="rgba(59,130,246,0.15)" stroke="#3B82F6" strokeWidth={0.5} />
+        <Rect x={0} y={0} width={isHorizontal ? elW : thickness} height={isHorizontal ? thickness : elW} fill="#FF5C1A" cornerRadius={1} />
+        <Arc x={arcX} y={arcY} innerRadius={0} outerRadius={arcRadius} angle={90} rotation={arcAngle} fill="rgba(255,92,26,0.15)" stroke="#FF5C1A" strokeWidth={0.5} />
       </>
     );
   }
@@ -67,6 +67,10 @@ function miniBounds(room: Room): { w: number; h: number } {
   const st = room.shapeType ?? getShapeType(room.shape);
   if (st === 'circle') { const d = room.length * PX_PER_M; return { w: d, h: d }; }
   if (st === 'halfcircle') { const r = (room.length * PX_PER_M) / 2; return { w: r * 2, h: r }; }
+  if (room.vertices && room.vertices.length >= 3) {
+    const bb = verticesBoundingBox(room.vertices);
+    return { w: bb.w * PX_PER_M, h: bb.h * PX_PER_M };
+  }
   const wl = room.wallLengths;
   if (st === 'rect' && wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
     const pts = computeQuadCorners(wl);
@@ -78,8 +82,11 @@ function miniBounds(room: Room): { w: number; h: number } {
 }
 
 function miniPoints(room: Room, w: number, h: number): number[] {
-  const wl = room.wallLengths;
   const st = room.shapeType ?? getShapeType(room.shape);
+  if (room.vertices && room.vertices.length >= 3) {
+    return verticesToPoints(ensureVertices(room));
+  }
+  const wl = room.wallLengths;
   if (st === 'rect' && wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
     return computeQuadCorners(wl);
   }
@@ -262,7 +269,7 @@ export default function TabElementen({
         ) : (
           <>
             {childRoomsOfSelected.length > 0 && (
-              <div className="mx-4 mt-3 mb-1 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400">
+              <div className="mx-4 mt-3 mb-1 px-3 py-2 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent">
                 Deze kamer bevat: {childRoomsOfSelected.map(c => c.name).join(', ')}
               </div>
             )}
@@ -308,8 +315,8 @@ export default function TabElementen({
                           const { w: rw, h: rh } = miniBounds(r);
                           const isSel = r.id === selectedRoomId;
                           const pts = miniPoints(r, rw, rh);
-                          const fill = r.isSubRoom ? '#0D1F2D' : canvasColors.roomFill;
-                          const strokeColor = isSel ? canvasColors.roomStrokeSelected : (r.isSubRoom ? '#1A6BFF' : canvasColors.roomStroke);
+                          const fill = r.isSubRoom ? canvasColors.subRoomFill : canvasColors.roomFill;
+                          const strokeColor = isSel ? canvasColors.roomStrokeSelected : (r.isSubRoom ? canvasColors.subRoomStroke : canvasColors.roomStroke);
                           return (
                             <Group key={r.id} x={r.x} y={r.y}>
                               {st === 'circle' ? (
@@ -440,7 +447,7 @@ export default function TabElementen({
                           }}
                         >
                           {renderElementContent(el.type, el.wall, elW)}
-                          <Rect x={0} y={0} width={bw} height={bh} fill="transparent" stroke={isElSelected ? '#FF5C1A' : 'rgba(255,255,255,0.4)'} strokeWidth={isElSelected ? 2 : 1} />
+                          <Rect x={0} y={0} width={bw} height={bh} fill="transparent" stroke={isElSelected ? '#FF5C1A' : canvasColors.elementStrokeUnselected} strokeWidth={isElSelected ? 2 : 1} />
                           {isElSelected && (
                             <>
                               <Rect x={-3} y={-3} width={6} height={6} fill="#FF5C1A" />

@@ -1,4 +1,4 @@
-import { Room, getShapeType, computeQuadCorners } from '../types';
+import { Room, Vertex, getShapeType, computeQuadCorners, ensureVertices, verticesBoundingBox, normalizeVertices, syncRoomFromVertices } from '../types';
 import { WallId, HandleType, SnapResult, PX_PER_M, SNAP_THRESHOLD, SNAP_THRESHOLD_SPECIAL } from './canvasTypes';
 
 export function clamp(v: number, min: number, max: number) {
@@ -19,12 +19,31 @@ export function nearestWall(px: number, py: number, w: number, h: number): { wal
 }
 
 export function isNonRect(room: Room): boolean {
+  if (room.vertices && room.vertices.length >= 3) {
+    if (room.vertices.length !== 4) return true;
+    for (let i = 0; i < 4; i++) {
+      const a = room.vertices[i];
+      const b = room.vertices[(i + 1) % 4];
+      if (Math.abs(a.y - b.y) >= 0.001 && Math.abs(a.x - b.x) >= 0.001) return true;
+    }
+    return false;
+  }
   const wl = room.wallLengths;
   if (!wl) return false;
   return wl.top !== wl.bottom || wl.left !== wl.right;
 }
 
+export function vertexBounds(room: Room): { w: number; h: number; pts: number[] } {
+  const verts = ensureVertices(room);
+  const bb = verticesBoundingBox(verts);
+  const pts = verts.flatMap(v => [v.x * PX_PER_M, v.y * PX_PER_M]);
+  return { w: bb.w * PX_PER_M, h: bb.h * PX_PER_M, pts };
+}
+
 export function quadBounds(room: Room): { w: number; h: number; pts: number[] } {
+  if (room.vertices && room.vertices.length >= 3) {
+    return vertexBounds(room);
+  }
   const wl = room.wallLengths;
   const pts = computeQuadCorners(wl);
   let maxX = 0, maxY = 0;
@@ -44,6 +63,10 @@ export function boundingSize(room: Room): { w: number; h: number } {
   if (shapeType === 'halfcircle') {
     const outerRadius = (room.length * PX_PER_M) / 2;
     return { w: outerRadius * 2, h: outerRadius };
+  }
+  if (room.vertices && room.vertices.length >= 3) {
+    const bb = verticesBoundingBox(room.vertices);
+    return { w: bb.w * PX_PER_M, h: bb.h * PX_PER_M };
   }
   if (shapeType === 'plus' || shapeType === 'ruit') {
     return { w: room.length * PX_PER_M, h: room.width * PX_PER_M };
@@ -259,35 +282,74 @@ export function computeHandleDrag(
   startRoom: Room,
   rawDx: number,
   rawDy: number,
-): { x: number; y: number; wallLengths: Room['wallLengths'] } {
+): { x: number; y: number; wallLengths: Room['wallLengths']; vertices?: Vertex[]; length: number; width: number } {
   const rot = startRoom.rotation || 0;
   const rad = -(rot * Math.PI) / 180;
   const dx = rawDx * Math.cos(rad) - rawDy * Math.sin(rad);
   const dy = rawDx * Math.sin(rad) + rawDy * Math.cos(rad);
-  const wl = startRoom.wallLengths ?? { top: startRoom.length, right: startRoom.width, bottom: startRoom.length, left: startRoom.width };
+
+  const verts = ensureVertices(startRoom);
+  const bb = verticesBoundingBox(verts);
+  const oldW = Math.max(bb.w, 0.1);
+  const oldH = Math.max(bb.h, 0.1);
+  const dM = 1 / PX_PER_M;
+
+  let addW = 0;
+  let addH = 0;
   let newX = startRoom.x;
   let newY = startRoom.y;
-  const newWl = { ...wl };
+
   const isEdge = handle === 'n' || handle === 's' || handle === 'e' || handle === 'w';
   if (isEdge) {
-    const dM = 1 / PX_PER_M;
-    if (handle === 'n') { newWl.left = Math.max(0.1, wl.left - dy * dM); newWl.right = Math.max(0.1, wl.right - dy * dM); newY = startRoom.y + rawDy; }
-    else if (handle === 's') { newWl.left = Math.max(0.1, wl.left + dy * dM); newWl.right = Math.max(0.1, wl.right + dy * dM); }
-    else if (handle === 'e') { newWl.top = Math.max(0.1, wl.top + dx * dM); newWl.bottom = Math.max(0.1, wl.bottom + dx * dM); }
-    else { newWl.top = Math.max(0.1, wl.top - dx * dM); newWl.bottom = Math.max(0.1, wl.bottom - dx * dM); newX = startRoom.x + rawDx; }
+    if (handle === 'n') { addH = -dy * dM; newY = startRoom.y + rawDy; }
+    else if (handle === 's') { addH = dy * dM; }
+    else if (handle === 'e') { addW = dx * dM; }
+    else { addW = -dx * dM; newX = startRoom.x + rawDx; }
   } else {
-    const dM = 1 / PX_PER_M;
-    let addW = 0, addH = 0;
     if (handle === 'se') { addW = dx * dM; addH = dy * dM; }
     else if (handle === 'sw') { addW = -dx * dM; addH = dy * dM; newX = startRoom.x + rawDx; }
     else if (handle === 'ne') { addW = dx * dM; addH = -dy * dM; newY = startRoom.y + rawDy; }
     else { addW = -dx * dM; addH = -dy * dM; newX = startRoom.x + rawDx; newY = startRoom.y + rawDy; }
-    const newTopBottom = Math.max(0.1, wl.top + addW);
-    const newLeftRight = Math.max(0.1, wl.left + addH);
-    newWl.top = newWl.bottom = parseFloat(newTopBottom.toFixed(1));
-    newWl.left = newWl.right = parseFloat(newLeftRight.toFixed(1));
   }
-  return { x: newX, y: newY, wallLengths: newWl };
+
+  const newW = Math.max(0.1, oldW + addW);
+  const newH = Math.max(0.1, oldH + addH);
+  const scaleX = isEdge && (handle === 'n' || handle === 's') ? 1 : newW / oldW;
+  const scaleY = isEdge && (handle === 'e' || handle === 'w') ? 1 : newH / oldH;
+
+  const scaled: Vertex[] = verts.map(v => ({
+    x: parseFloat((v.x * scaleX).toFixed(4)),
+    y: parseFloat((v.y * scaleY).toFixed(4)),
+  }));
+
+  const synced = syncRoomFromVertices(scaled);
+
+  return { x: newX, y: newY, wallLengths: synced.wallLengths, vertices: scaled, length: synced.length, width: synced.width };
+}
+
+export function computeVertexDrag(
+  startVertices: Vertex[],
+  vertexIndex: number,
+  dxMetres: number,
+  dyMetres: number,
+  startRoomX: number,
+  startRoomY: number,
+): { vertices: Vertex[]; x: number; y: number } & ReturnType<typeof syncRoomFromVertices> {
+  const moved = startVertices.map(v => ({ ...v }));
+  moved[vertexIndex] = {
+    x: parseFloat((startVertices[vertexIndex].x + dxMetres).toFixed(4)),
+    y: parseFloat((startVertices[vertexIndex].y + dyMetres).toFixed(4)),
+  };
+
+  const { vertices: norm, offsetX, offsetY } = normalizeVertices(moved);
+  const synced = syncRoomFromVertices(norm);
+
+  return {
+    vertices: norm,
+    x: startRoomX + offsetX * PX_PER_M,
+    y: startRoomY + offsetY * PX_PER_M,
+    ...synced,
+  };
 }
 
 export function computeGhostPos(

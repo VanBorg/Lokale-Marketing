@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall } from '../types';
+import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, shapePointsToVertices } from '../types';
 import RoomShapes from '../RoomShapes';
 import RoomProperties from '../RoomProperties';
 import PlattegrondCanvas, { PlattegrondCanvasHandle } from '../PlattegrondCanvas';
@@ -45,6 +45,8 @@ interface TabPlattegrondProps {
   activeFloorId: string;
   setActiveFloorId: React.Dispatch<React.SetStateAction<string>>;
   setActiveTab: (tab: 1 | 2 | 3 | 4) => void;
+  beginBatch: () => void;
+  endBatch: () => void;
 }
 
 export default function TabPlattegrond({
@@ -53,10 +55,13 @@ export default function TabPlattegrond({
   activeFloorId,
   setActiveFloorId,
   setActiveTab,
+  beginBatch,
+  endBatch,
 }: TabPlattegrondProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [lastShape, setLastShape] = useState<string | null>(null);
   const [placingElement, setPlacingElement] = useState<PlacingElement>(null);
+  const [selectedWallIndices, setSelectedWallIndices] = useState<number[]>([]);
 
   const [clipboard, setClipboard] = useState<Room | null>(null);
   const [isCut, setIsCut] = useState(false);
@@ -108,6 +113,7 @@ export default function TabPlattegrond({
       setLastShape(shape);
       counter += 1;
       const dims = SHAPE_DEFAULTS[shape] ?? { length: 4, width: 3 };
+      const verts = shapePointsToVertices(shape, dims.length, dims.width);
       const newRoom: Room = {
         id: crypto.randomUUID(),
         name: `Kamer${counter}`,
@@ -121,6 +127,7 @@ export default function TabPlattegrond({
         y: 50 + rooms.length * 30,
         elements: [],
         wallLengths: { top: dims.length, right: dims.width, bottom: dims.length, left: dims.width },
+        vertices: verts,
         walls: createDefaultWalls(2.6),
         wallsCustomized: createDefaultWallsCustomized(),
         slopedCeiling: false,
@@ -314,6 +321,10 @@ export default function TabPlattegrond({
   }, [activeFloorId]);
 
   useEffect(() => {
+    setSelectedWallIndices([]);
+  }, [selectedRoomId]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!selectedRoomId) return;
       if (e.key !== 'Backspace' && e.key !== 'Delete') return;
@@ -324,6 +335,12 @@ export default function TabPlattegrond({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedRoomId]);
+
+  const toggleWallIndex = useCallback((i: number) => {
+    setSelectedWallIndices(prev =>
+      prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
+    );
+  }, []);
 
   const handleFloorChange = useCallback((floorId: string) => {
     setActiveFloorId(floorId);
@@ -364,6 +381,9 @@ export default function TabPlattegrond({
           onCopy={copyRoom}
           onCut={cutRoom}
           onPaste={pasteRoom}
+          beginBatch={beginBatch}
+          endBatch={endBatch}
+          selectedWallIndices={selectedWallIndices}
         />
 
         <div className="w-80 shrink-0 border-l border-dark-border bg-dark overflow-y-auto flex flex-col">
@@ -377,7 +397,14 @@ export default function TabPlattegrond({
             />
 
             {selectedRoom && (
-              <RoomProperties room={selectedRoom} rooms={rooms} onUpdate={updateRoom} onDelete={deleteRoom} />
+              <RoomProperties
+                room={selectedRoom}
+                rooms={rooms}
+                onUpdate={updateRoom}
+                onDelete={deleteRoom}
+                selectedWallIndices={selectedWallIndices}
+                onToggleWallIndex={toggleWallIndex}
+              />
             )}
           </div>
 

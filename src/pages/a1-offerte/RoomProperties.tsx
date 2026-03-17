@@ -7,6 +7,8 @@ interface RoomPropertiesProps {
   rooms: Room[];
   onUpdate: (id: string, updates: Partial<Room>) => void;
   onDelete: (id: string) => void;
+  selectedWallIndices: number[];
+  onToggleWallIndex: (i: number) => void;
 }
 
 function parseNum(value: string, fallback: number): number {
@@ -14,7 +16,7 @@ function parseNum(value: string, fallback: number): number {
   return isNaN(n) ? fallback : n;
 }
 
-export default function RoomProperties({ room, rooms, onUpdate, onDelete }: RoomPropertiesProps) {
+export default function RoomProperties({ room, rooms, onUpdate, onDelete, selectedWallIndices, onToggleWallIndex }: RoomPropertiesProps) {
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSubRoomConfirm, setShowSubRoomConfirm] = useState(false);
@@ -118,8 +120,8 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete }: Room
                 <span className="text-light/60">{floor.toFixed(1)} m²</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-blue-400/60">Aftrek sub-ruimtes</span>
-                <span className="text-blue-400/60">-{insideSubtraction.toFixed(1)} m²</span>
+                <span className="text-accent/60">Aftrek sub-ruimtes</span>
+                <span className="text-accent/60">-{insideSubtraction.toFixed(1)} m²</span>
               </div>
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-light/60">Vloer (netto)</span>
@@ -202,7 +204,12 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete }: Room
           </div>
         </div>
 
-        <RoomWalls room={room} onUpdate={onUpdate} />
+        <RoomWalls
+          room={room}
+          onUpdate={onUpdate}
+          selectedWallIndices={selectedWallIndices}
+          onToggleWallIndex={onToggleWallIndex}
+        />
 
         {!room.isFinalized ? (
           <div>

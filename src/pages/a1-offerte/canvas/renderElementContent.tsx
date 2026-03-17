@@ -26,7 +26,7 @@ export function renderElementContent(
           x={0} y={0}
           width={isHorizontal ? elW : thickness}
           height={isHorizontal ? thickness : elW}
-          fill="#3B82F6"
+          fill="#FF5C1A"
           cornerRadius={1}
         />
         <Arc
@@ -35,8 +35,8 @@ export function renderElementContent(
           outerRadius={arcRadius}
           angle={90}
           rotation={arcAngle}
-          fill="rgba(59,130,246,0.15)"
-          stroke="#3B82F6"
+          fill="rgba(255,92,26,0.15)"
+          stroke="#FF5C1A"
           strokeWidth={0.5}
         />
       </>

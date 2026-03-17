@@ -28,7 +28,7 @@ function RoomButton({ room, isSelected, isChild, onClick }: {
     >
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-sm font-medium text-light">
-          {isChild && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+          {isChild && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />}
           {room.name}
         </span>
         <span className="text-xs text-light/40">{area.toFixed(1)} m²</span>

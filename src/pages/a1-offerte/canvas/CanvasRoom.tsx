@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
-import { Line, Group } from 'react-konva';
+import { Line, Circle, Group } from 'react-konva';
 import Konva from 'konva';
-import { Room, RoomElement, getShapePoints, getShapeType } from '../types';
+import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
-import { WallId, DraggingHandle } from './canvasTypes';
+import { WallId, DraggingHandle, PX_PER_M } from './canvasTypes';
 import { isNonRect, quadBounds, boundingSize, snapPosition } from './canvasUtils';
 import RoomShape from './RoomShape';
 import RoomDimensionLines from './RoomDimensionLines';
@@ -12,16 +12,27 @@ import RoomElementsList from './RoomElements';
 import RoomHandles from './RoomHandles';
 import RoomGhost from './RoomGhost';
 
-const GRAB_EDGE_RATIO = 0.22;
+/** Centre zone: if pointer is this far from all edges (from centre), treat as whole-room grab. */
+const CENTER_ZONE_RATIO = 0.25;
 
+/**
+ * Which wall(s) the user is grabbing, from room content space (0,0)-(w,h) top-left origin.
+ * Uses distance to each edge; if pointer is in the centre zone, returns all four walls.
+ */
 function getDragFromWalls(localX: number, localY: number, w: number, h: number): WallId[] {
-  const walls: WallId[] = [];
-  const cx = w / 2, cy = h / 2;
-  if (localX <= -cx + w * GRAB_EDGE_RATIO) walls.push('left');
-  if (localX >= cx - w * GRAB_EDGE_RATIO) walls.push('right');
-  if (localY <= -cy + h * GRAB_EDGE_RATIO) walls.push('top');
-  if (localY >= cy - h * GRAB_EDGE_RATIO) walls.push('bottom');
-  return walls.length > 0 ? walls : ['left', 'right', 'top', 'bottom'];
+  const dLeft = localX;
+  const dRight = w - localX;
+  const dTop = localY;
+  const dBottom = h - localY;
+  const centerZone = CENTER_ZONE_RATIO * Math.min(w, h) / 2;
+  const minDist = Math.min(dLeft, dRight, dTop, dBottom);
+  if (minDist >= centerZone) {
+    return ['left', 'right', 'top', 'bottom'];
+  }
+  if (dLeft <= dRight && dLeft <= dTop && dLeft <= dBottom) return ['left'];
+  if (dRight <= dTop && dRight <= dBottom) return ['right'];
+  if (dTop <= dBottom) return ['top'];
+  return ['bottom'];
 }
 
 interface CanvasRoomProps {
@@ -32,10 +43,12 @@ interface CanvasRoomProps {
   placingElement: { type: RoomElement['type']; width: number; height: number } | null;
   ghostPos: { wall: WallId; position: number } | null;
   draggingHandle: DraggingHandle;
+  isDraggingVertex?: boolean;
   cutRoomId?: string | null;
   canvasColors: CanvasColors;
   theme: string;
   activeDragWalls: WallId[] | null;
+  selectedWallIndices?: number[];
   onSelectRoom: (id: string | null) => void;
   onMoveRoom: (id: string, x: number, y: number) => void;
   onUpdateRoom?: (id: string, updates: Partial<Room>) => void;
@@ -46,6 +59,7 @@ interface CanvasRoomProps {
   onSnapHighlight: (snap: { roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null) => void;
   onDragStartWalls: (roomId: string, walls: WallId[]) => void;
   onDragEndRoom: () => void;
+  onVertexHandleMouseDown?: (vertexIndex: number, worldX: number, worldY: number) => void;
 }
 
 export default function CanvasRoom({
@@ -56,6 +70,7 @@ export default function CanvasRoom({
   placingElement,
   ghostPos,
   draggingHandle,
+  isDraggingVertex,
   cutRoomId,
   canvasColors,
   theme,
@@ -68,15 +83,18 @@ export default function CanvasRoom({
   onSetDraggingHandle,
   onSnapHighlight,
   activeDragWalls,
+  selectedWallIndices,
   onDragStartWalls,
   onDragEndRoom,
+  onVertexHandleMouseDown,
 }: CanvasRoomProps) {
   const snapHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalizedStripeGreen = theme === 'dark' ? 'rgba(200, 255, 220, 0.28)' : 'rgba(134, 239, 172, 0.45)';
   const finalizedStripeLineWidth = theme === 'dark' ? 1.5 : 4;
 
   const shapeType = room.shapeType ?? getShapeType(room.shape);
-  const nonRect = shapeType === 'rect' && isNonRect(room);
+  const hasVertices = (room.vertices?.length ?? 0) >= 3 && shapeType !== 'circle' && shapeType !== 'halfcircle';
+  const nonRect = shapeType === 'rect' && !hasVertices && isNonRect(room);
   const qb = nonRect ? quadBounds(room) : null;
   const { w, h } = boundingSize(room);
   const rot = room.rotation || 0;
@@ -84,17 +102,19 @@ export default function CanvasRoom({
   const cy = h / 2;
   const isSelected = room.id === selectedRoomId;
   const area = shapeType === 'circle' ? Math.PI * (room.length / 2) ** 2 : shapeType === 'halfcircle' ? (Math.PI * (room.length / 2) ** 2) / 2 : room.length * room.width;
-  const points = qb ? qb.pts : getShapePoints(room.shape, w, h);
-  const showWallNumbers = shapeType === 'rect' || shapeType === 'plus' || shapeType === 'ruit';
+  const points = hasVertices
+    ? verticesToPoints(ensureVertices(room))
+    : qb ? qb.pts : getShapePoints(room.shape, w, h);
+  const showWallNumbers = shapeType !== 'circle' && shapeType !== 'halfcircle';
   const isLooseSpecial = !room.isSubRoom && room.roomType !== 'normal';
   const subRoomCount = rooms.filter(r => r.parentRoomId === room.id).length;
 
   const stroke = room.isSubRoom
-    ? (isSelected ? canvasColors.roomStrokeSelected : '#1A6BFF')
+    ? (isSelected ? canvasColors.roomStrokeSelected : canvasColors.subRoomStroke)
     : isLooseSpecial
       ? '#FF5C1A'
       : (isSelected ? canvasColors.roomStrokeSelected : canvasColors.roomStroke);
-  const roomFill = room.isSubRoom ? '#0D1F2D' : canvasColors.roomFill;
+  const roomFill = room.isSubRoom ? canvasColors.subRoomFill : canvasColors.roomFill;
   const strokeOpacity = room.isSubRoom && !isSelected ? 0.6 : isLooseSpecial ? 0.5 : 1;
   const dashPattern = isLooseSpecial ? [4, 4] : undefined;
 
@@ -107,7 +127,7 @@ export default function CanvasRoom({
       offsetY={cy}
       rotation={rot}
       opacity={room.id === cutRoomId ? 0.4 : 1}
-      draggable={!placingElement && !draggingHandle && !room.isFinalized}
+      draggable={!placingElement && !draggingHandle && !isDraggingVertex && !room.isFinalized}
       onDragStart={(e: Konva.KonvaEventObject<DragEvent>) => {
         const pos = e.target.getRelativePointerPosition();
         if (pos) {
@@ -181,6 +201,7 @@ export default function CanvasRoom({
         cy={cy}
         rot={rot}
         area={area}
+        isSelected={isSelected}
         isLooseSpecial={isLooseSpecial}
         subRoomCount={subRoomCount}
         showWallNumbers={showWallNumbers}
@@ -195,6 +216,7 @@ export default function CanvasRoom({
         rot={rot}
         room={room}
         isSelected={isSelected}
+        isDraggingHandle={draggingHandle?.roomId === room.id}
         canvasColors={canvasColors}
       />
       <RoomElementsList
@@ -206,7 +228,7 @@ export default function CanvasRoom({
         onUpdateElement={onUpdateElement}
         onSetSelectedElement={onSetSelectedElement}
       />
-      {isSelected && onUpdateRoom && !room.isFinalized && (shapeType === 'rect' || shapeType === 'plus' || shapeType === 'ruit') && !placingElement && (
+      {isSelected && onUpdateRoom && !room.isFinalized && !placingElement && (
         <RoomHandles
           room={room}
           w={w}
@@ -225,6 +247,66 @@ export default function CanvasRoom({
         w={w}
         h={h}
       />
+
+      {/* Selected-wall highlights and vertex drag handles */}
+      {isSelected && hasVertices && selectedWallIndices && selectedWallIndices.length > 0 && (() => {
+        const verts = ensureVertices(room);
+        const n = verts.length;
+
+        // Collect unique end-vertex indices for all selected walls (deduplicated)
+        const handleVertexIndices = new Set<number>();
+        selectedWallIndices.forEach(wi => {
+          if (wi < n) handleVertexIndices.add((wi + 1) % n);
+        });
+
+        return (
+          <Group>
+            {/* Highlight lines on selected walls */}
+            {selectedWallIndices.map(wi => {
+              if (wi >= n) return null;
+              const v1 = verts[wi];
+              const v2 = verts[(wi + 1) % n];
+              return (
+                <Line
+                  key={`wall-hl-${wi}`}
+                  points={[v1.x * PX_PER_M, v1.y * PX_PER_M, v2.x * PX_PER_M, v2.y * PX_PER_M]}
+                  stroke="#3B82F6"
+                  strokeWidth={3}
+                  listening={false}
+                />
+              );
+            })}
+            {/* Vertex drag handles */}
+            {!room.isFinalized && !placingElement && onVertexHandleMouseDown &&
+              Array.from(handleVertexIndices).map(vi => {
+                const v = verts[vi];
+                return (
+                  <Circle
+                    key={`vhandle-${vi}`}
+                    x={v.x * PX_PER_M}
+                    y={v.y * PX_PER_M}
+                    radius={6}
+                    fill="#3B82F6"
+                    stroke="white"
+                    strokeWidth={1.5}
+                    listening={true}
+                    onMouseDown={(e: Konva.KonvaEventObject<MouseEvent>) => {
+                      e.cancelBubble = true;
+                      const stage = e.target.getStage();
+                      if (!stage) return;
+                      const pointer = stage.getPointerPosition();
+                      if (!pointer) return;
+                      const worldX = (pointer.x - stage.x()) / stage.scaleX();
+                      const worldY = (pointer.y - stage.y()) / stage.scaleY();
+                      onVertexHandleMouseDown(vi, worldX, worldY);
+                    }}
+                  />
+                );
+              })
+            }
+          </Group>
+        );
+      })()}
     </Group>
   );
 }

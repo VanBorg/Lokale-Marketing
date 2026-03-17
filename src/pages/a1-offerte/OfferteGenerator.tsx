@@ -47,6 +47,7 @@ export default function OfferteGenerator() {
   const pastRef = useRef<HistorySnapshot[]>([]);
   const futureRef = useRef<HistorySnapshot[]>([]);
   const isUndoRedoRef = useRef(false);
+  const batchRef = useRef<HistorySnapshot | null>(null);
 
   const pushToPast = useCallback((snapshot: HistorySnapshot) => {
     pastRef.current = [...pastRef.current.slice(1 - MAX_HISTORY), snapshot];
@@ -54,9 +55,22 @@ export default function OfferteGenerator() {
     setHistoryVersion(v => v + 1);
   }, []);
 
+  const beginBatch = useCallback(() => {
+    if (!batchRef.current) {
+      batchRef.current = { floors, activeFloorId };
+    }
+  }, [floors, activeFloorId]);
+
+  const endBatch = useCallback(() => {
+    if (batchRef.current) {
+      pushToPast(batchRef.current);
+      batchRef.current = null;
+    }
+  }, [pushToPast]);
+
   const setFloors = useCallback(
     (update: React.SetStateAction<Floor[]>) => {
-      if (isUndoRedoRef.current) {
+      if (isUndoRedoRef.current || batchRef.current) {
         setFloorsRaw(update);
         return;
       }
@@ -225,6 +239,8 @@ export default function OfferteGenerator() {
               activeFloorId={activeFloorId}
               setActiveFloorId={setActiveFloorId}
               setActiveTab={goTo}
+              beginBatch={beginBatch}
+              endBatch={endBatch}
             />
           )}
           {activeTab === 2 && (

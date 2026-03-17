@@ -1,4 +1,4 @@
-import { Room, RoomElement } from '../types';
+import { Room, RoomElement, Vertex } from '../types';
 
 export const PX_PER_M = 40;
 export const SNAP_THRESHOLD = 20;
@@ -32,6 +32,15 @@ export const HANDLE_CURSORS: Record<HandleType, string> = {
   e: 'ew-resize', w: 'ew-resize',
 };
 
+export type DraggingVertex = {
+  roomId: string;
+  vertexIndex: number;
+  startWorldPos: { x: number; y: number };
+  startVertices: Vertex[];
+  startRoomPos: { x: number; y: number };
+  startRotation: number;
+} | null;
+
 export interface PlattegrondCanvasProps {
   rooms: Room[];
   selectedRoomId: string | null;
@@ -50,4 +59,7 @@ export interface PlattegrondCanvasProps {
   onCopy?: () => void;
   onCut?: () => void;
   onPaste?: () => void;
+  beginBatch?: () => void;
+  endBatch?: () => void;
+  selectedWallIndices?: number[];
 }

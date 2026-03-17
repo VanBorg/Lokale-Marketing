@@ -21,6 +21,10 @@ export interface CanvasColors {
   elementStrokeUnselected: string;
   /** Resize handle stroke (around orange fill) */
   handleStroke: string;
+  /** Sub-room fill (theme-dependent) */
+  subRoomFill: string;
+  /** Sub-room stroke (theme-dependent) */
+  subRoomStroke: string;
 }
 
 interface ThemeContextValue {
@@ -44,15 +48,17 @@ const DARK_CANVAS: CanvasColors = {
   dimensionLabelText: '#e0e0e0',
   elementStrokeUnselected: 'rgba(255,255,255,0.4)',
   handleStroke: '#fff',
+  subRoomFill: '#1A0F08',
+  subRoomStroke: '#FF5C1A',
 };
 
 const LIGHT_CANVAS: CanvasColors = {
   stageBg: '#FAFAFA',
-  roomFill: '#F2F2F2',
+  roomFill: '#EBEBEB',
   roomStroke: 'rgba(0,0,0,0.38)',
   roomStrokeSelected: '#FF5C1A',
-  gridThin: 'rgba(0,0,0,0.1)',
-  gridThick: 'rgba(0,0,0,0.18)',
+  gridThin: 'rgba(0,0,0,0.14)',
+  gridThick: 'rgba(0,0,0,0.24)',
   text: '#1A1A1A',
   textSelected: '#FF5C1A',
   wallNumber: '#555',
@@ -61,6 +67,8 @@ const LIGHT_CANVAS: CanvasColors = {
   dimensionLabelText: '#1a1a1a',
   elementStrokeUnselected: 'rgba(0,0,0,0.35)',
   handleStroke: '#333',
+  subRoomFill: '#FFF5F0',
+  subRoomStroke: '#E85A1A',
 };
 
 const ThemeContext = createContext<ThemeContextValue>({

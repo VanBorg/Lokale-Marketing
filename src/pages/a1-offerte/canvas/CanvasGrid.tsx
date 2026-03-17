@@ -19,12 +19,8 @@ export default function CanvasGrid({ thinLines, thickLines, canvasColors, theme 
       {thickLines.map((line, i) => (
         <Line key={`k-${i}`} points={line.points} stroke={canvasColors.gridThick} strokeWidth={1} listening={false} />
       ))}
-      {theme === 'dark' && (
-        <>
-          <Line points={[-CENTER_CROSS_SIZE, 0, CENTER_CROSS_SIZE, 0]} stroke="#FFFFFF" strokeWidth={1.5} listening={false} />
-          <Line points={[0, -CENTER_CROSS_SIZE, 0, CENTER_CROSS_SIZE]} stroke="#FFFFFF" strokeWidth={1.5} listening={false} />
-        </>
-      )}
+      <Line points={[-CENTER_CROSS_SIZE, 0, CENTER_CROSS_SIZE, 0]} stroke={theme === 'dark' ? '#FFFFFF' : canvasColors.gridThick} strokeWidth={3} listening={false} />
+      <Line points={[0, -CENTER_CROSS_SIZE, 0, CENTER_CROSS_SIZE]} stroke={theme === 'dark' ? '#FFFFFF' : canvasColors.gridThick} strokeWidth={3} listening={false} />
     </Layer>
   );
 }

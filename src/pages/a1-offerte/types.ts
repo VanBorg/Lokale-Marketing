@@ -29,9 +29,11 @@ export type RoomTask = {
 
 export type WallsCustomized = { top: boolean; right: boolean; bottom: boolean; left: boolean };
 
-export type RoomType = 'normal' | 'wc' | 'badkamer' | 'kast' | 'berging';
+export type RoomType = 'normal' | 'wc' | 'badkamer' | 'kast' | 'berging' | 'doorgang' | 'logia' | 'plateau' | 'erker' | 'nis' | 'schouw' | 'trapgat' | 'balkon';
 
 export type AttachedWall = 'top' | 'right' | 'bottom' | 'left' | 'inside' | null;
+
+export type Vertex = { x: number; y: number };
 
 export type Room = {
   id: string;
@@ -48,6 +50,8 @@ export type Room = {
   walls: RoomWalls;
   wallsCustomized: WallsCustomized;
   wallLengths: { top: number; right: number; bottom: number; left: number };
+  vertices?: Vertex[];
+  wallLocks?: boolean[];
   slopedCeiling: boolean;
   highestPoint: number;
   ridgeCeiling: boolean;
@@ -78,13 +82,29 @@ export const ROOM_TYPE_ICONS: Record<RoomType, string> = {
   badkamer: '🚿',
   kast: '📦',
   berging: '📁',
+  doorgang: '🚪',
+  logia: '🏛️',
+  plateau: '⬆️',
+  erker: '🪟',
+  nis: '↩️',
+  schouw: '🔥',
+  trapgat: '🪜',
+  balkon: '🌤️',
 };
 
 export const SPECIAL_ROOMS: { type: RoomType; label: string; length: number; width: number }[] = [
   { type: 'wc', label: 'WC', length: 1.2, width: 1.8 },
   { type: 'badkamer', label: 'Badkamer', length: 2.5, width: 2.0 },
+  { type: 'doorgang', label: 'Doorgang', length: 1.0, width: 0.8 },
   { type: 'kast', label: 'Kast', length: 1.0, width: 0.6 },
   { type: 'berging', label: 'Berging', length: 2.0, width: 1.5 },
+  { type: 'trapgat', label: 'Trapgat', length: 2.5, width: 1.0 },
+  { type: 'erker', label: 'Erker', length: 2.0, width: 1.0 },
+  { type: 'balkon', label: 'Balkon', length: 3.0, width: 1.2 },
+  { type: 'nis', label: 'Nis', length: 0.8, width: 0.4 },
+  { type: 'schouw', label: 'Schouw', length: 1.0, width: 0.6 },
+  { type: 'plateau', label: 'Plateau', length: 2.0, width: 1.5 },
+  { type: 'logia', label: 'Logia', length: 3.0, width: 1.5 },
 ];
 
 export function calcWallArea(wall: WallSide, wallWidth: number): number {
@@ -105,14 +125,20 @@ export function calcTotalWalls(room: Room): number {
 
 export const SHAPES = [
   { id: 'rechthoek', label: 'Rechthoek' },
+  { id: 'langwerpig', label: 'Langwerpig' },
   { id: 'l-vorm', label: 'L-vorm' },
   { id: 'boog', label: 'Omgekeerde L' },
-  { id: 'langwerpig', label: 'Langwerpig' },
-  { id: 'i-vorm', label: 'I-profiel' },
   { id: 't-vorm', label: 'T-vorm' },
   { id: 'u-vorm', label: 'U-vorm' },
+  { id: 'z-vorm', label: 'Z-vorm' },
+  { id: 'z-vorm-inv', label: 'S-vorm (Z inv)' },
+  { id: 's-vorm', label: 'S-vorm' },
+  { id: 's-vorm-inv', label: 'Omgekeerde S' },
+  { id: 'i-vorm', label: 'I-profiel' },
   { id: 'trapezium', label: 'Trapezium' },
   { id: 'plus-vorm', label: 'Plus-vorm' },
+  { id: 'vijfhoek', label: 'Vijfhoek' },
+  { id: 'halve-cirkel', label: 'Halve cirkel' },
 ] as const;
 
 export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> = {
@@ -129,14 +155,21 @@ export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> =
   vijfhoek: { length: 4, width: 3 },
   boog: { length: 4, width: 3 },
   ruit: { length: 4, width: 4 },
+  's-vorm': { length: 4, width: 4 },
+  's-vorm-inv': { length: 4, width: 4 },
+  'z-vorm': { length: 5, width: 4 },
+  'z-vorm-inv': { length: 5, width: 4 },
 };
 
 export function getShapeType(shape: string): Room['shapeType'] {
   if (shape === 'cirkel') return 'circle';
   if (shape === 'halve-cirkel') return 'halfcircle';
   if (shape === 'plus-vorm') return 'plus';
-  if (shape === 'boog') return 'rect'; // getekend als L-vorm (polygoon)
+  if (shape === 'boog') return 'rect';
   if (shape === 'ruit') return 'ruit';
+  if (shape === 's-vorm' || shape === 's-vorm-inv') return 'rect';
+  if (shape === 'z-vorm' || shape === 'z-vorm-inv') return 'rect';
+  if (shape === 'vijfhoek') return 'rect';
   return 'rect';
 }
 
@@ -192,8 +225,17 @@ export function getShapePoints(shape: string, w: number, h: number): number[] {
     case 'ruit':
       return [w / 2, 0, w, h / 2, w / 2, h, 0, h / 2];
     case 'boog':
-      // Omgekeerde L: haak linksboven; extra hoekpunt (0,0) voorkomt schuine hoek
       return [w * 0.5, 0, w, 0, w, h, w * 0.5, h, w * 0.5, h * 0.5, 0, h * 0.5, 0, 0];
+    case 's-vorm':
+      return [0, h * 0.33, w * 0.5, h * 0.33, w * 0.5, 0, w, 0, w, h * 0.67, w * 0.5, h * 0.67, w * 0.5, h, 0, h];
+    case 's-vorm-inv':
+      return [0, 0, w * 0.5, 0, w * 0.5, h * 0.33, w, h * 0.33, w, h, w * 0.5, h, w * 0.5, h * 0.67, 0, h * 0.67];
+    case 'z-vorm':
+      // Z-shape: top arm left, straight centre bar, bottom arm right
+      return [0, 0, w * 0.5, 0, w * 0.5, h * 0.4, w, h * 0.4, w, h, w * 0.5, h, w * 0.5, h * 0.6, 0, h * 0.6];
+    case 'z-vorm-inv':
+      // S-shape (inverted Z): top arm right, straight centre bar, bottom arm left
+      return [w, 0, w * 0.5, 0, w * 0.5, h * 0.4, 0, h * 0.4, 0, h, w * 0.5, h, w * 0.5, h * 0.6, w, h * 0.6];
     case 'langwerpig':
     case 'rechthoek':
     default:
@@ -250,34 +292,210 @@ export function computeQuadCorners(wl: Room['wallLengths']): number[] {
   const bottom = wl.bottom * PX_PER_M;
   const left = wl.left * PX_PER_M;
 
-  // TL is always at origin
   const tlX = 0, tlY = 0;
-  // TR is always at (top, 0)
   const trX = top, trY = 0;
 
   if (top === bottom) {
     return [tlX, tlY, trX, trY, trX, right, tlX, left];
   }
 
-  // For non-rectangular: solve BL position so left wall and bottom wall lengths are satisfied
-  // BL = (blX, left), BR = (blX + bottom, brY)
-  // left wall: sqrt(blX^2 + left^2) = left (already the height, so blX offset needed)
-  // We place BL directly below TL offset to make left wall = left pixels tall
-  // right wall: from TR to BR
   const blX = 0;
   const blY = left;
   const brX = bottom;
-  // Right wall length must equal 'right' pixels, starting from TR
-  // brY = sqrt(right^2 - (brX - trX)^2) but only if valid
   const dx = brX - trX;
   const rSq = right * right - dx * dx;
   if (rSq < 0) {
-    // Geometry impossible, fall back to rectangle
     return [tlX, tlY, trX, trY, trX, right, tlX, left];
   }
   const brY = Math.sqrt(rSq);
 
   return [tlX, tlY, trX, trY, brX, brY, blX, blY];
+}
+
+/* ── Vertex helpers ───────────────────────────────────────────────── */
+
+export function shapePointsToVertices(shape: string, length: number, width: number): Vertex[] {
+  const w = length * PX_PER_M;
+  const h = width * PX_PER_M;
+  const pts = getShapePoints(shape, w, h);
+  const verts: Vertex[] = [];
+  for (let i = 0; i < pts.length; i += 2) {
+    verts.push({
+      x: parseFloat((pts[i] / PX_PER_M).toFixed(4)),
+      y: parseFloat((pts[i + 1] / PX_PER_M).toFixed(4)),
+    });
+  }
+  return verts;
+}
+
+export function ensureVertices(room: Room): Vertex[] {
+  if (room.vertices && room.vertices.length >= 3) return room.vertices;
+
+  const shapeType = room.shapeType ?? getShapeType(room.shape);
+  const isComplex = room.shape && room.shape !== 'rechthoek' && room.shape !== 'langwerpig'
+    && shapeType === 'rect';
+  if (isComplex) {
+    return shapePointsToVertices(room.shape, room.length, room.width);
+  }
+
+  const wl = room.wallLengths ?? {
+    top: room.length, right: room.width,
+    bottom: room.length, left: room.width,
+  };
+  if (Math.abs(wl.top - wl.bottom) < 0.001 && Math.abs(wl.left - wl.right) < 0.001) {
+    return [
+      { x: 0, y: 0 },
+      { x: wl.top, y: 0 },
+      { x: wl.top, y: wl.right },
+      { x: 0, y: wl.left },
+    ];
+  }
+  const brX = wl.bottom;
+  const dx = brX - wl.top;
+  const rSq = wl.right * wl.right - dx * dx;
+  if (rSq < 0) {
+    return [
+      { x: 0, y: 0 },
+      { x: wl.top, y: 0 },
+      { x: wl.top, y: wl.right },
+      { x: 0, y: wl.left },
+    ];
+  }
+  return [
+    { x: 0, y: 0 },
+    { x: wl.top, y: 0 },
+    { x: brX, y: Math.sqrt(rSq) },
+    { x: 0, y: wl.left },
+  ];
+}
+
+export function vertexWallLengths(verts: Vertex[]): number[] {
+  const n = verts.length;
+  const lengths: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = verts[i];
+    const b = verts[(i + 1) % n];
+    lengths.push(Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2));
+  }
+  return lengths;
+}
+
+export function verticesBoundingBox(verts: Vertex[]): {
+  minX: number; minY: number; maxX: number; maxY: number; w: number; h: number;
+} {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const v of verts) {
+    if (v.x < minX) minX = v.x;
+    if (v.y < minY) minY = v.y;
+    if (v.x > maxX) maxX = v.x;
+    if (v.y > maxY) maxY = v.y;
+  }
+  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+}
+
+export function verticesToPoints(verts: Vertex[]): number[] {
+  return verts.flatMap(v => [v.x * PX_PER_M, v.y * PX_PER_M]);
+}
+
+export function normalizeVertices(verts: Vertex[]): {
+  vertices: Vertex[]; offsetX: number; offsetY: number;
+} {
+  const bb = verticesBoundingBox(verts);
+  return {
+    vertices: verts.map(v => ({
+      x: parseFloat((v.x - bb.minX).toFixed(4)),
+      y: parseFloat((v.y - bb.minY).toFixed(4)),
+    })),
+    offsetX: bb.minX,
+    offsetY: bb.minY,
+  };
+}
+
+export function insertVertex(verts: Vertex[], wallIndex: number): Vertex[] {
+  const n = verts.length;
+  const v1 = verts[wallIndex];
+  const v2 = verts[(wallIndex + 1) % n];
+  const mid: Vertex = {
+    x: parseFloat(((v1.x + v2.x) / 2).toFixed(4)),
+    y: parseFloat(((v1.y + v2.y) / 2).toFixed(4)),
+  };
+  const result = [...verts];
+  result.splice(wallIndex + 1, 0, mid);
+  return result;
+}
+
+function isRectangularVertices(verts: Vertex[]): boolean {
+  if (verts.length !== 4) return false;
+  for (let i = 0; i < 4; i++) {
+    const a = verts[i];
+    const b = verts[(i + 1) % 4];
+    if (Math.abs(a.y - b.y) >= 0.001 && Math.abs(a.x - b.x) >= 0.001) return false;
+  }
+  return true;
+}
+
+export function updateVertexWallLength(
+  verts: Vertex[],
+  wallIndex: number,
+  newLength: number,
+  wallLocks?: boolean[],
+): { vertices: Vertex[]; offsetX: number; offsetY: number } {
+  const n = verts.length;
+  const v1Idx = wallIndex;
+  const v2Idx = (wallIndex + 1) % n;
+  const v1 = verts[v1Idx];
+  const v2 = verts[v2Idx];
+
+  const dx = v2.x - v1.x;
+  const dy = v2.y - v1.y;
+  const curLen = Math.sqrt(dx * dx + dy * dy);
+  if (curLen < 0.001) return { vertices: [...verts], offsetX: 0, offsetY: 0 };
+
+  const dirX = dx / curLen;
+  const dirY = dy / curLen;
+  const newV2x = v1.x + dirX * newLength;
+  const newV2y = v1.y + dirY * newLength;
+  const deltaX = newV2x - v2.x;
+  const deltaY = newV2y - v2.y;
+
+  const out = verts.map(v => ({ ...v }));
+  out[v2Idx] = { x: newV2x, y: newV2y };
+
+  if (n === 4 && isRectangularVertices(verts)) {
+    const oppositeIdx = (wallIndex + 2) % 4;
+    const oppositeLocked = wallLocks?.[oppositeIdx] ?? false;
+
+    if (!oppositeLocked) {
+      const v3Idx = (wallIndex + 2) % 4;
+      const isHorizontal = Math.abs(dy) < 0.001;
+      if (isHorizontal) {
+        out[v3Idx] = { x: out[v3Idx].x + deltaX, y: out[v3Idx].y };
+      } else {
+        out[v3Idx] = { x: out[v3Idx].x, y: out[v3Idx].y + deltaY };
+      }
+    }
+  }
+
+  return normalizeVertices(out);
+}
+
+export function syncRoomFromVertices(verts: Vertex[]): {
+  length: number;
+  width: number;
+  wallLengths: { top: number; right: number; bottom: number; left: number };
+} {
+  const bb = verticesBoundingBox(verts);
+  const lengths = vertexWallLengths(verts);
+  return {
+    length: parseFloat(bb.w.toFixed(2)),
+    width: parseFloat(bb.h.toFixed(2)),
+    wallLengths: {
+      top: parseFloat((lengths[0] ?? bb.w).toFixed(2)),
+      right: parseFloat((lengths[1] ?? bb.h).toFixed(2)),
+      bottom: parseFloat((lengths[2] ?? bb.w).toFixed(2)),
+      left: parseFloat((lengths[3] ?? bb.h).toFixed(2)),
+    },
+  };
 }
 
 export function detectAttachedWall(special: Room, normal: Room): AttachedWall {
