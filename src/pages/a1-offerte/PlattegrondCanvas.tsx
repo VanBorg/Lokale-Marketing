@@ -15,6 +15,8 @@ const Stage = KonvaStage as unknown as React.ComponentType<any>;
 
 export interface PlattegrondCanvasHandle {
   goToCenter: () => void;
+  /** World coords of viewport center; use for spawning new rooms in view. */
+  getSpawnPosition: () => { x: number; y: number };
 }
 
 const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasProps>(function PlattegrondCanvas({
@@ -32,7 +34,12 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const goToCenterRef = useRef(goToCenter);
   goToCenterRef.current = goToCenter;
 
-  useImperativeHandle(ref, () => ({ goToCenter }), [goToCenter]);
+  const getSpawnPosition = useCallback(() => ({
+    x: (size.width / 2 - stagePos.x) / scale,
+    y: (size.height / 2 - stagePos.y) / scale,
+  }), [size, stagePos, scale]);
+
+  useImperativeHandle(ref, () => ({ goToCenter, getSpawnPosition }), [goToCenter, getSpawnPosition]);
 
   useEffect(() => {
     goToCenter();

@@ -39,7 +39,7 @@ export type Room = {
   id: string;
   name: string;
   shape: string;
-  shapeType: 'rect' | 'circle' | 'halfcircle' | 'plus' | 'boog' | 'ruit';
+  shapeType: 'rect';
   rotation: number;
   length: number;
   width: number;
@@ -80,8 +80,8 @@ export const ROOM_TYPE_ICONS: Record<RoomType, string> = {
   normal: '',
   wc: '🚽',
   badkamer: '🚿',
-  kast: '📦',
-  berging: '📁',
+  kast: '🗄️',
+  berging: '📦',
   doorgang: '🚪',
   logia: '🏛️',
   plateau: '⬆️',
@@ -125,51 +125,27 @@ export function calcTotalWalls(room: Room): number {
 
 export const SHAPES = [
   { id: 'rechthoek', label: 'Rechthoek' },
-  { id: 'langwerpig', label: 'Langwerpig' },
   { id: 'l-vorm', label: 'L-vorm' },
   { id: 'boog', label: 'Omgekeerde L' },
   { id: 't-vorm', label: 'T-vorm' },
   { id: 'u-vorm', label: 'U-vorm' },
   { id: 'z-vorm', label: 'Z-vorm' },
   { id: 'z-vorm-inv', label: 'S-vorm (Z inv)' },
-  { id: 's-vorm', label: 'S-vorm' },
-  { id: 's-vorm-inv', label: 'Omgekeerde S' },
   { id: 'i-vorm', label: 'I-profiel' },
-  { id: 'trapezium', label: 'Trapezium' },
-  { id: 'plus-vorm', label: 'Plus-vorm' },
-  { id: 'vijfhoek', label: 'Vijfhoek' },
-  { id: 'halve-cirkel', label: 'Halve cirkel' },
 ] as const;
 
 export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> = {
   rechthoek: { length: 4, width: 3 },
-  langwerpig: { length: 6, width: 2 },
   'l-vorm': { length: 4, width: 3 },
   'i-vorm': { length: 4, width: 3 },
   't-vorm': { length: 5, width: 4 },
   'u-vorm': { length: 5, width: 4 },
-  trapezium: { length: 4, width: 3 },
-  'plus-vorm': { length: 4, width: 4 },
-  cirkel: { length: 4, width: 4 },
-  'halve-cirkel': { length: 4, width: 2 },
-  vijfhoek: { length: 4, width: 3 },
   boog: { length: 4, width: 3 },
-  ruit: { length: 4, width: 4 },
-  's-vorm': { length: 4, width: 4 },
-  's-vorm-inv': { length: 4, width: 4 },
   'z-vorm': { length: 5, width: 4 },
   'z-vorm-inv': { length: 5, width: 4 },
 };
 
-export function getShapeType(shape: string): Room['shapeType'] {
-  if (shape === 'cirkel') return 'circle';
-  if (shape === 'halve-cirkel') return 'halfcircle';
-  if (shape === 'plus-vorm') return 'plus';
-  if (shape === 'boog') return 'rect';
-  if (shape === 'ruit') return 'ruit';
-  if (shape === 's-vorm' || shape === 's-vorm-inv') return 'rect';
-  if (shape === 'z-vorm' || shape === 'z-vorm-inv') return 'rect';
-  if (shape === 'vijfhoek') return 'rect';
+export function getShapeType(_shape: string): Room['shapeType'] {
   return 'rect';
 }
 
@@ -199,44 +175,14 @@ export function getShapePoints(shape: string, w: number, h: number): number[] {
         0, 0, w * 0.33, 0, w * 0.33, h * 0.6,
         w * 0.67, h * 0.6, w * 0.67, 0, w, 0, w, h, 0, h,
       ];
-    case 'trapezium':
-      return [w * 0.15, 0, w * 0.85, 0, w, h, 0, h];
-    case 'plus-vorm': {
-      const tx = w / 3;
-      const ty = h / 3;
-      return [
-        tx, 0, w - tx, 0,
-        w - tx, ty, w, ty,
-        w, h - ty, w - tx, h - ty,
-        w - tx, h, tx, h,
-        tx, h - ty, 0, h - ty,
-        0, ty, tx, ty,
-      ];
-    }
-    case 'vijfhoek': {
-      const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 * 0.9;
-      const pts: number[] = [];
-      for (let i = 0; i < 5; i++) {
-        const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-        pts.push(cx + r * Math.cos(a), cy + r * Math.sin(a));
-      }
-      return pts;
-    }
-    case 'ruit':
-      return [w / 2, 0, w, h / 2, w / 2, h, 0, h / 2];
     case 'boog':
       return [w * 0.5, 0, w, 0, w, h, w * 0.5, h, w * 0.5, h * 0.5, 0, h * 0.5, 0, 0];
-    case 's-vorm':
-      return [0, h * 0.33, w * 0.5, h * 0.33, w * 0.5, 0, w, 0, w, h * 0.67, w * 0.5, h * 0.67, w * 0.5, h, 0, h];
-    case 's-vorm-inv':
-      return [0, 0, w * 0.5, 0, w * 0.5, h * 0.33, w, h * 0.33, w, h, w * 0.5, h, w * 0.5, h * 0.67, 0, h * 0.67];
     case 'z-vorm':
       // Z-shape: top arm left, straight centre bar, bottom arm right
       return [0, 0, w * 0.5, 0, w * 0.5, h * 0.4, w, h * 0.4, w, h, w * 0.5, h, w * 0.5, h * 0.6, 0, h * 0.6];
     case 'z-vorm-inv':
       // S-shape (inverted Z): top arm right, straight centre bar, bottom arm left
       return [w, 0, w * 0.5, 0, w * 0.5, h * 0.4, 0, h * 0.4, 0, h, w * 0.5, h, w * 0.5, h * 0.6, w, h * 0.6];
-    case 'langwerpig':
     case 'rechthoek':
     default:
       return [0, 0, w, 0, w, h, 0, h];
@@ -260,8 +206,16 @@ export const ELEMENT_DEFAULTS: Record<
 export const PX_PER_M = 40;
 
 function roomBounds(room: Room) {
-  const w = room.length * PX_PER_M;
-  const h = room.width * PX_PER_M;
+  const rotation = room.rotation || 0;
+  let w: number;
+  let h: number;
+  if (rotation === 90 || rotation === 270) {
+    w = room.width * PX_PER_M;
+    h = room.length * PX_PER_M;
+  } else {
+    w = room.length * PX_PER_M;
+    h = room.width * PX_PER_M;
+  }
   return { left: room.x, top: room.y, right: room.x + w, bottom: room.y + h, w, h };
 }
 
@@ -271,19 +225,26 @@ export function isOverlapping(container: Room, inner: Room): boolean {
   return i.left >= c.left && i.top >= c.top && i.right <= c.right && i.bottom <= c.bottom;
 }
 
-export function isAdjacent(roomA: Room, roomB: Room, threshold: number = 5): boolean {
+export function isAdjacent(roomA: Room, roomB: Room, threshold: number = 20): boolean {
   const a = roomBounds(roomA);
   const b = roomBounds(roomB);
 
-  const overlapX = a.left < b.right && a.right > b.left;
-  const overlapY = a.top < b.bottom && a.bottom > b.top;
+  const touchingHorizontally =
+    Math.abs(a.right - b.left) <= threshold ||
+    Math.abs(a.left - b.right) <= threshold;
 
-  if (overlapX && Math.abs(a.bottom - b.top) <= threshold) return true;
-  if (overlapX && Math.abs(a.top - b.bottom) <= threshold) return true;
-  if (overlapY && Math.abs(a.right - b.left) <= threshold) return true;
-  if (overlapY && Math.abs(a.left - b.right) <= threshold) return true;
+  const touchingVertically =
+    Math.abs(a.bottom - b.top) <= threshold ||
+    Math.abs(a.top - b.bottom) <= threshold;
 
-  return false;
+  const hasVerticalRange =
+    a.top < b.bottom + threshold && a.bottom > b.top - threshold;
+
+  const hasHorizontalRange =
+    a.left < b.right + threshold && a.right > b.left - threshold;
+
+  return (touchingHorizontally && hasVerticalRange) ||
+         (touchingVertically && hasHorizontalRange);
 }
 
 export function computeQuadCorners(wl: Room['wallLengths']): number[] {
@@ -332,7 +293,7 @@ export function ensureVertices(room: Room): Vertex[] {
   if (room.vertices && room.vertices.length >= 3) return room.vertices;
 
   const shapeType = room.shapeType ?? getShapeType(room.shape);
-  const isComplex = room.shape && room.shape !== 'rechthoek' && room.shape !== 'langwerpig'
+  const isComplex = room.shape && room.shape !== 'rechthoek'
     && shapeType === 'rect';
   if (isComplex) {
     return shapePointsToVertices(room.shape, room.length, room.width);
@@ -531,12 +492,17 @@ export function syncRoomFromVertices(verts: Vertex[]): {
 export function detectAttachedWall(special: Room, normal: Room): AttachedWall {
   const s = roomBounds(special);
   const n = roomBounds(normal);
+  const threshold = 20;
+
+  if (Math.abs(s.bottom - n.top) <= threshold) return 'top';
+  if (Math.abs(s.top - n.bottom) <= threshold) return 'bottom';
+  if (Math.abs(s.right - n.left) <= threshold) return 'left';
+  if (Math.abs(s.left - n.right) <= threshold) return 'right';
 
   const dTop = Math.abs(s.bottom - n.top);
   const dBottom = Math.abs(s.top - n.bottom);
   const dLeft = Math.abs(s.right - n.left);
   const dRight = Math.abs(s.left - n.right);
-
   const min = Math.min(dTop, dBottom, dLeft, dRight);
   if (min === dTop) return 'top';
   if (min === dBottom) return 'bottom';

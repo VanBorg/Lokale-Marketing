@@ -1,4 +1,4 @@
-import { Room, getShapeType, computeQuadCorners, ensureVertices, verticesBoundingBox } from '../types';
+import { Room, computeQuadCorners, ensureVertices, verticesBoundingBox } from '../types';
 import { WallId, PX_PER_M } from './canvasTypes';
 
 export function clamp(v: number, min: number, max: number) {
@@ -55,23 +55,11 @@ export function quadBounds(room: Room): { w: number; h: number; pts: number[] } 
 }
 
 export function boundingSize(room: Room): { w: number; h: number } {
-  const shapeType = room.shapeType ?? getShapeType(room.shape);
-  if (shapeType === 'circle') {
-    const d = room.length * PX_PER_M;
-    return { w: d, h: d };
-  }
-  if (shapeType === 'halfcircle') {
-    const outerRadius = (room.length * PX_PER_M) / 2;
-    return { w: outerRadius * 2, h: outerRadius };
-  }
   if (room.vertices && room.vertices.length >= 3) {
     const bb = verticesBoundingBox(room.vertices);
     return { w: bb.w * PX_PER_M, h: bb.h * PX_PER_M };
   }
-  if (shapeType === 'plus' || shapeType === 'ruit') {
-    return { w: room.length * PX_PER_M, h: room.width * PX_PER_M };
-  }
-  if (shapeType === 'rect' && isNonRect(room)) {
+  if (isNonRect(room)) {
     const { w, h } = quadBounds(room);
     return { w, h };
   }
@@ -118,9 +106,8 @@ export function computeGhostPos(
   stageScaleX: number,
   stageScaleY: number,
 ): { wall: WallId; position: number } | null {
-  const shapeType = room.shapeType ?? getShapeType(room.shape);
   const w = room.length * PX_PER_M;
-  const h = shapeType === 'circle' ? w : room.width * PX_PER_M;
+  const h = room.width * PX_PER_M;
   const rot = room.rotation || 0;
   const rad = (rot * Math.PI) / 180;
   const worldX = (pointerX - stageX) / stageScaleX;

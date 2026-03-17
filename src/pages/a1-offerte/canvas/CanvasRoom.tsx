@@ -99,12 +99,9 @@ export default function CanvasRoom({
   onRoomDragMove,
 }: CanvasRoomProps) {
   const snapHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const finalizedStripeGreen = theme === 'dark' ? 'rgba(200, 255, 220, 0.28)' : 'rgba(134, 239, 172, 0.45)';
-  const finalizedStripeLineWidth = theme === 'dark' ? 1.5 : 4;
-  const finalizedSolidGreen = theme === 'dark' ? 'rgba(134, 239, 172, 0.15)' : 'rgba(134, 239, 172, 0.25)';
 
   const shapeType = room.shapeType ?? getShapeType(room.shape);
-  const hasVertices = (room.vertices?.length ?? 0) >= 3 && shapeType !== 'circle' && shapeType !== 'halfcircle';
+  const hasVertices = (room.vertices?.length ?? 0) >= 3;
   const nonRect = shapeType === 'rect' && !hasVertices && isNonRect(room);
   const qb = nonRect ? quadBounds(room) : null;
   const { w, h } = boundingSize(room);
@@ -112,23 +109,19 @@ export default function CanvasRoom({
   const cx = w / 2;
   const cy = h / 2;
   const isSelected = room.id === selectedRoomId;
-  const area = shapeType === 'circle' ? Math.PI * (room.length / 2) ** 2 : shapeType === 'halfcircle' ? (Math.PI * (room.length / 2) ** 2) / 2 : room.length * room.width;
+  const area = room.length * room.width;
   const points = hasVertices
     ? verticesToPoints(ensureVertices(room))
     : qb ? qb.pts : getShapePoints(room.shape, w, h);
   const isLooseSpecial = !room.isSubRoom && room.roomType !== 'normal';
   const isSpecialRoom = room.roomType !== 'normal';
-  const showWallNumbers = shapeType !== 'circle' && shapeType !== 'halfcircle' && !isSpecialRoom;
+  const showWallNumbers = !isSpecialRoom;
   const subRoomCount = rooms.filter(r => r.parentRoomId === room.id).length;
 
-  const stroke = room.isSubRoom
-    ? (isSelected ? canvasColors.roomStrokeSelected : canvasColors.subRoomStroke)
-    : isLooseSpecial
-      ? '#FF5C1A'
-      : (isSelected ? canvasColors.roomStrokeSelected : canvasColors.roomStroke);
+  const stroke = isSelected ? canvasColors.roomStrokeSelected : canvasColors.roomStroke;
   const roomFill = room.isSubRoom ? canvasColors.subRoomFill : canvasColors.roomFill;
-  const strokeOpacity = room.isSubRoom && !isSelected ? 0.6 : isLooseSpecial ? 0.5 : 1;
-  const dashPattern = isLooseSpecial ? [4, 4] : undefined;
+  const strokeOpacity = 1;
+  const dashPattern = undefined;
 
   return (
     <Group
@@ -156,9 +149,6 @@ export default function CanvasRoom({
         const newX = e.target.x() - cx;
         const newY = e.target.y() - cy;
         const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
-        // #region agent log
-        fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'379215'},body:JSON.stringify({sessionId:'379215',location:'CanvasRoom.tsx:onDragEnd',message:'snap during room drag',data:{roomId:room.id,rawX:newX,rawY:newY,snappedX:snapped.x,snappedY:snapped.y,snappedToId:snapped.snappedToId,snappedWall:snapped.snappedWall,activeDragWalls,deltaX:snapped.x-newX,deltaY:snapped.y-newY,otherRoomCount:rooms.filter(r=>r.id!==room.id).length},timestamp:Date.now(),hypothesisId:'A-B'})}).catch(()=>{});
-        // #endregion
         e.target.x(snapped.x + cx);
         e.target.y(snapped.y + cy);
         onDragEndRoom();
@@ -199,9 +189,8 @@ export default function CanvasRoom({
         room={room}
         isLooseSpecial={isLooseSpecial}
         isSpecialRoom={isSpecialRoom}
-        finalizedStripeGreen={room.isFinalized ? finalizedStripeGreen : undefined}
-        finalizedStripeLineWidth={room.isFinalized ? finalizedStripeLineWidth : undefined}
-        finalizedSolidGreen={room.isFinalized ? finalizedSolidGreen : undefined}
+        finalizedRoomStripe={room.isFinalized ? canvasColors.finalizedRoomStripe : undefined}
+        finalizedRoomStripeLineWidth={room.isFinalized ? canvasColors.finalizedRoomStripeLineWidth : undefined}
       />
       {activeDragWalls && activeDragWalls.length > 0 && (
         <Group listening={false}>

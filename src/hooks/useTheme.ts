@@ -25,6 +25,10 @@ export interface CanvasColors {
   subRoomFill: string;
   /** Sub-room stroke (theme-dependent) */
   subRoomStroke: string;
+  /** Finalized room: diagonal stripe colour (same for all finalized rooms, dark/light) */
+  finalizedRoomStripe: string;
+  /** Finalized room: stripe line width */
+  finalizedRoomStripeLineWidth: number;
 }
 
 interface ThemeContextValue {
@@ -48,8 +52,10 @@ const DARK_CANVAS: CanvasColors = {
   dimensionLabelText: '#e0e0e0',
   elementStrokeUnselected: 'rgba(255,255,255,0.4)',
   handleStroke: '#fff',
-  subRoomFill: '#1A0F08',
+  subRoomFill: '#232222',
   subRoomStroke: '#FF5C1A',
+  finalizedRoomStripe: 'rgba(200, 255, 220, 0.28)',
+  finalizedRoomStripeLineWidth: 1.5,
 };
 
 const LIGHT_CANVAS: CanvasColors = {
@@ -67,8 +73,10 @@ const LIGHT_CANVAS: CanvasColors = {
   dimensionLabelText: '#1a1a1a',
   elementStrokeUnselected: 'rgba(0,0,0,0.35)',
   handleStroke: '#333',
-  subRoomFill: '#FFF5F0',
+  subRoomFill: '#E4E2E0',
   subRoomStroke: '#E85A1A',
+  finalizedRoomStripe: 'rgba(134, 239, 172, 0.45)',
+  finalizedRoomStripeLineWidth: 4,
 };
 
 const ThemeContext = createContext<ThemeContextValue>({

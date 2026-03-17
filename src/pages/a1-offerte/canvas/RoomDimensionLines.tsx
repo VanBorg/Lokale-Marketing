@@ -117,7 +117,7 @@ export default function RoomDimensionLines({
   isDraggingHandle,
   canvasColors,
 }: RoomDimensionLinesProps) {
-  const hasVertices = (room.vertices?.length ?? 0) >= 3 && shapeType !== 'circle' && shapeType !== 'halfcircle';
+  const hasVertices = (room.vertices?.length ?? 0) >= 3;
 
   if (!isSelected && !isDraggingHandle) return null;
 
@@ -125,27 +125,7 @@ export default function RoomDimensionLines({
 
   return (
     <Group opacity={1} listening={false}>
-      {shapeType === 'circle' ? (
-        <>
-          <Line points={[0, cy, w, cy]} stroke={lineColor} strokeWidth={0.5} dash={[3, 2]} />
-          <Line points={[0, cy - 4, 0, cy + 4]} stroke={lineColor} strokeWidth={0.5} />
-          <Line points={[w, cy - 4, w, cy + 4]} stroke={lineColor} strokeWidth={0.5} />
-          <Group x={cx} y={cy} rotation={-rot}>
-            <Rect x={-14} y={-7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
-            <Text text={room.length.toFixed(1)} x={-12} y={-5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
-          </Group>
-        </>
-      ) : shapeType === 'halfcircle' ? (
-        <>
-          <Line points={[0, -20, w, -20]} stroke={lineColor} strokeWidth={0.5} />
-          <Line points={[0, -28, 0, -12]} stroke={lineColor} strokeWidth={0.5} />
-          <Line points={[w, -28, w, -12]} stroke={lineColor} strokeWidth={0.5} />
-          <Group x={cx} y={-20} rotation={-rot}>
-            <Rect x={-14} y={-7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
-            <Text text={room.length.toFixed(1)} x={-12} y={-5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
-          </Group>
-        </>
-      ) : hasVertices ? (
+      {hasVertices ? (
         <VertexDimensionLines room={room} rot={rot} lineColor={lineColor} canvasColors={canvasColors} />
       ) : (() => {
         const wl = room.wallLengths ?? { top: room.length, right: room.width, bottom: room.length, left: room.width };

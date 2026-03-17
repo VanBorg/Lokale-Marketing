@@ -36,54 +36,60 @@ export default function RoomLabels({
 }: RoomLabelsProps) {
   return (
     <>
-      {room.isSubRoom && (
-        <Text
-          text="⊂"
-          x={4}
-          y={h - 16}
-          rotation={-rot}
-          fontSize={10}
-          fill={canvasColors.subRoomStroke}
-          fontFamily="sans-serif"
-        />
-      )}
-      {room.roomType === 'normal' && subRoomCount > 0 && (
-        <Text
-          text={`●${subRoomCount}`}
-          x={w - 24}
-          y={h - 14}
-          rotation={-rot}
-          fontSize={9}
-          fill={canvasColors.subRoomStroke}
-          fontFamily="DM Sans, sans-serif"
-        />
-      )}
       {(() => {
-        if (isLooseSpecial && !isSelected) {
+        if (room.roomType !== 'normal') {
           const icon = ROOM_TYPE_ICONS[room.roomType!] || '';
           const iconSize = 22;
-          const boxSize = iconSize + 12;
+          const pad = 12;
+          const showM2 = isSelected;
+          const boxW = iconSize + pad * 2;
+          const lineH = 14;
+          const boxH = showM2 ? iconSize + pad + lineH : iconSize + pad * 2;
           return (
-            <Group x={cx} y={cy} offsetX={boxSize / 2} offsetY={boxSize / 2} rotation={-rot} opacity={0.8}>
+            <Group x={cx} y={cy} offsetX={boxW / 2} offsetY={boxH / 2} rotation={-rot} opacity={isSelected ? 1 : 0.8}>
+              <Rect
+                x={0}
+                y={0}
+                width={boxW}
+                height={boxH}
+                fill={canvasColors.dimensionLabelBg}
+                stroke={canvasColors.dimensionLabelText}
+                strokeWidth={isSelected ? 0.5 : 0.3}
+                cornerRadius={4}
+                listening={false}
+              />
               <Text
                 text={icon}
                 x={0}
                 y={0}
-                width={boxSize}
-                height={boxSize}
+                width={boxW}
+                height={showM2 ? iconSize + pad : boxH}
                 fontSize={iconSize}
                 fontFamily="sans-serif"
                 align="center"
                 verticalAlign="middle"
                 listening={false}
               />
+              {showM2 && (
+                <Text
+                  text={`${area.toFixed(1)} m²`}
+                  x={0}
+                  y={iconSize + pad}
+                  width={boxW}
+                  height={lineH}
+                  fontSize={10}
+                  fontFamily="DM Sans, sans-serif"
+                  fill={canvasColors.dimensionLabelText}
+                  align="center"
+                  verticalAlign="middle"
+                  listening={false}
+                />
+              )}
             </Group>
           );
         }
         let labelText: string;
-        if (isLooseSpecial) {
-          labelText = `${room.name}\n${area.toFixed(1)} m²`;
-        } else if (room.isSubRoom) {
+        if (room.isSubRoom) {
           labelText = room.name;
         } else if (isSelected) {
           labelText = `${room.name}\n${area.toFixed(1)} m²`;

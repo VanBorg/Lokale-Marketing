@@ -1,4 +1,4 @@
-import { Room, Vertex, getShapeType, ensureVertices, syncRoomFromVertices } from '../types';
+import { Room, Vertex, ensureVertices, syncRoomFromVertices } from '../types';
 import { PX_PER_M, FacingEdgePair, GapInfo } from './canvasTypes';
 
 /* ── Constants ──────────────────────────────────────────────────── */
@@ -128,16 +128,11 @@ export function detectRoomGaps(
   if (placedRoom.isFinalized) return [];
   if ((placedRoom.rotation || 0) !== 0) return [];
 
-  const placedST = placedRoom.shapeType ?? getShapeType(placedRoom.shape);
-  if (placedST === 'circle' || placedST === 'halfcircle' || placedST === 'ruit') return [];
-
   const gaps: GapInfo[] = [];
 
   for (const ref of rooms) {
     if (ref.id === placedRoom.id || !ref.isFinalized) continue;
     if ((ref.rotation || 0) !== 0) continue;
-    const refST = ref.shapeType ?? getShapeType(ref.shape);
-    if (refST === 'circle' || refST === 'halfcircle' || refST === 'ruit') continue;
 
     const pairs = findFacingEdgePairs(placedRoom, ref);
     if (pairs.length === 0) continue;
@@ -206,15 +201,11 @@ export function computeWizardFill(
 
     for (const i of [i1, i2]) {
       if (pair.axis === 'x') {
-        const worldY = targetRoom.y + verts[i].y * PX_PER_M;
-        if (worldY < pair.overlapMin - 1 || worldY > pair.overlapMax + 1) continue;
         if (!dxSet[i] || Math.abs(deltaM) < Math.abs(dx[i])) {
           dx[i] = deltaM;
           dxSet[i] = true;
         }
       } else {
-        const worldX = targetRoom.x + verts[i].x * PX_PER_M;
-        if (worldX < pair.overlapMin - 1 || worldX > pair.overlapMax + 1) continue;
         if (!dySet[i] || Math.abs(deltaM) < Math.abs(dy[i])) {
           dy[i] = deltaM;
           dySet[i] = true;

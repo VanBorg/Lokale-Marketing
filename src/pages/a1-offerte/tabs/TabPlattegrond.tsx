@@ -159,6 +159,11 @@ export default function TabPlattegrond({
 
   const addSpecialRoom = useCallback(
     (type: RoomType, name: string, length: number, width: number) => {
+      const spawn = canvasRef.current?.getSpawnPosition?.();
+      const defaultX = 50 + rooms.length * 30;
+      const defaultY = 50 + rooms.length * 30;
+      const x = spawn ? spawn.x - (length * 40) / 2 : defaultX;
+      const y = spawn ? spawn.y - (width * 40) / 2 : defaultY;
       const newRoom: Room = {
         id: crypto.randomUUID(),
         name,
@@ -168,8 +173,8 @@ export default function TabPlattegrond({
         length,
         width,
         height: 2.6,
-        x: 50 + rooms.length * 30,
-        y: 50 + rooms.length * 30,
+        x,
+        y,
         elements: [],
         wallLengths: { top: length, right: width, bottom: length, left: width },
         walls: createDefaultWalls(2.6),

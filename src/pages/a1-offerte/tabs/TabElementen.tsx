@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Stage as KonvaStage, Layer, Line, Rect, Arc, Circle, Text, Group } from 'react-konva';
+import { Stage as KonvaStage, Layer, Line, Rect, Arc, Text, Group } from 'react-konva';
 import Konva from 'konva';
 import { Trash2 } from 'lucide-react';
-import { Floor, Room, RoomElement, ELEMENT_DEFAULTS, getShapePoints, getShapeType, computeQuadCorners, ROOM_TYPE_ICONS, ensureVertices, verticesToPoints, verticesBoundingBox } from '../types';
+import { Floor, Room, RoomElement, ELEMENT_DEFAULTS, getShapePoints, computeQuadCorners, ROOM_TYPE_ICONS, ensureVertices, verticesToPoints, verticesBoundingBox } from '../types';
 import { useTheme } from '../../../hooks/useTheme';
 import KamerSelector from '../components/KamerSelector';
 
@@ -64,15 +64,12 @@ function renderElementContent(
 }
 
 function miniBounds(room: Room): { w: number; h: number } {
-  const st = room.shapeType ?? getShapeType(room.shape);
-  if (st === 'circle') { const d = room.length * PX_PER_M; return { w: d, h: d }; }
-  if (st === 'halfcircle') { const r = (room.length * PX_PER_M) / 2; return { w: r * 2, h: r }; }
   if (room.vertices && room.vertices.length >= 3) {
     const bb = verticesBoundingBox(room.vertices);
     return { w: bb.w * PX_PER_M, h: bb.h * PX_PER_M };
   }
   const wl = room.wallLengths;
-  if (st === 'rect' && wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
+  if (wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
     const pts = computeQuadCorners(wl);
     let mx = 0, my = 0;
     for (let i = 0; i < pts.length; i += 2) { mx = Math.max(mx, pts[i]); my = Math.max(my, pts[i + 1]); }
@@ -82,12 +79,11 @@ function miniBounds(room: Room): { w: number; h: number } {
 }
 
 function miniPoints(room: Room, w: number, h: number): number[] {
-  const st = room.shapeType ?? getShapeType(room.shape);
   if (room.vertices && room.vertices.length >= 3) {
     return verticesToPoints(ensureVertices(room));
   }
   const wl = room.wallLengths;
-  if (st === 'rect' && wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
+  if (wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
     return computeQuadCorners(wl);
   }
   return getShapePoints(room.shape, w, h);
@@ -235,10 +231,8 @@ export default function TabElementen({
   }, [rooms, miniWidth]);
 
   const roomW = selectedRoom ? selectedRoom.length * PX_PER_M : 0;
-  const shapeType = selectedRoom ? (selectedRoom.shapeType ?? getShapeType(selectedRoom.shape)) : 'rect';
-  const roomH = selectedRoom
-    ? (shapeType === 'circle' ? roomW : selectedRoom.width * PX_PER_M)
-    : 0;
+  
+  const roomH = selectedRoom ? selectedRoom.width * PX_PER_M : 0;
 
   const padding = 60;
   const scaleX = roomW > 0 ? (canvasSize.width - padding * 2) / roomW : 1;
@@ -311,7 +305,6 @@ export default function TabElementen({
                     <Layer>
                       <Group x={miniData.oX} y={miniData.oY} scaleX={miniData.s} scaleY={miniData.s}>
                         {rooms.map(r => {
-                          const st = r.shapeType ?? getShapeType(r.shape);
                           const { w: rw, h: rh } = miniBounds(r);
                           const isSel = r.id === selectedRoomId;
                           const pts = miniPoints(r, rw, rh);
@@ -319,13 +312,7 @@ export default function TabElementen({
                           const strokeColor = isSel ? canvasColors.roomStrokeSelected : (r.isSubRoom ? canvasColors.subRoomStroke : canvasColors.roomStroke);
                           return (
                             <Group key={r.id} x={r.x} y={r.y}>
-                              {st === 'circle' ? (
-                                <Circle x={rw / 2} y={rh / 2} radius={rw / 2} fill={fill} stroke={strokeColor} strokeWidth={isSel ? 2 / miniData.s : 1 / miniData.s} />
-                              ) : st === 'halfcircle' ? (
-                                <Arc x={rw / 2} y={rh / 2} innerRadius={0} outerRadius={rw / 2} angle={180} rotation={-90} fill={fill} stroke={strokeColor} strokeWidth={isSel ? 2 / miniData.s : 1 / miniData.s} />
-                              ) : (
-                                <Line points={pts} closed fill={fill} stroke={strokeColor} strokeWidth={isSel ? 2 / miniData.s : 1 / miniData.s} />
-                              )}
+                              <Line points={pts} closed fill={fill} stroke={strokeColor} strokeWidth={isSel ? 2 / miniData.s : 1 / miniData.s} />
                               <Text
                                 text={r.name}
                                 x={4}
@@ -357,7 +344,7 @@ export default function TabElementen({
               <Stage width={canvasSize.width} height={canvasSize.height}>
                 <Layer>
                   <Group x={offsetX} y={offsetY} scaleX={canvasScale} scaleY={canvasScale}>
-                    {shapeType === 'rect' && (
+                    {selectedRoom && (
                       <Line
                         points={getShapePoints(selectedRoom.shape, roomW, roomH)}
                         closed
@@ -366,14 +353,7 @@ export default function TabElementen({
                         strokeWidth={2 / canvasScale}
                       />
                     )}
-                    {shapeType === 'circle' && (
-                      <Circle x={roomW / 2} y={roomH / 2} radius={roomW / 2} fill={canvasColors.roomFill} stroke={canvasColors.roomStrokeSelected} strokeWidth={2 / canvasScale} />
-                    )}
-                    {shapeType === 'halfcircle' && (
-                      <Arc x={roomW / 2} y={roomH / 2} innerRadius={0} outerRadius={roomW / 2} angle={180} rotation={-90} fill={canvasColors.roomFill} stroke={canvasColors.roomStrokeSelected} strokeWidth={2 / canvasScale} />
-                    )}
-
-                    {shapeType === 'rect' && (
+                    {(
                       <>
                         <Text text="1" x={roomW / 2 - 4} y={4} fontSize={12 / canvasScale} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
                         <Text text="2" x={roomW - 16 / canvasScale} y={roomH / 2 - 6} fontSize={12 / canvasScale} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />

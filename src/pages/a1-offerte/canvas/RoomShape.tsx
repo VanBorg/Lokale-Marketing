@@ -1,7 +1,6 @@
 import React from 'react';
-import { Line, Arc, Circle, Shape } from 'react-konva';
+import { Line, Shape } from 'react-konva';
 import { Room } from '../types';
-import { PX_PER_M } from './canvasTypes';
 
 interface RoomShapeProps {
   shapeType: NonNullable<Room['shapeType']>;
@@ -18,18 +17,15 @@ interface RoomShapeProps {
   room: Room;
   isLooseSpecial: boolean;
   isSpecialRoom: boolean;
-  finalizedStripeGreen?: string;
-  finalizedStripeLineWidth?: number;
-  finalizedSolidGreen?: string;
+  /** Diagonal stripe colour for finalized rooms (all rooms use same style) */
+  finalizedRoomStripe?: string;
+  finalizedRoomStripeLineWidth?: number;
 }
 
 export default function RoomShape({
-  shapeType,
   points,
   w,
   h,
-  cx,
-  cy,
   roomFill,
   stroke,
   strokeOpacity,
@@ -37,16 +33,14 @@ export default function RoomShape({
   isSelected,
   room,
   isLooseSpecial,
-  isSpecialRoom,
-  finalizedStripeGreen,
-  finalizedStripeLineWidth,
-  finalizedSolidGreen,
+  finalizedRoomStripe,
+  finalizedRoomStripeLineWidth,
 }: RoomShapeProps) {
   return (
     <>
-      {shapeType === 'rect' && (() => {
+      {(() => {
         const topSloped = room.walls.top.heightLeft !== room.walls.top.heightRight;
-        const useGradient = topSloped && !room.isSubRoom && !isLooseSpecial;
+        const useGradient = topSloped && !room.isSubRoom && !isLooseSpecial && !room.isFinalized;
         const higherLeft = room.walls.top.heightLeft > room.walls.top.heightRight;
 
         return (
@@ -69,7 +63,7 @@ export default function RoomShape({
           />
         );
       })()}
-      {shapeType === 'rect' && (() => {
+      {(() => {
         const slopedWalls: { wall: string; x1: number; y1: number; x2: number; y2: number }[] = [];
         if (room.walls.top.heightLeft !== room.walls.top.heightRight)
           slopedWalls.push({ wall: 'top', x1: 0, y1: 0, x2: w, y2: 0 });
@@ -104,117 +98,17 @@ export default function RoomShape({
           </>
         );
       })()}
-      {shapeType === 'circle' && (
-        <Circle
-          x={cx}
-          y={cy}
-          radius={(room.length * PX_PER_M) / 2}
-          fill={roomFill}
-          stroke={stroke}
-          strokeWidth={isSelected ? 2 : 1}
-          opacity={strokeOpacity}
-          dash={dashPattern}
-        />
-      )}
-      {shapeType === 'halfcircle' && (
-        <Arc
-          x={cx}
-          y={cy}
-          innerRadius={0}
-          outerRadius={(room.length * PX_PER_M) / 2}
-          angle={180}
-          rotation={-90}
-          fill={roomFill}
-          stroke={stroke}
-          strokeWidth={isSelected ? 2 : 1}
-          opacity={strokeOpacity}
-          dash={dashPattern}
-        />
-      )}
-      {shapeType === 'plus' && (
-        <Shape
-          sceneFunc={(context: any, shape: any) => {
-            const tx = w / 3;
-            const ty = h / 3;
-            context.beginPath();
-            context.moveTo(tx, 0);
-            context.lineTo(w - tx, 0);
-            context.lineTo(w - tx, ty);
-            context.lineTo(w, ty);
-            context.lineTo(w, h - ty);
-            context.lineTo(w - tx, h - ty);
-            context.lineTo(w - tx, h);
-            context.lineTo(tx, h);
-            context.lineTo(tx, h - ty);
-            context.lineTo(0, h - ty);
-            context.lineTo(0, ty);
-            context.lineTo(tx, ty);
-            context.closePath();
-            context.fillStrokeShape(shape);
-          }}
-          fill={roomFill}
-          stroke={stroke}
-          strokeWidth={isSelected ? 2 : 1}
-          opacity={strokeOpacity}
-          dash={dashPattern}
-        />
-      )}
-      {shapeType === 'ruit' && (
-        <Shape
-          sceneFunc={(context: any, shape: any) => {
-            context.beginPath();
-            context.moveTo(w / 2, 0);
-            context.lineTo(w, h / 2);
-            context.lineTo(w / 2, h);
-            context.lineTo(0, h / 2);
-            context.closePath();
-            context.fillStrokeShape(shape);
-          }}
-          fill={roomFill}
-          stroke={stroke}
-          strokeWidth={isSelected ? 2 : 1}
-          opacity={strokeOpacity}
-          dash={dashPattern}
-        />
-      )}
-      {room.isFinalized && finalizedSolidGreen != null && isSpecialRoom && (
+      {room.isFinalized && finalizedRoomStripe != null && finalizedRoomStripeLineWidth != null && (
         <Shape
           sceneFunc={(ctx: any) => {
             ctx.save();
             ctx.beginPath();
-            if (shapeType === 'circle') {
-              ctx.arc(cx, cy, w / 2, 0, Math.PI * 2);
-            } else if (shapeType === 'halfcircle') {
-              ctx.arc(cx, cy, w / 2, -Math.PI / 2, Math.PI / 2);
-            } else {
-              ctx.moveTo(points[0], points[1]);
-              for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
-              ctx.closePath();
-            }
-            ctx.fillStyle = finalizedSolidGreen;
-            ctx.fill();
-            ctx.restore();
-          }}
-          listening={false}
-        />
-      )}
-      {room.isFinalized && finalizedStripeGreen != null && finalizedStripeLineWidth != null && !isSpecialRoom && (
-        <Shape
-          sceneFunc={(ctx: any) => {
-            ctx.save();
-            ctx.beginPath();
-            if (shapeType === 'circle') {
-              ctx.arc(cx, cy, w / 2, 0, Math.PI * 2);
-            } else if (shapeType === 'halfcircle') {
-              ctx.arc(cx, cy, w / 2, -Math.PI / 2, Math.PI / 2);
-            } else {
-              ctx.moveTo(points[0], points[1]);
-              for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
-              ctx.closePath();
-            }
+            ctx.moveTo(points[0], points[1]);
+            for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
+            ctx.closePath();
             ctx.clip();
-            ctx.strokeStyle = finalizedStripeGreen;
-            ctx.lineWidth = finalizedStripeLineWidth;
+            ctx.strokeStyle = finalizedRoomStripe;
+            ctx.lineWidth = finalizedRoomStripeLineWidth;
             ctx.lineCap = 'butt';
             const step = 12;
             for (let y = -w; y <= h + w; y += step) {

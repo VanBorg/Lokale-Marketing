@@ -42,10 +42,14 @@ export function snapPosition(
 
   const walls: readonly WallId[] = activeWalls && activeWalls.length > 0 ? activeWalls : ['left', 'right', 'top', 'bottom'];
 
+  // When dragging a special room (WC, Kast, Nis, etc.), only snap to normal rooms so they magnet to main walls.
+  const snapTargets = dragged.roomType !== 'normal'
+    ? rooms.filter(r => r.id !== draggedId && r.roomType === 'normal')
+    : rooms.filter(r => r.id !== draggedId);
+
   const tryRoomSnapX = (): boolean => {
     let bestDx = threshold;
-    for (const other of rooms) {
-      if (other.id === draggedId) continue;
+    for (const other of snapTargets) {
       const ow = boundingSize(other).w;
       if (walls.includes('left')) {
         const dAdj = Math.abs(x - (other.x + ow));
@@ -65,8 +69,7 @@ export function snapPosition(
 
   const tryRoomSnapY = (): boolean => {
     let bestDy = threshold;
-    for (const other of rooms) {
-      if (other.id === draggedId) continue;
+    for (const other of snapTargets) {
       const oh = boundingSize(other).h;
       if (walls.includes('top')) {
         const dAdj = Math.abs(y - (other.y + oh));
@@ -97,8 +100,7 @@ export function snapPosition(
   if (!hasXWalls && !hasYWalls) {
     const dragEdges = getShapeSnapEdges(dragged);
     let bestDx = threshold, bestDy = threshold;
-    for (const other of rooms) {
-      if (other.id === draggedId) continue;
+    for (const other of snapTargets) {
       const ow = boundingSize(other).w;
       const oh = boundingSize(other).h;
       for (const de of dragEdges.x) {
@@ -132,6 +134,25 @@ export function snapPosition(
           snappedToId = other.id;
           snappedWall = 'bottom';
         }
+      }
+    }
+  }
+
+  // For special rooms (WC, Kast, Nis, etc.): align perpendicular axis so the room stays
+  // adjacent to the target wall and detectSubRooms can set attachedWall correctly.
+  if (dragged.roomType !== 'normal' && snappedToId && snappedWall) {
+    const other = rooms.find(r => r.id === snappedToId);
+    if (other) {
+      const oh = boundingSize(other).h;
+      const ow = boundingSize(other).w;
+      if (snappedWall === 'left' || snappedWall === 'right') {
+        const minY = other.y - dh + 1;
+        const maxY = other.y + oh - 1;
+        sy = Math.max(minY, Math.min(maxY, sy));
+      } else {
+        const minX = other.x - dw + 1;
+        const maxX = other.x + ow - 1;
+        sx = Math.max(minX, Math.min(maxX, sx));
       }
     }
   }

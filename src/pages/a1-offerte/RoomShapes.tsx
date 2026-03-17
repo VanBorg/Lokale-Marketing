@@ -6,11 +6,6 @@ const shapeIcons: Record<string, React.ReactNode> = {
       <rect x="3" y="5" width="18" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
-  langwerpig: (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <rect x="2" y="8" width="20" height="8" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
   'l-vorm': (
     <svg viewBox="0 0 24 24" className="w-6 h-6">
       <path d="M3 3 H12 V12 H21 V21 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -31,16 +26,6 @@ const shapeIcons: Record<string, React.ReactNode> = {
       <path d="M3 3 H9 V14 H15 V3 H21 V21 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
-  trapezium: (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M6 5 H18 L21 19 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  'plus-vorm': (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M9 3 H15 V9 H21 V15 H15 V21 H9 V15 H3 V9 H9 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
   'i-vorm': (
     <svg viewBox="0 0 24 24" className="w-6 h-6">
       <path d="M4 5 H20 V9 H15 V15 H20 V19 H4 V15 H9 V9 H4 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -54,26 +39,6 @@ const shapeIcons: Record<string, React.ReactNode> = {
   'z-vorm-inv': (
     <svg viewBox="0 0 24 24" className="w-6 h-6">
       <path d="M12 3 H21 V14 H12 V21 H3 V10 H12 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  's-vorm': (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M3 8 H12 V3 H21 V16 H12 V21 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  's-vorm-inv': (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M3 3 H12 V8 H21 V21 H12 V16 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  vijfhoek: (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M12 3 L21 10 L18 21 H6 L3 10 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  'halve-cirkel': (
-    <svg viewBox="0 0 24 24" className="w-6 h-6">
-      <path d="M3 19 A9 9 0 0 1 21 19 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
 };
