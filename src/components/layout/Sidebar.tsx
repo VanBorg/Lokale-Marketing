@@ -10,6 +10,8 @@ import {
   Truck,
   ShieldCheck,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -17,6 +19,11 @@ interface MenuItem {
   label: string;
   path: string;
   icon: React.ReactNode;
+}
+
+interface SidebarProps {
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
 const moduleA: MenuItem[] = [
@@ -74,11 +81,29 @@ function ModuleGroup({ title, items, defaultOpen = true }: { title: string; item
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   return (
-    <aside className="fixed left-0 top-14 bottom-0 w-64 bg-dark border-r border-dark-border overflow-y-auto py-4">
-      <ModuleGroup title="Offerte & Inkoop" items={moduleA} />
-      <ModuleGroup title="Document Scanner" items={moduleB} />
+    <aside
+      className={`fixed left-0 top-14 bottom-0 bg-dark border-r border-dark-border transition-all duration-200 overflow-hidden flex flex-col ${
+        isOpen ? 'w-64' : 'w-12'
+      }`}
+    >
+      {/* Toggle button – always visible at the top */}
+      <button
+        onClick={onToggle}
+        title={isOpen ? 'Sidebar verbergen' : 'Sidebar tonen'}
+        className="shrink-0 flex items-center justify-center h-10 w-full border-b border-dark-border text-light/40 hover:text-light hover:bg-dark-card transition-colors cursor-pointer"
+      >
+        {isOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+      </button>
+
+      {/* Nav content – shown only when expanded */}
+      {isOpen && (
+        <div className="flex-1 overflow-y-auto py-4">
+          <ModuleGroup title="Offerte & Inkoop" items={moduleA} />
+          <ModuleGroup title="Document Scanner" items={moduleB} />
+        </div>
+      )}
     </aside>
   );
 }

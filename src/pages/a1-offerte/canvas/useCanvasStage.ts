@@ -5,13 +5,18 @@ import { SCALE_BY, MIN_SCALE, MAX_SCALE } from './canvasTypes';
 export function useCanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
+  // Always-current size ref so goToCenter is never stale when called from
+  // effects that captured an earlier closure (e.g. on first mount).
+  const sizeRef = useRef({ width: 800, height: 600 });
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
   const measure = useCallback(() => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
-      setSize({ width: rect.width, height: rect.height - 44 });
+      const newSize = { width: rect.width, height: rect.height - 44 };
+      sizeRef.current = newSize; // sync update so goToCenter sees it immediately
+      setSize(newSize);
     }
   }, []);
 
@@ -47,8 +52,9 @@ export function useCanvasStage() {
   const resetZoom = useCallback(() => { setScale(1); setStagePos({ x: 0, y: 0 }); }, []);
 
   const goToCenter = useCallback(() => {
-    setStagePos({ x: size.width / 2, y: size.height / 2 });
-  }, [size.width, size.height]);
+    // Use sizeRef so this is always correct even when called from a stale closure
+    setStagePos({ x: sizeRef.current.width / 2, y: sizeRef.current.height / 2 });
+  }, []); // no size dependency needed — ref is always current
 
   const handleStageDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     if (e.target !== e.target.getStage()) return;
