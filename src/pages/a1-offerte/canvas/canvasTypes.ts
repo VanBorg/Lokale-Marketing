@@ -59,7 +59,12 @@ export interface PlattegrondCanvasProps {
   onCopy?: () => void;
   onCut?: () => void;
   onPaste?: () => void;
+  onMoveRooms?: (moves: Array<{ id: string; x: number; y: number }>) => void;
   beginBatch?: () => void;
   endBatch?: () => void;
   selectedWallIndices?: number[];
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }

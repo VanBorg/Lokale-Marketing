@@ -47,6 +47,10 @@ interface TabPlattegrondProps {
   setActiveTab: (tab: 1 | 2 | 3 | 4) => void;
   beginBatch: () => void;
   endBatch: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 export default function TabPlattegrond({
@@ -57,6 +61,10 @@ export default function TabPlattegrond({
   setActiveTab,
   beginBatch,
   endBatch,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: TabPlattegrondProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [lastShape, setLastShape] = useState<string | null>(null);
@@ -253,6 +261,19 @@ export default function TabPlattegrond({
     [updateActiveFloorRooms],
   );
 
+  const moveRooms = useCallback(
+    (moves: Array<{ id: string; x: number; y: number }>) => {
+      updateActiveFloorRooms(prev => {
+        let next = [...prev];
+        for (const m of moves) {
+          next = next.map(r => (r.id === m.id ? { ...r, x: m.x, y: m.y } : r));
+        }
+        return detectSubRooms(next);
+      });
+    },
+    [updateActiveFloorRooms],
+  );
+
   const placeElement = useCallback(
     (roomId: string, wall: 'top' | 'right' | 'bottom' | 'left', position: number) => {
       if (!placingElement) return;
@@ -407,9 +428,14 @@ export default function TabPlattegrond({
           onCopy={copyRoom}
           onCut={cutRoom}
           onPaste={pasteRoom}
+          onMoveRooms={moveRooms}
           beginBatch={beginBatch}
           endBatch={endBatch}
           selectedWallIndices={selectedWallIndices}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={onUndo}
+          onRedo={onRedo}
         />
 
         <div className="w-80 shrink-0 border-l border-dark-border bg-dark overflow-y-auto flex flex-col">

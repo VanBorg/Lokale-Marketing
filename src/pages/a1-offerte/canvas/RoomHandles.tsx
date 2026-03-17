@@ -50,6 +50,8 @@ export default function RoomHandles({
           strokeWidth={1}
           onMouseDown={(e: Konva.KonvaEventObject<MouseEvent>) => {
             e.cancelBubble = true;
+            const parent = e.target.getParent();
+            if (parent) parent.draggable(false);
             const stage = e.target.getStage();
             if (!stage) return;
             const pos = stage.getPointerPosition();

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Line, Circle, Group } from 'react-konva';
+import { Line, Circle, Group, Rect } from 'react-konva';
 import Konva from 'konva';
 import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
@@ -60,6 +60,11 @@ interface CanvasRoomProps {
   onDragStartWalls: (roomId: string, walls: WallId[]) => void;
   onDragEndRoom: () => void;
   onVertexHandleMouseDown?: (vertexIndex: number, worldX: number, worldY: number) => void;
+  isMultiSelected?: boolean;
+  multiDragOffset?: { dx: number; dy: number } | null;
+  selectionModifierHeld?: boolean;
+  onRoomClick?: (roomId: string, evt: MouseEvent) => void;
+  onRoomDragMove?: (roomId: string, dx: number, dy: number) => void;
 }
 
 export default function CanvasRoom({
@@ -87,6 +92,11 @@ export default function CanvasRoom({
   onDragStartWalls,
   onDragEndRoom,
   onVertexHandleMouseDown,
+  isMultiSelected,
+  multiDragOffset,
+  selectionModifierHeld,
+  onRoomClick,
+  onRoomDragMove,
 }: CanvasRoomProps) {
   const snapHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalizedStripeGreen = theme === 'dark' ? 'rgba(200, 255, 220, 0.28)' : 'rgba(134, 239, 172, 0.45)';
@@ -123,18 +133,23 @@ export default function CanvasRoom({
   return (
     <Group
       key={room.id}
-      x={room.x + cx}
-      y={room.y + cy}
+      x={room.x + cx + (multiDragOffset?.dx ?? 0)}
+      y={room.y + cy + (multiDragOffset?.dy ?? 0)}
       offsetX={cx}
       offsetY={cy}
       rotation={rot}
       opacity={room.id === cutRoomId ? 0.4 : 1}
-      draggable={!placingElement && !draggingHandle && !isDraggingVertex && !room.isFinalized}
+      draggable={!placingElement && !draggingHandle && !isDraggingVertex && !room.isFinalized && !selectionModifierHeld}
       onDragStart={(e: Konva.KonvaEventObject<DragEvent>) => {
         const pos = e.target.getRelativePointerPosition();
         if (pos) {
           const walls = getDragFromWalls(pos.x, pos.y, w, h);
           onDragStartWalls(room.id, walls);
+        }
+      }}
+      onDragMove={(e: Konva.KonvaEventObject<DragEvent>) => {
+        if (isMultiSelected && onRoomDragMove) {
+          onRoomDragMove(room.id, e.target.x() - cx - room.x, e.target.y() - cy - room.y);
         }
       }}
       onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
@@ -160,7 +175,12 @@ export default function CanvasRoom({
           onPlaceElement?.(room.id, ghostPos.wall, ghostPos.position);
           return;
         }
-        onSelectRoom(room.id);
+        if (onRoomClick && (e.evt.ctrlKey || e.evt.metaKey || e.evt.shiftKey)) {
+          e.cancelBubble = true;
+          onRoomClick(room.id, e.evt);
+        } else {
+          onSelectRoom(room.id);
+        }
       }}
       onTap={() => onSelectRoom(room.id)}
     >
@@ -197,6 +217,19 @@ export default function CanvasRoom({
             <Line points={[0, h, w, h]} stroke={theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(255,180,80,0.85)'} strokeWidth={2.5} />
           )}
         </Group>
+      )}
+      {isMultiSelected && (
+        <Rect
+          x={-4}
+          y={-4}
+          width={w + 8}
+          height={h + 8}
+          stroke="#3B82F6"
+          strokeWidth={1.5}
+          dash={[6, 4]}
+          listening={false}
+          cornerRadius={3}
+        />
       )}
       <RoomLabels
         room={room}

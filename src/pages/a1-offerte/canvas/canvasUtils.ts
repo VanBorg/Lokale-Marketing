@@ -303,16 +303,24 @@ export function computeHandleDrag(
   rawDx: number,
   rawDy: number,
 ): { x: number; y: number; wallLengths: Room['wallLengths']; vertices?: Vertex[]; length: number; width: number } {
+  const shapeType = startRoom.shapeType ?? getShapeType(startRoom.shape);
   const rot = startRoom.rotation || 0;
   const rad = -(rot * Math.PI) / 180;
   const dx = rawDx * Math.cos(rad) - rawDy * Math.sin(rad);
   const dy = rawDx * Math.sin(rad) + rawDy * Math.cos(rad);
+  const dM = 1 / PX_PER_M;
+
+  if (shapeType === 'circle') {
+    return computeCircleHandleDrag(handle, startRoom, dx, dy, rawDx, rawDy, dM);
+  }
+  if (shapeType === 'halfcircle') {
+    return computeHalfcircleHandleDrag(handle, startRoom, dx, dy, rawDx, rawDy, dM);
+  }
 
   const verts = ensureVertices(startRoom);
   const bb = verticesBoundingBox(verts);
   const oldW = Math.max(bb.w, 0.1);
   const oldH = Math.max(bb.h, 0.1);
-  const dM = 1 / PX_PER_M;
 
   let addW = 0;
   let addH = 0;
@@ -344,7 +352,97 @@ export function computeHandleDrag(
 
   const synced = syncRoomFromVertices(scaled);
 
-  return { x: newX, y: newY, wallLengths: synced.wallLengths, vertices: scaled, length: synced.length, width: synced.width };
+  const useVertices = shapeType === 'rect';
+  return {
+    x: newX, y: newY,
+    wallLengths: synced.wallLengths,
+    vertices: useVertices ? scaled : undefined,
+    length: synced.length, width: synced.width,
+  };
+}
+
+function computeCircleHandleDrag(
+  handle: HandleType, startRoom: Room,
+  dx: number, dy: number, _rawDx: number, _rawDy: number, dM: number,
+): { x: number; y: number; wallLengths: Room['wallLengths']; length: number; width: number } {
+  const oldD = startRoom.length;
+  let addD = 0;
+
+  switch (handle) {
+    case 'e':  addD = dx * dM; break;
+    case 'w':  addD = -dx * dM; break;
+    case 's':  addD = dy * dM; break;
+    case 'n':  addD = -dy * dM; break;
+    case 'se': addD = Math.max(dx, dy) * dM; break;
+    case 'sw': addD = Math.max(-dx, dy) * dM; break;
+    case 'ne': addD = Math.max(dx, -dy) * dM; break;
+    case 'nw': addD = Math.max(-dx, -dy) * dM; break;
+  }
+
+  const newD = Math.max(0.1, oldD + addD);
+  const delta = (newD - oldD) * PX_PER_M;
+
+  let newX = startRoom.x;
+  let newY = startRoom.y;
+
+  switch (handle) {
+    case 'e':  newY = startRoom.y - delta / 2; break;
+    case 'w':  newX = startRoom.x - delta; newY = startRoom.y - delta / 2; break;
+    case 's':  newX = startRoom.x - delta / 2; break;
+    case 'n':  newX = startRoom.x - delta / 2; newY = startRoom.y - delta; break;
+    case 'sw': newX = startRoom.x - delta; break;
+    case 'ne': newY = startRoom.y - delta; break;
+    case 'nw': newX = startRoom.x - delta; newY = startRoom.y - delta; break;
+  }
+
+  const d = parseFloat(newD.toFixed(2));
+  return {
+    x: newX, y: newY, length: d, width: d,
+    wallLengths: { top: d, right: d, bottom: d, left: d },
+  };
+}
+
+function computeHalfcircleHandleDrag(
+  handle: HandleType, startRoom: Room,
+  dx: number, dy: number, _rawDx: number, _rawDy: number, dM: number,
+): { x: number; y: number; wallLengths: Room['wallLengths']; length: number; width: number } {
+  const oldD = startRoom.length;
+  let addD = 0;
+
+  switch (handle) {
+    case 'e':  addD = dx * dM; break;
+    case 'w':  addD = -dx * dM; break;
+    case 's':  addD = dy * dM * 2; break;
+    case 'n':  addD = -dy * dM * 2; break;
+    case 'se': addD = Math.max(dx, dy * 2) * dM; break;
+    case 'sw': addD = Math.max(-dx, dy * 2) * dM; break;
+    case 'ne': addD = Math.max(dx, -dy * 2) * dM; break;
+    case 'nw': addD = Math.max(-dx, -dy * 2) * dM; break;
+  }
+
+  const newD = Math.max(0.1, oldD + addD);
+  const deltaW = (newD - oldD) * PX_PER_M;
+  const deltaH = deltaW / 2;
+
+  let newX = startRoom.x;
+  let newY = startRoom.y;
+
+  switch (handle) {
+    case 'e':  newY = startRoom.y - deltaH / 2; break;
+    case 'w':  newX = startRoom.x - deltaW; newY = startRoom.y - deltaH / 2; break;
+    case 's':  newX = startRoom.x - deltaW / 2; break;
+    case 'n':  newX = startRoom.x - deltaW / 2; newY = startRoom.y - deltaH; break;
+    case 'sw': newX = startRoom.x - deltaW; break;
+    case 'ne': newY = startRoom.y - deltaH; break;
+    case 'nw': newX = startRoom.x - deltaW; newY = startRoom.y - deltaH; break;
+  }
+
+  const d = parseFloat(newD.toFixed(2));
+  const r = parseFloat((newD / 2).toFixed(2));
+  return {
+    x: newX, y: newY, length: d, width: r,
+    wallLengths: { top: d, right: r, bottom: d, left: r },
+  };
 }
 
 export function computeVertexDrag(

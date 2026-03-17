@@ -4,7 +4,7 @@ import Konva from 'konva';
 import { calcTotalWalls, ensureVertices, syncRoomFromVertices } from './types';
 import { useTheme } from '../../hooks/useTheme';
 import { WallId, DraggingHandle, DraggingVertex, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps } from './canvas/canvasTypes';
-import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms } from './canvas/canvasUtils';
+import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
 import CanvasGrid from './canvas/CanvasGrid';
 import CanvasRoom from './canvas/CanvasRoom';
@@ -21,8 +21,10 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   placingElement, onPlaceElement, onCancelPlacing,
   selectedRoom, clipboard, isCut, cutRoomId,
   onDuplicate, onCopy, onCut, onPaste,
+  onMoveRooms,
   beginBatch, endBatch,
   selectedWallIndices,
+  canUndo, canRedo, onUndo, onRedo,
 }, ref) {
   const { theme, canvasColors } = useTheme();
   const { containerRef, size, scale, stagePos, handleWheel, adjustZoom, resetZoom, goToCenter, handleStageDragEnd } = useCanvasStage();
@@ -56,6 +58,14 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const [snapHighlight, setSnapHighlight] = useState<{ roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null>(null);
   const [dragFromWalls, setDragFromWalls] = useState<{ roomId: string; walls: WallId[] } | null>(null);
 
+  const [selectedRoomIds, setSelectedRoomIds] = useState<Set<string>>(new Set());
+  const [multiDragDelta, setMultiDragDelta] = useState<{ dx: number; dy: number } | null>(null);
+  const multiDragOriginIdRef = useRef<string | null>(null);
+  const [marquee, setMarquee] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
+  const internalSelectRef = useRef(false);
+  const justFinishedDragRef = useRef(false);
+  const [modifierHeld, setModifierHeld] = useState(false);
+
   const setDraggingHandle = useCallback((handle: DraggingHandle) => {
     if (handle && !draggingHandle) beginBatch?.();
     setDraggingHandleRaw(handle);
@@ -65,12 +75,125 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     if (!placingElement) setGhostPos(null);
   }, [placingElement]);
 
+  useEffect(() => {
+    const update = (e: KeyboardEvent) => setModifierHeld(e.ctrlKey || e.metaKey || e.shiftKey);
+    const blur = () => setModifierHeld(false);
+    window.addEventListener('keydown', update);
+    window.addEventListener('keyup', update);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.removeEventListener('keydown', update);
+      window.removeEventListener('keyup', update);
+      window.removeEventListener('blur', blur);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (internalSelectRef.current) {
+      internalSelectRef.current = false;
+      return;
+    }
+    setSelectedRoomIds(selectedRoomId ? new Set([selectedRoomId]) : new Set());
+  }, [selectedRoomId]);
+
+  useEffect(() => {
+    const roomIds = new Set(rooms.map(r => r.id));
+    setSelectedRoomIds(prev => {
+      const next = new Set(Array.from(prev).filter(id => roomIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rooms]);
+
   const totals = rooms.reduce(
     (acc, r) => ({ floor: acc.floor + r.length * r.width, walls: acc.walls + calcTotalWalls(r), ceiling: acc.ceiling + r.length * r.width }),
     { floor: 0, walls: 0, ceiling: 0 },
   );
 
   const grid = computeGridLines(size, stagePos, scale);
+
+  const selectRoom = useCallback((id: string | null) => {
+    setSelectedRoomIds(id ? new Set([id]) : new Set());
+    setMultiDragDelta(null);
+    multiDragOriginIdRef.current = null;
+    internalSelectRef.current = true;
+    onSelectRoom(id);
+  }, [onSelectRoom]);
+
+  const handleRoomClick = useCallback((roomId: string, evt: MouseEvent) => {
+    if (evt.ctrlKey || evt.metaKey) {
+      const isInSet = selectedRoomIds.has(roomId);
+      if (isInSet) {
+        const next = new Set(selectedRoomIds);
+        next.delete(roomId);
+        setSelectedRoomIds(next);
+        if (selectedRoomId === roomId) {
+          const remaining = Array.from(next);
+          internalSelectRef.current = true;
+          onSelectRoom(remaining.length > 0 ? remaining[0] : null);
+        }
+      } else {
+        const next = new Set(selectedRoomIds);
+        next.add(roomId);
+        if (selectedRoomId) next.add(selectedRoomId);
+        setSelectedRoomIds(next);
+        internalSelectRef.current = true;
+        onSelectRoom(roomId);
+      }
+      return;
+    }
+
+    if (evt.shiftKey && selectedRoomId) {
+      const startIdx = rooms.findIndex(r => r.id === selectedRoomId);
+      const endIdx = rooms.findIndex(r => r.id === roomId);
+      if (startIdx !== -1 && endIdx !== -1) {
+        const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+        const rangeIds = new Set(rooms.slice(from, to + 1).map(r => r.id));
+        setSelectedRoomIds(rangeIds);
+        internalSelectRef.current = true;
+        onSelectRoom(roomId);
+      }
+      return;
+    }
+
+    selectRoom(roomId);
+  }, [selectedRoomIds, selectedRoomId, rooms, onSelectRoom, selectRoom]);
+
+  const handleRoomDragMove = useCallback((roomId: string, dx: number, dy: number) => {
+    multiDragOriginIdRef.current = roomId;
+    setMultiDragDelta({ dx, dy });
+  }, []);
+
+  const handleMoveRoom = useCallback((id: string, x: number, y: number) => {
+    setMultiDragDelta(null);
+    multiDragOriginIdRef.current = null;
+    if (selectedRoomIds.size > 1 && selectedRoomIds.has(id) && onMoveRooms) {
+      const room = rooms.find(r => r.id === id);
+      if (!room) { onMoveRoom(id, x, y); return; }
+      const dx = x - room.x;
+      const dy = y - room.y;
+      const moves = Array.from(selectedRoomIds)
+        .map(rid => {
+          const r = rooms.find(r => r.id === rid);
+          if (!r) return null;
+          return { id: rid, x: rid === id ? x : r.x + dx, y: rid === id ? y : r.y + dy };
+        })
+        .filter((m): m is { id: string; x: number; y: number } => m !== null);
+      onMoveRooms(moves);
+    } else {
+      onMoveRoom(id, x, y);
+    }
+  }, [selectedRoomIds, rooms, onMoveRoom, onMoveRooms]);
+
+  const handleStageMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if ((e.evt.ctrlKey || e.evt.metaKey) && e.target === e.target.getStage()) {
+      const stage = e.target.getStage()!;
+      stage.draggable(false);
+      const pos = stage.getPointerPosition()!;
+      const worldX = (pos.x - stage.x()) / stage.scaleX();
+      const worldY = (pos.y - stage.y()) / stage.scaleY();
+      setMarquee({ startX: worldX, startY: worldY, endX: worldX, endY: worldY });
+    }
+  }, []);
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (!placingElement || !selectedRoomId) return;
@@ -84,10 +207,11 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   }, [placingElement, selectedRoomId, rooms]);
 
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (justFinishedDragRef.current) return;
     if (placingElement && selectedRoomId && ghostPos) { onPlaceElement?.(selectedRoomId, ghostPos.wall, ghostPos.position); return; }
     setSelectedElementId(null);
-    if (e.target === e.target.getStage()) onSelectRoom(null);
-  }, [placingElement, selectedRoomId, ghostPos, onPlaceElement, onSelectRoom]);
+    if (e.target === e.target.getStage()) selectRoom(null);
+  }, [placingElement, selectedRoomId, ghostPos, onPlaceElement, selectRoom]);
 
   const handleHandleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (!draggingHandle || !onUpdateRoom) return;
@@ -172,10 +296,38 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   }, [draggingVertex, onUpdateRoom]);
 
   const handleMouseUp = useCallback(() => {
+    if (marquee) {
+      const left = Math.min(marquee.startX, marquee.endX);
+      const right = Math.max(marquee.startX, marquee.endX);
+      const top = Math.min(marquee.startY, marquee.endY);
+      const bottom = Math.max(marquee.startY, marquee.endY);
+
+      const newSelection = new Set<string>();
+      for (const room of rooms) {
+        const { w, h } = boundingSize(room);
+        if (room.x < right && room.x + w > left && room.y < bottom && room.y + h > top) {
+          newSelection.add(room.id);
+        }
+      }
+
+      setSelectedRoomIds(newSelection);
+      if (newSelection.size > 0) {
+        const firstId = Array.from(newSelection)[0];
+        internalSelectRef.current = true;
+        onSelectRoom(firstId);
+      } else {
+        internalSelectRef.current = true;
+        onSelectRoom(null);
+      }
+      setMarquee(null);
+      return;
+    }
     if (draggingHandle) {
       const roomId = draggingHandle.roomId;
       endBatch?.();
       setDraggingHandleRaw(null);
+      justFinishedDragRef.current = true;
+      requestAnimationFrame(() => { justFinishedDragRef.current = false; });
       const room = rooms.find(r => r.id === roomId);
       if (room && onUpdateRoom) {
         const snapped = snapToRooms(roomId, room.x, room.y, rooms);
@@ -188,6 +340,8 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       const roomId = draggingVertex.roomId;
       endBatch?.();
       setDraggingVertex(null);
+      justFinishedDragRef.current = true;
+      requestAnimationFrame(() => { justFinishedDragRef.current = false; });
       const room = rooms.find(r => r.id === roomId);
       if (room && onUpdateRoom) {
         const snapped = snapToRooms(roomId, room.x, room.y, rooms);
@@ -196,7 +350,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         }
       }
     }
-  }, [draggingHandle, draggingVertex, endBatch, rooms, onUpdateRoom]);
+  }, [marquee, draggingHandle, draggingVertex, endBatch, rooms, onUpdateRoom, onSelectRoom]);
 
   const handleVertexHandleMouseDown = useCallback((roomId: string, vertexIndex: number, worldX: number, worldY: number) => {
     beginBatch?.();
@@ -214,10 +368,22 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   }, [rooms, beginBatch]);
 
   const combinedMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (marquee) {
+      const stage = e.target.getStage();
+      if (stage) {
+        const pos = stage.getPointerPosition();
+        if (pos) {
+          const worldX = (pos.x - stage.x()) / stage.scaleX();
+          const worldY = (pos.y - stage.y()) / stage.scaleY();
+          setMarquee(prev => prev ? { ...prev, endX: worldX, endY: worldY } : null);
+        }
+      }
+      return;
+    }
     if (draggingHandle) { handleHandleMouseMove(e); return; }
     if (draggingVertex) { handleVertexMouseMove(e); return; }
     handleMouseMove(e);
-  }, [draggingHandle, draggingVertex, handleHandleMouseMove, handleVertexMouseMove, handleMouseMove]);
+  }, [marquee, draggingHandle, draggingVertex, handleHandleMouseMove, handleVertexMouseMove, handleMouseMove]);
 
   const isDraggingVertex = draggingVertex !== null;
 
@@ -226,8 +392,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       <Stage
         width={size.width} height={size.height} scaleX={scale} scaleY={scale}
         x={stagePos.x} y={stagePos.y}
-        draggable={!placingElement && !draggingHandle && !isDraggingVertex}
+        draggable={!placingElement && !draggingHandle && !isDraggingVertex && !marquee}
         onDragEnd={handleStageDragEnd} onWheel={handleWheel}
+        onMouseDown={handleStageMouseDown}
         onClick={handleStageClick} onMouseMove={combinedMouseMove} onMouseUp={handleMouseUp}
         style={{
           background: canvasColors.stageBg,
@@ -237,7 +404,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               ? 'crosshair'
               : placingElement
                 ? 'crosshair'
-                : 'grab',
+                : marquee || modifierHeld
+                  ? 'crosshair'
+                  : 'grab',
         }}
       >
         <CanvasGrid thinLines={grid.thin} thickLines={grid.thick} canvasColors={canvasColors} theme={theme} />
@@ -255,7 +424,16 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               canvasColors={canvasColors} theme={theme}
               activeDragWalls={dragFromWalls?.roomId === room.id ? dragFromWalls.walls : null}
               selectedWallIndices={room.id === selectedRoomId ? (selectedWallIndices ?? []) : []}
-              onSelectRoom={onSelectRoom} onMoveRoom={onMoveRoom}
+              isMultiSelected={selectedRoomIds.has(room.id) && selectedRoomIds.size > 1}
+              multiDragOffset={
+                selectedRoomIds.size > 1 && selectedRoomIds.has(room.id) && multiDragDelta && multiDragOriginIdRef.current !== room.id
+                  ? multiDragDelta
+                  : null
+              }
+              selectionModifierHeld={modifierHeld}
+              onRoomClick={handleRoomClick}
+              onRoomDragMove={handleRoomDragMove}
+              onSelectRoom={selectRoom} onMoveRoom={handleMoveRoom}
               onUpdateRoom={onUpdateRoom} onUpdateElement={onUpdateElement}
               onPlaceElement={onPlaceElement} onSetSelectedElement={setSelectedElementId}
               onSetDraggingHandle={setDraggingHandle}
@@ -270,11 +448,25 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
             if (!r) return null;
             return <Rect x={r.x} y={r.y} width={r.w} height={r.h} fill="#FF5C1A22" stroke="#FF5C1A" strokeWidth={1} opacity={0.8} listening={false} />;
           })()}
+          {marquee && (
+            <Rect
+              x={Math.min(marquee.startX, marquee.endX)}
+              y={Math.min(marquee.startY, marquee.endY)}
+              width={Math.abs(marquee.endX - marquee.startX)}
+              height={Math.abs(marquee.endY - marquee.startY)}
+              fill="rgba(59, 130, 246, 0.08)"
+              stroke="rgba(59, 130, 246, 0.5)"
+              strokeWidth={1}
+              dash={[4, 4]}
+              listening={false}
+            />
+          )}
         </Layer>
       </Stage>
       <CanvasToolbar
         rooms={rooms} selectedRoom={selectedRoom} clipboard={clipboard}
         placingElement={!!placingElement} scale={scale} totals={totals}
+        canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo}
         onDuplicate={onDuplicate} onCopy={onCopy} onCut={onCut} onPaste={onPaste}
         onZoomIn={() => adjustZoom(SCALE_BY)} onZoomOut={() => adjustZoom(1 / SCALE_BY)}
         onResetZoom={resetZoom}

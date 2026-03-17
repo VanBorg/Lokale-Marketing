@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Undo2, Redo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Floor } from './types';
 import TabPlattegrond from './tabs/TabPlattegrond';
 import TabElementen from './tabs/TabElementen';
@@ -190,25 +190,6 @@ export default function OfferteGenerator() {
     <div className="flex flex-col h-[calc(100vh-7rem)]">
       <div className="shrink-0 flex items-center gap-1 px-2 py-1 border-b border-dark-border bg-dark">
         <button
-          type="button"
-          onClick={undo}
-          disabled={!canUndo}
-          title="Ongedaan maken (Ctrl+Z)"
-          className="p-1.5 rounded-lg text-light/40 hover:text-light disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
-        >
-          <Undo2 size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={redo}
-          disabled={!canRedo}
-          title="Opnieuw (Ctrl+Y)"
-          className="p-1.5 rounded-lg text-light/40 hover:text-light disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
-        >
-          <Redo2 size={18} />
-        </button>
-        <span className="w-px h-5 bg-dark-border mx-0.5" aria-hidden />
-        <button
           disabled={activeTab === 1}
           onClick={() => setActiveTab((activeTab - 1) as 1 | 2 | 3 | 4)}
           className="p-1.5 rounded-lg text-light/40 hover:text-light disabled:opacity-20 disabled:cursor-not-allowed transition-colors cursor-pointer"
@@ -266,6 +247,10 @@ export default function OfferteGenerator() {
               setActiveTab={goTo}
               beginBatch={beginBatch}
               endBatch={endBatch}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onUndo={undo}
+              onRedo={redo}
             />
           )}
           {activeTab === 2 && (
