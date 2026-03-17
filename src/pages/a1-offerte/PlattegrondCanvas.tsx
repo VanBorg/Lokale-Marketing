@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef, useMemo } from 'react';
 import { Stage as KonvaStage, Layer, Rect } from 'react-konva';
 import Konva from 'konva';
 import { calcTotalWalls, ensureVertices, syncRoomFromVertices } from './types';
 import { useTheme } from '../../hooks/useTheme';
 import { WallId, DraggingHandle, DraggingVertex, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps } from './canvas/canvasTypes';
-import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect } from './canvas/canvasUtils';
+import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
 import CanvasGrid from './canvas/CanvasGrid';
 import CanvasRoom from './canvas/CanvasRoom';
@@ -173,14 +173,30 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
 
   const handleMouseUp = useCallback(() => {
     if (draggingHandle) {
+      const roomId = draggingHandle.roomId;
       endBatch?.();
       setDraggingHandleRaw(null);
+      const room = rooms.find(r => r.id === roomId);
+      if (room && onUpdateRoom) {
+        const snapped = snapToRooms(roomId, room.x, room.y, rooms);
+        if (snapped.x !== room.x || snapped.y !== room.y) {
+          onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
+        }
+      }
     }
     if (draggingVertex) {
+      const roomId = draggingVertex.roomId;
       endBatch?.();
       setDraggingVertex(null);
+      const room = rooms.find(r => r.id === roomId);
+      if (room && onUpdateRoom) {
+        const snapped = snapToRooms(roomId, room.x, room.y, rooms);
+        if (snapped.x !== room.x || snapped.y !== room.y) {
+          onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
+        }
+      }
     }
-  }, [draggingHandle, draggingVertex, endBatch]);
+  }, [draggingHandle, draggingVertex, endBatch, rooms, onUpdateRoom]);
 
   const handleVertexHandleMouseDown = useCallback((roomId: string, vertexIndex: number, worldX: number, worldY: number) => {
     beginBatch?.();
@@ -226,7 +242,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       >
         <CanvasGrid thinLines={grid.thin} thickLines={grid.thick} canvasColors={canvasColors} theme={theme} />
         <Layer>
-          {rooms.map((room) => (
+          {useMemo(() => [...rooms].sort((a, b) =>
+            a.id === selectedRoomId ? 1 : b.id === selectedRoomId ? -1 : 0
+          ), [rooms, selectedRoomId]).map((room) => (
             <CanvasRoom
               key={room.id} room={room} rooms={rooms}
               selectedRoomId={selectedRoomId} selectedElementId={selectedElementId}

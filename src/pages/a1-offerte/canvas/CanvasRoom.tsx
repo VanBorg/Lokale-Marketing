@@ -91,6 +91,7 @@ export default function CanvasRoom({
   const snapHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalizedStripeGreen = theme === 'dark' ? 'rgba(200, 255, 220, 0.28)' : 'rgba(134, 239, 172, 0.45)';
   const finalizedStripeLineWidth = theme === 'dark' ? 1.5 : 4;
+  const finalizedSolidGreen = theme === 'dark' ? 'rgba(134, 239, 172, 0.15)' : 'rgba(134, 239, 172, 0.25)';
 
   const shapeType = room.shapeType ?? getShapeType(room.shape);
   const hasVertices = (room.vertices?.length ?? 0) >= 3 && shapeType !== 'circle' && shapeType !== 'halfcircle';
@@ -105,8 +106,9 @@ export default function CanvasRoom({
   const points = hasVertices
     ? verticesToPoints(ensureVertices(room))
     : qb ? qb.pts : getShapePoints(room.shape, w, h);
-  const showWallNumbers = shapeType !== 'circle' && shapeType !== 'halfcircle';
   const isLooseSpecial = !room.isSubRoom && room.roomType !== 'normal';
+  const isSpecialRoom = room.roomType !== 'normal';
+  const showWallNumbers = shapeType !== 'circle' && shapeType !== 'halfcircle' && !isSpecialRoom;
   const subRoomCount = rooms.filter(r => r.parentRoomId === room.id).length;
 
   const stroke = room.isSubRoom
@@ -139,6 +141,9 @@ export default function CanvasRoom({
         const newX = e.target.x() - cx;
         const newY = e.target.y() - cy;
         const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
+        // #region agent log
+        fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'379215'},body:JSON.stringify({sessionId:'379215',location:'CanvasRoom.tsx:onDragEnd',message:'snap during room drag',data:{roomId:room.id,rawX:newX,rawY:newY,snappedX:snapped.x,snappedY:snapped.y,snappedToId:snapped.snappedToId,snappedWall:snapped.snappedWall,activeDragWalls,deltaX:snapped.x-newX,deltaY:snapped.y-newY,otherRoomCount:rooms.filter(r=>r.id!==room.id).length},timestamp:Date.now(),hypothesisId:'A-B'})}).catch(()=>{});
+        // #endregion
         e.target.x(snapped.x + cx);
         e.target.y(snapped.y + cy);
         onDragEndRoom();
@@ -175,6 +180,7 @@ export default function CanvasRoom({
         isLooseSpecial={isLooseSpecial}
         finalizedStripeGreen={room.isFinalized ? finalizedStripeGreen : undefined}
         finalizedStripeLineWidth={room.isFinalized ? finalizedStripeLineWidth : undefined}
+        finalizedSolidGreen={room.isFinalized ? finalizedSolidGreen : undefined}
       />
       {activeDragWalls && activeDragWalls.length > 0 && (
         <Group listening={false}>
@@ -253,15 +259,17 @@ export default function CanvasRoom({
         const verts = ensureVertices(room);
         const n = verts.length;
 
-        // Collect unique end-vertex indices for all selected walls (deduplicated)
         const handleVertexIndices = new Set<number>();
         selectedWallIndices.forEach(wi => {
           if (wi < n) handleVertexIndices.add((wi + 1) % n);
         });
 
+        const centroidX = verts.reduce((s, v) => s + v.x, 0) / n * PX_PER_M;
+        const centroidY = verts.reduce((s, v) => s + v.y, 0) / n * PX_PER_M;
+        const HANDLE_OUTWARD_OFFSET = 14;
+
         return (
           <Group>
-            {/* Highlight lines on selected walls */}
             {selectedWallIndices.map(wi => {
               if (wi >= n) return null;
               const v1 = verts[wi];
@@ -276,20 +284,36 @@ export default function CanvasRoom({
                 />
               );
             })}
-            {/* Vertex drag handles */}
             {!room.isFinalized && !placingElement && onVertexHandleMouseDown &&
               Array.from(handleVertexIndices).map(vi => {
                 const v = verts[vi];
+                const vxPx = v.x * PX_PER_M;
+                const vyPx = v.y * PX_PER_M;
+                const dx = vxPx - centroidX;
+                const dy = vyPx - centroidY;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                const offsetX = vxPx + (dx / dist) * HANDLE_OUTWARD_OFFSET;
+                const offsetY = vyPx + (dy / dist) * HANDLE_OUTWARD_OFFSET;
                 return (
                   <Circle
                     key={`vhandle-${vi}`}
-                    x={v.x * PX_PER_M}
-                    y={v.y * PX_PER_M}
+                    x={offsetX}
+                    y={offsetY}
                     radius={6}
                     fill="#3B82F6"
                     stroke="white"
                     strokeWidth={1.5}
                     listening={true}
+                    onMouseEnter={(e: Konva.KonvaEventObject<MouseEvent>) => {
+                      const container = e.target.getStage()?.container();
+                      if (container) container.style.cursor = 'crosshair';
+                      e.target.to({ radius: 9, strokeWidth: 2.5, duration: 0.1 });
+                    }}
+                    onMouseLeave={(e: Konva.KonvaEventObject<MouseEvent>) => {
+                      const container = e.target.getStage()?.container();
+                      if (container) container.style.cursor = '';
+                      e.target.to({ radius: 6, strokeWidth: 1.5, duration: 0.1 });
+                    }}
                     onMouseDown={(e: Konva.KonvaEventObject<MouseEvent>) => {
                       e.cancelBubble = true;
                       const stage = e.target.getStage();

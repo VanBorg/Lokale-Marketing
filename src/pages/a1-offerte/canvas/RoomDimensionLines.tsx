@@ -20,10 +20,12 @@ interface RoomDimensionLinesProps {
 function VertexDimensionLines({
   room,
   rot,
+  lineColor,
   canvasColors,
 }: {
   room: Room;
   rot: number;
+  lineColor: string;
   canvasColors: CanvasColors;
 }) {
   const verts = ensureVertices(room);
@@ -58,7 +60,7 @@ function VertexDimensionLines({
           <React.Fragment key={`dim-${i}`}>
             <Line
               points={[v1x + ox, v1y + oy, v2x + ox, v2y + oy]}
-              stroke={canvasColors.dimensionLine}
+              stroke={lineColor}
               strokeWidth={0.5}
             />
             <Line
@@ -67,7 +69,7 @@ function VertexDimensionLines({
                 v1x + nx * (offset - tickHalf), v1y + ny * (offset - tickHalf),
                 v1x + nx * (offset + tickHalf), v1y + ny * (offset + tickHalf),
               ]}
-              stroke={canvasColors.dimensionLine}
+              stroke={lineColor}
               strokeWidth={0.5}
             />
             <Line
@@ -75,7 +77,7 @@ function VertexDimensionLines({
                 v2x + nx * (offset - tickHalf), v2y + ny * (offset - tickHalf),
                 v2x + nx * (offset + tickHalf), v2y + ny * (offset + tickHalf),
               ]}
-              stroke={canvasColors.dimensionLine}
+              stroke={lineColor}
               strokeWidth={0.5}
             />
             <Rect
@@ -115,30 +117,31 @@ export default function RoomDimensionLines({
   canvasColors,
 }: RoomDimensionLinesProps) {
   const hasVertices = (room.vertices?.length ?? 0) >= 3 && shapeType !== 'circle' && shapeType !== 'halfcircle';
-  const isSpecial = room.roomType !== 'normal';
 
-  if (isSpecial && !isDraggingHandle) return null;
+  if (!isSelected && !isDraggingHandle) return null;
+
+  const lineColor = isSelected ? '#FF5C1A' : canvasColors.dimensionLine;
 
   return (
-    <Group opacity={isSelected || room.isFinalized ? 1 : 0.4} listening={false}>
+    <Group opacity={1} listening={false}>
       {shapeType === 'circle' ? (
         <>
-          <Line points={[0, cy, w, cy]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} dash={[3, 2]} />
-          <Line points={[0, cy - 4, 0, cy + 4]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-          <Line points={[w, cy - 4, w, cy + 4]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
+          <Line points={[0, cy, w, cy]} stroke={lineColor} strokeWidth={0.5} dash={[3, 2]} />
+          <Line points={[0, cy - 4, 0, cy + 4]} stroke={lineColor} strokeWidth={0.5} />
+          <Line points={[w, cy - 4, w, cy + 4]} stroke={lineColor} strokeWidth={0.5} />
           <Rect x={cx - 14} y={cy - 7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
           <Text text={room.length.toFixed(1)} x={cx - 12} y={cy - 5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
         </>
       ) : shapeType === 'halfcircle' ? (
         <>
-          <Line points={[0, -20, w, -20]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-          <Line points={[0, -28, 0, -12]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-          <Line points={[w, -28, w, -12]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
+          <Line points={[0, -20, w, -20]} stroke={lineColor} strokeWidth={0.5} />
+          <Line points={[0, -28, 0, -12]} stroke={lineColor} strokeWidth={0.5} />
+          <Line points={[w, -28, w, -12]} stroke={lineColor} strokeWidth={0.5} />
           <Rect x={cx - 14} y={-27} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
           <Text text={room.length.toFixed(1)} x={cx - 12} y={-25} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
         </>
       ) : hasVertices ? (
-        <VertexDimensionLines room={room} rot={rot} canvasColors={canvasColors} />
+        <VertexDimensionLines room={room} rot={rot} lineColor={lineColor} canvasColors={canvasColors} />
       ) : (() => {
         const wl = room.wallLengths ?? { top: room.length, right: room.width, bottom: room.length, left: room.width };
         const topLabel = wl.top.toFixed(1);
@@ -147,23 +150,23 @@ export default function RoomDimensionLines({
         const leftLabel = wl.left.toFixed(1);
         return (
           <>
-            <Line points={[0, -20, w, -20]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-            <Line points={[0, -28, 0, -12]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-            <Line points={[w, -28, w, -12]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
+            <Line points={[0, -20, w, -20]} stroke={lineColor} strokeWidth={0.5} />
+            <Line points={[0, -28, 0, -12]} stroke={lineColor} strokeWidth={0.5} />
+            <Line points={[w, -28, w, -12]} stroke={lineColor} strokeWidth={0.5} />
             <Rect x={cx - 14} y={-27} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
             <Text text={topLabel} x={cx - 12} y={-25} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
 
-            <Line points={[w + 20, 0, w + 20, h]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-            <Line points={[w + 12, 0, w + 28, 0]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-            <Line points={[w + 12, h, w + 28, h]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
+            <Line points={[w + 20, 0, w + 20, h]} stroke={lineColor} strokeWidth={0.5} />
+            <Line points={[w + 12, 0, w + 28, 0]} stroke={lineColor} strokeWidth={0.5} />
+            <Line points={[w + 12, h, w + 28, h]} stroke={lineColor} strokeWidth={0.5} />
             <Rect x={w + 12} y={cy - 7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
             <Text text={rightLabel} x={w + 14} y={cy - 5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" rotation={-rot} />
 
             {wl.bottom !== wl.top && (
               <>
-                <Line points={[0, h + 20, w, h + 20]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-                <Line points={[0, h + 12, 0, h + 28]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-                <Line points={[w, h + 12, w, h + 28]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
+                <Line points={[0, h + 20, w, h + 20]} stroke={lineColor} strokeWidth={0.5} />
+                <Line points={[0, h + 12, 0, h + 28]} stroke={lineColor} strokeWidth={0.5} />
+                <Line points={[w, h + 12, w, h + 28]} stroke={lineColor} strokeWidth={0.5} />
                 <Rect x={cx - 14} y={h + 13} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
                 <Text text={bottomLabel} x={cx - 12} y={h + 15} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" />
               </>
@@ -171,9 +174,9 @@ export default function RoomDimensionLines({
 
             {wl.left !== wl.right && (
               <>
-                <Line points={[-20, 0, -20, h]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-                <Line points={[-28, 0, -12, 0]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
-                <Line points={[-28, h, -12, h]} stroke={canvasColors.dimensionLine} strokeWidth={0.5} />
+                <Line points={[-20, 0, -20, h]} stroke={lineColor} strokeWidth={0.5} />
+                <Line points={[-28, 0, -12, 0]} stroke={lineColor} strokeWidth={0.5} />
+                <Line points={[-28, h, -12, h]} stroke={lineColor} strokeWidth={0.5} />
                 <Rect x={-40} y={cy - 7} width={28} height={14} fill={canvasColors.dimensionLabelBg} cornerRadius={2} />
                 <Text text={leftLabel} x={-38} y={cy - 5} fontSize={10} fill={canvasColors.dimensionLabelText} fontFamily="DM Sans, sans-serif" rotation={-rot} />
               </>

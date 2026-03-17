@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Lock, Unlock } from 'lucide-react';
 import {
   Room,
   RoomWalls as RoomWallsType,
@@ -10,9 +11,11 @@ import {
   syncRoomFromVertices,
   PX_PER_M,
 } from './types';
+import { snapToRooms } from './canvas/canvasUtils';
 
 interface RoomWallsProps {
   room: Room;
+  rooms: Room[];
   onUpdate: (id: string, updates: Partial<Room>) => void;
   selectedWallIndices: number[];
   onToggleWallIndex: (i: number) => void;
@@ -21,16 +24,34 @@ interface RoomWallsProps {
 const WALL_LABELS_4 = ['Boven', 'Rechts', 'Onder', 'Links'];
 const WALL_HEIGHT_KEYS: (keyof RoomWallsType)[] = ['top', 'right', 'bottom', 'left'];
 
-export default function RoomWalls({ room, onUpdate, selectedWallIndices, onToggleWallIndex }: RoomWallsProps) {
+export default function RoomWalls({ room, rooms, onUpdate, selectedWallIndices, onToggleWallIndex }: RoomWallsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [wallStrings, setWallStrings] = useState<Record<string, string>>({});
   const [lengthStrings, setLengthStrings] = useState<Record<string, string>>({});
   const focusedLengthRef = useRef<string | null>(null);
+  const [snapFocusedKey, setSnapFocusedKey] = useState<string | null>(null);
 
   const verts = ensureVertices(room);
   const wallLens = vertexWallLengths(verts);
   const wallCount = verts.length;
   const locks = room.wallLocks ?? new Array(wallCount).fill(false);
+
+  // Collect wall lengths from all other rooms for magnetic snap suggestions
+  const snapSuggestions = useMemo(() => {
+    if (!snapFocusedKey) return [];
+    const currentVal = parseFloat(lengthStrings[snapFocusedKey] ?? '0') || 0;
+    const seen = new Set<number>();
+    rooms.forEach(r => {
+      if (r.id === room.id) return;
+      vertexWallLengths(ensureVertices(r)).forEach(l => {
+        const v = Math.round(l * 100) / 100;
+        if (v >= 0.1) seen.add(v);
+      });
+    });
+    return Array.from(seen)
+      .sort((a, b) => Math.abs(a - currentVal) - Math.abs(b - currentVal))
+      .slice(0, 5);
+  }, [snapFocusedKey, lengthStrings, rooms, room.id]);
 
   useEffect(() => {
     setWallStrings({});
@@ -65,6 +86,15 @@ export default function RoomWalls({ room, onUpdate, selectedWallIndices, onToggl
     if (result.offsetX !== 0 || result.offsetY !== 0) {
       updates.x = room.x + result.offsetX * PX_PER_M;
       updates.y = room.y + result.offsetY * PX_PER_M;
+    }
+    const newX = updates.x ?? room.x;
+    const newY = updates.y ?? room.y;
+    const updatedRoom = { ...room, ...updates };
+    const updatedRooms = rooms.map(r => r.id === room.id ? updatedRoom : r);
+    const snapped = snapToRooms(room.id, newX, newY, updatedRooms);
+    if (snapped.x !== newX || snapped.y !== newY) {
+      updates.x = snapped.x;
+      updates.y = snapped.y;
     }
     onUpdate(room.id, updates);
   };
@@ -183,57 +213,108 @@ export default function RoomWalls({ room, onUpdate, selectedWallIndices, onToggl
 
       {/* Edit area – visible when ≥1 wall is selected */}
       {selectedWallIndices.length > 0 && (
-        <div className="rounded-lg bg-dark-card border border-dark-border p-3 mb-3 space-y-2">
-          <div className="text-[10px] font-semibold text-light/40 uppercase tracking-wider mb-1">Geselecteerd</div>
+        <div className="rounded-lg bg-dark-card border border-dark-border p-3 mb-3 space-y-2.5">
+          {/* Header row */}
+          <div className="flex items-center justify-end mb-0.5">
+            <span className="text-[11px] font-semibold text-accent/80 uppercase tracking-wider">Geselecteerd</span>
+          </div>
+
           {selectedWallIndices.map(i => {
             const key = String(i);
             const curLen = wallLens[i];
             const isLocked = locks[i] ?? false;
-            const wallLabel = wallCount === 4 ? `Muur ${i + 1} — ${WALL_LABELS_4[i]}` : `Muur ${i + 1}`;
+            const wallLabel = wallCount === 4 ? `M${i + 1} — ${WALL_LABELS_4[i]}` : `Muur ${i + 1}`;
+            const isFocused = snapFocusedKey === key;
             return (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-[11px] text-light/50 w-14 shrink-0">{wallLabel}</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={lengthStrings[key] ?? curLen.toFixed(2)}
-                  onFocus={() => { focusedLengthRef.current = key; }}
-                  onBlur={() => {
-                    focusedLengthRef.current = null;
-                    const raw = lengthStrings[key];
-                    const n = parseFloat(raw);
-                    if (isNaN(n) || n < 0.1) {
-                      setLengthStrings(prev => ({ ...prev, [key]: curLen.toFixed(2) }));
-                    } else {
-                      applyWallLength(i, Math.max(0.1, n));
+              <div key={i} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  {/* Lock button – next to label, larger and prominent */}
+                  <button
+                    type="button"
+                    onClick={() => toggleLock(i)}
+                    disabled={room.isFinalized}
+                    title={isLocked ? 'Muur ontgrendelen' : 'Muur vergrendelen'}
+                    className={`shrink-0 p-1 rounded transition-colors cursor-pointer disabled:opacity-40
+                      ${isLocked
+                        ? 'text-accent bg-accent/10 border border-accent/30'
+                        : 'text-light/40 hover:text-light/70 border border-transparent hover:border-dark-border'
+                      }`}
+                  >
+                    {isLocked
+                      ? <Lock size={14} strokeWidth={2.5} />
+                      : <Unlock size={14} strokeWidth={2} />
                     }
-                  }}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    setLengthStrings(prev => ({ ...prev, [key]: raw }));
-                    const n = parseFloat(raw);
-                    if (!isNaN(n) && n >= 0.1 && !raw.endsWith('.') && raw !== '') {
-                      applyWallLength(i, Math.max(0.1, n));
-                    }
-                  }}
-                  disabled={room.isFinalized || isLocked}
-                  className={`flex-1 min-w-0 px-2 py-1 rounded bg-dark border border-dark-border text-light text-xs focus:outline-none focus:border-accent
-                    ${(room.isFinalized || isLocked) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-                <span className="text-[10px] text-light/40 shrink-0">m</span>
-                <button
-                  type="button"
-                  onClick={() => toggleLock(i)}
-                  disabled={room.isFinalized}
-                  className="shrink-0 text-[11px] px-1 py-0.5 cursor-pointer disabled:opacity-40"
-                  title={isLocked ? 'Muur ontgrendelen' : 'Muur vergrendelen'}
-                >
-                  {isLocked ? <span className="text-accent">🔒</span> : <span className="text-light/30">🔓</span>}
-                </button>
+                  </button>
+                  <span className="text-[11px] font-medium text-light/70 shrink-0 w-20">{wallLabel}</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={lengthStrings[key] ?? curLen.toFixed(2)}
+                    onFocus={() => {
+                      focusedLengthRef.current = key;
+                      setSnapFocusedKey(key);
+                    }}
+                    onBlur={() => {
+                      focusedLengthRef.current = null;
+                      setSnapFocusedKey(null);
+                      const raw = lengthStrings[key];
+                      const n = parseFloat(raw);
+                      if (isNaN(n) || n < 0.1) {
+                        setLengthStrings(prev => ({ ...prev, [key]: curLen.toFixed(2) }));
+                      } else {
+                        applyWallLength(i, Math.max(0.1, n));
+                      }
+                    }}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setLengthStrings(prev => ({ ...prev, [key]: raw }));
+                      const n = parseFloat(raw);
+                      if (!isNaN(n) && n >= 0.1 && !raw.endsWith('.') && raw !== '') {
+                        applyWallLength(i, Math.max(0.1, n));
+                      }
+                    }}
+                    disabled={room.isFinalized || isLocked}
+                    className={`flex-1 min-w-0 px-2 py-1.5 rounded bg-dark border text-light text-xs focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-colors
+                      ${isFocused ? 'border-accent/60' : 'border-dark-border'}
+                      ${(room.isFinalized || isLocked) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  />
+                  <span className="text-[10px] text-light/40 shrink-0">m</span>
+                </div>
+
+                {/* Magnetic snap suggestions – shown when this input is focused */}
+                {isFocused && snapSuggestions.length > 0 && (
+                  <div className="pl-8 flex flex-wrap gap-1">
+                    <span className="text-[9px] text-light/30 self-center mr-0.5">↔</span>
+                    {snapSuggestions.map(val => {
+                      const current = parseFloat(lengthStrings[key] ?? '0');
+                      const isExact = Math.abs(val - current) < 0.01;
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onMouseDown={(e) => {
+                            // Prevent blur before click registers
+                            e.preventDefault();
+                            setLengthStrings(prev => ({ ...prev, [key]: val.toFixed(2) }));
+                            applyWallLength(i, val);
+                          }}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer
+                            ${isExact
+                              ? 'bg-accent/20 border-accent/60 text-accent font-semibold'
+                              : 'bg-dark border-dark-border text-light/50 hover:border-accent/40 hover:text-accent'
+                            }`}
+                        >
+                          {val.toFixed(2)}m
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
-          <p className="text-[10px] text-accent/60 pt-1">
+
+          <p className="text-[10px] text-light/30 pt-0.5">
             ↗ Sleep het blauwe punt op de kaart om de positie vrij aan te passen.
           </p>
         </div>

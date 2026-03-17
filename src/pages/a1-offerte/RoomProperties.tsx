@@ -206,6 +206,7 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
 
         <RoomWalls
           room={room}
+          rooms={rooms}
           onUpdate={onUpdate}
           selectedWallIndices={selectedWallIndices}
           onToggleWallIndex={onToggleWallIndex}

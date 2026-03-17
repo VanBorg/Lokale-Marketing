@@ -99,7 +99,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
+    document.documentElement.classList.add('disable-transitions');
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.documentElement.classList.remove('disable-transitions');
+      });
+    });
   }, []);
 
   const canvasColors = useMemo(

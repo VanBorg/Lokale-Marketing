@@ -19,6 +19,7 @@ interface RoomShapeProps {
   isLooseSpecial: boolean;
   finalizedStripeGreen?: string;
   finalizedStripeLineWidth?: number;
+  finalizedSolidGreen?: string;
 }
 
 export default function RoomShape({
@@ -37,6 +38,7 @@ export default function RoomShape({
   isLooseSpecial,
   finalizedStripeGreen,
   finalizedStripeLineWidth,
+  finalizedSolidGreen,
 }: RoomShapeProps) {
   return (
     <>
@@ -173,7 +175,28 @@ export default function RoomShape({
           dash={dashPattern}
         />
       )}
-      {room.isFinalized && finalizedStripeGreen != null && finalizedStripeLineWidth != null && (
+      {room.isFinalized && finalizedSolidGreen != null && isLooseSpecial && (
+        <Shape
+          sceneFunc={(ctx: any) => {
+            ctx.save();
+            ctx.beginPath();
+            if (shapeType === 'circle') {
+              ctx.arc(cx, cy, w / 2, 0, Math.PI * 2);
+            } else if (shapeType === 'halfcircle') {
+              ctx.arc(cx, cy, w / 2, -Math.PI / 2, Math.PI / 2);
+            } else {
+              ctx.moveTo(points[0], points[1]);
+              for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
+              ctx.closePath();
+            }
+            ctx.fillStyle = finalizedSolidGreen;
+            ctx.fill();
+            ctx.restore();
+          }}
+          listening={false}
+        />
+      )}
+      {room.isFinalized && finalizedStripeGreen != null && finalizedStripeLineWidth != null && !isLooseSpecial && (
         <Shape
           sceneFunc={(ctx: any) => {
             ctx.save();

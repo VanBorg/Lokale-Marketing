@@ -83,7 +83,6 @@ const ROTATIONS = [0, 90, 180, 270] as const;
 interface RoomShapesProps {
   selectedShape: string | null;
   onSelect: (shape: string) => void;
-  onAddSpecialRoom?: (type: RoomType, name: string, length: number, width: number) => void;
   selectedRoom: Room | null;
   onUpdateRoom: (id: string, updates: Partial<Room>) => void;
 }
@@ -91,7 +90,6 @@ interface RoomShapesProps {
 export default function RoomShapes({
   selectedShape,
   onSelect,
-  onAddSpecialRoom,
   selectedRoom,
   onUpdateRoom,
 }: RoomShapesProps) {
@@ -147,24 +145,31 @@ export default function RoomShapes({
         </div>
       )}
 
-      {onAddSpecialRoom && (
-        <div className="mt-4">
-          <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
-            Speciale ruimtes
-          </h3>
-          <div className="grid grid-cols-2 gap-1.5">
-            {SPECIAL_ROOMS.map(sr => (
-              <button
-                key={sr.type}
-                onClick={() => onAddSpecialRoom(sr.type, sr.label, sr.length, sr.width)}
-                className="px-2 py-1.5 rounded-lg text-xs font-medium bg-dark-card border border-dark-border text-accent hover:border-accent/40 hover:bg-accent/5 transition-colors cursor-pointer"
-              >
-                + {sr.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+    </div>
+  );
+}
+
+export function SpecialRoomsSection({
+  onAddSpecialRoom,
+}: {
+  onAddSpecialRoom: (type: RoomType, name: string, length: number, width: number) => void;
+}) {
+  return (
+    <div className="p-4 border-b border-dark-border">
+      <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
+        Speciale ruimtes
+      </h3>
+      <div className="grid grid-cols-2 gap-1.5">
+        {SPECIAL_ROOMS.map(sr => (
+          <button
+            key={sr.type}
+            onClick={() => onAddSpecialRoom(sr.type, sr.label, sr.length, sr.width)}
+            className="px-2 py-1.5 rounded-lg text-xs font-medium bg-dark-card border border-dark-border text-accent hover:border-accent/40 hover:bg-accent/5 transition-colors cursor-pointer"
+          >
+            + {sr.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

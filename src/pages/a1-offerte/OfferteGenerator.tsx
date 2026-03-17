@@ -31,6 +31,17 @@ function loadSavedFloorId(): string {
   return '1';
 }
 
+function loadSavedProjectName(): string {
+  try {
+    const saved = localStorage.getItem('craftbase_autosave');
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (typeof data.projectName === 'string') return data.projectName;
+    }
+  } catch {}
+  return '';
+}
+
 const TABS = [
   { num: 1 as const, label: '1. Plattegrond' },
   { num: 2 as const, label: '2. Elementen' },
@@ -41,6 +52,7 @@ const TABS = [
 export default function OfferteGenerator() {
   const [floors, setFloorsRaw] = useState<Floor[]>(loadSavedFloors);
   const [activeFloorId, setActiveFloorIdRaw] = useState(loadSavedFloorId);
+  const [projectName, setProjectName] = useState(loadSavedProjectName);
   const [activeTab, setActiveTab] = useState<1 | 2 | 3 | 4>(1);
   const [historyVersion, setHistoryVersion] = useState(0);
 
@@ -148,8 +160,8 @@ export default function OfferteGenerator() {
   }, [undo, redo]);
 
   useEffect(() => {
-    localStorage.setItem('craftbase_autosave', JSON.stringify({ floors, activeFloorId }));
-  }, [floors, activeFloorId]);
+    localStorage.setItem('craftbase_autosave', JSON.stringify({ floors, activeFloorId, projectName }));
+  }, [floors, activeFloorId, projectName]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -225,6 +237,19 @@ export default function OfferteGenerator() {
         >
           <ChevronRight size={18} />
         </button>
+
+        <div className="flex-1 min-w-0" aria-hidden />
+
+        <div className="shrink-0 flex items-center gap-2">
+          <label className="text-xs font-medium text-light/50 whitespace-nowrap">Projectnaam</label>
+          <input
+            type="text"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            placeholder="Naam van het project..."
+            className="w-48 max-w-[200px] px-2.5 py-1 rounded-lg bg-dark-card border border-dark-border text-light text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"
+          />
+        </div>
       </div>
 
       <div

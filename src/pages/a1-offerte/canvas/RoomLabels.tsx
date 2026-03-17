@@ -36,16 +36,6 @@ export default function RoomLabels({
 }: RoomLabelsProps) {
   return (
     <>
-      {room.roomType && room.roomType !== 'normal' && (
-        <Text
-          text={ROOM_TYPE_ICONS[room.roomType] || ''}
-          x={w - 20}
-          y={4}
-          rotation={-rot}
-          fontSize={14}
-          fontFamily="sans-serif"
-        />
-      )}
       {room.isSubRoom && (
         <Text
           text="⊂"
@@ -69,11 +59,30 @@ export default function RoomLabels({
         />
       )}
       {(() => {
+        if (isLooseSpecial && !isSelected) {
+          const icon = ROOM_TYPE_ICONS[room.roomType!] || '';
+          const iconSize = 22;
+          const boxSize = iconSize + 12;
+          return (
+            <Group x={cx} y={cy} offsetX={boxSize / 2} offsetY={boxSize / 2} rotation={-rot} opacity={0.8}>
+              <Text
+                text={icon}
+                x={0}
+                y={0}
+                width={boxSize}
+                height={boxSize}
+                fontSize={iconSize}
+                fontFamily="sans-serif"
+                align="center"
+                verticalAlign="middle"
+                listening={false}
+              />
+            </Group>
+          );
+        }
         let labelText: string;
         if (isLooseSpecial) {
-          labelText = isSelected
-            ? `${room.name}\nL ${room.length.toFixed(1)} | B ${room.width.toFixed(1)} | ${area.toFixed(1)} m²`
-            : room.name;
+          labelText = `${room.name}\n${area.toFixed(1)} m²`;
         } else if (room.isSubRoom) {
           labelText = room.name;
         } else if (isSelected) {

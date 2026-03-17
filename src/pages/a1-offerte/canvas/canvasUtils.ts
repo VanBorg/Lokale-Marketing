@@ -104,8 +104,6 @@ function getShapeSnapEdges(room: Room): { x: number[]; y: number[] } {
   }
 }
 
-const GRID_SNAP_STEP = 80;
-
 export function snapPosition(
   draggedId: string,
   x: number,
@@ -130,22 +128,20 @@ export function snapPosition(
       if (other.id === draggedId) continue;
       const ow = boundingSize(other).w;
       if (walls.includes('left')) {
-        const dist = Math.abs(x - (other.x + ow));
-        if (dist < bestDx) {
-          bestDx = dist;
-          sx = other.x + ow;
-          snappedToId = other.id;
-          snappedWall = 'left';
-        }
+        // Adjacency: my left edge to their right edge
+        const dAdj = Math.abs(x - (other.x + ow));
+        if (dAdj < bestDx) { bestDx = dAdj; sx = other.x + ow; snappedToId = other.id; snappedWall = 'left'; }
+        // Alignment: my left edge to their left edge
+        const dAlign = Math.abs(x - other.x);
+        if (dAlign < bestDx) { bestDx = dAlign; sx = other.x; snappedToId = other.id; snappedWall = 'left'; }
       }
       if (walls.includes('right')) {
-        const dist = Math.abs((x + dw) - other.x);
-        if (dist < bestDx) {
-          bestDx = dist;
-          sx = other.x - dw;
-          snappedToId = other.id;
-          snappedWall = 'right';
-        }
+        // Adjacency: my right edge to their left edge
+        const dAdj = Math.abs((x + dw) - other.x);
+        if (dAdj < bestDx) { bestDx = dAdj; sx = other.x - dw; snappedToId = other.id; snappedWall = 'right'; }
+        // Alignment: my right edge to their right edge
+        const dAlign = Math.abs((x + dw) - (other.x + ow));
+        if (dAlign < bestDx) { bestDx = dAlign; sx = other.x + ow - dw; snappedToId = other.id; snappedWall = 'right'; }
       }
     }
     return bestDx < threshold;
@@ -157,51 +153,33 @@ export function snapPosition(
       if (other.id === draggedId) continue;
       const oh = boundingSize(other).h;
       if (walls.includes('top')) {
-        const dist = Math.abs(y - (other.y + oh));
-        if (dist < bestDy) {
-          bestDy = dist;
-          sy = other.y + oh;
-          snappedToId = other.id;
-          snappedWall = 'top';
-        }
+        // Adjacency: my top edge to their bottom edge
+        const dAdj = Math.abs(y - (other.y + oh));
+        if (dAdj < bestDy) { bestDy = dAdj; sy = other.y + oh; snappedToId = other.id; snappedWall = 'top'; }
+        // Alignment: my top edge to their top edge
+        const dAlign = Math.abs(y - other.y);
+        if (dAlign < bestDy) { bestDy = dAlign; sy = other.y; snappedToId = other.id; snappedWall = 'top'; }
       }
       if (walls.includes('bottom')) {
-        const dist = Math.abs((y + dh) - other.y);
-        if (dist < bestDy) {
-          bestDy = dist;
-          sy = other.y - dh;
-          snappedToId = other.id;
-          snappedWall = 'bottom';
-        }
+        // Adjacency: my bottom edge to their top edge
+        const dAdj = Math.abs((y + dh) - other.y);
+        if (dAdj < bestDy) { bestDy = dAdj; sy = other.y - dh; snappedToId = other.id; snappedWall = 'bottom'; }
+        // Alignment: my bottom edge to their bottom edge
+        const dAlign = Math.abs((y + dh) - (other.y + oh));
+        if (dAlign < bestDy) { bestDy = dAlign; sy = other.y + oh - dh; snappedToId = other.id; snappedWall = 'bottom'; }
       }
     }
     return bestDy < threshold;
-  };
-
-  const snapXToGrid = () => {
-    if (walls.includes('left')) {
-      sx = Math.round(x / GRID_SNAP_STEP) * GRID_SNAP_STEP;
-    } else if (walls.includes('right')) {
-      sx = Math.round((x + dw) / GRID_SNAP_STEP) * GRID_SNAP_STEP - dw;
-    }
-  };
-
-  const snapYToGrid = () => {
-    if (walls.includes('top')) {
-      sy = Math.round(y / GRID_SNAP_STEP) * GRID_SNAP_STEP;
-    } else if (walls.includes('bottom')) {
-      sy = Math.round((y + dh) / GRID_SNAP_STEP) * GRID_SNAP_STEP - dh;
-    }
   };
 
   const hasXWalls = walls.includes('left') || walls.includes('right');
   const hasYWalls = walls.includes('top') || walls.includes('bottom');
 
   if (hasXWalls) {
-    if (!tryRoomSnapX()) snapXToGrid();
+    tryRoomSnapX();
   }
   if (hasYWalls) {
-    if (!tryRoomSnapY()) snapYToGrid();
+    tryRoomSnapY();
   }
 
   if (!hasXWalls && !hasYWalls) {
@@ -245,6 +223,48 @@ export function snapPosition(
         }
       }
     }
+  }
+
+  return { x: sx, y: sy, snappedToId, snappedWall };
+}
+
+/**
+ * Like snapPosition but only snaps to neighbouring room edges — never to grid.
+ * Use after resize / wall-length edits where grid-jumping is unwanted.
+ */
+export function snapToRooms(
+  draggedId: string,
+  x: number,
+  y: number,
+  rooms: Room[],
+): SnapResult {
+  const dragged = rooms.find(r => r.id === draggedId);
+  if (!dragged) return { x, y };
+
+  const threshold = dragged.roomType !== 'normal' ? SNAP_THRESHOLD_SPECIAL : SNAP_THRESHOLD;
+  const { w: dw, h: dh } = boundingSize(dragged);
+  let sx = x, sy = y;
+  let snappedToId: string | undefined;
+  let snappedWall: 'top' | 'right' | 'bottom' | 'left' | undefined;
+
+  let bestDx = threshold;
+  for (const other of rooms) {
+    if (other.id === draggedId) continue;
+    const ow = boundingSize(other).w;
+    const distL = Math.abs(x - (other.x + ow));
+    if (distL < bestDx) { bestDx = distL; sx = other.x + ow; snappedToId = other.id; snappedWall = 'left'; }
+    const distR = Math.abs((x + dw) - other.x);
+    if (distR < bestDx) { bestDx = distR; sx = other.x - dw; snappedToId = other.id; snappedWall = 'right'; }
+  }
+
+  let bestDy = threshold;
+  for (const other of rooms) {
+    if (other.id === draggedId) continue;
+    const oh = boundingSize(other).h;
+    const distT = Math.abs(y - (other.y + oh));
+    if (distT < bestDy) { bestDy = distT; sy = other.y + oh; snappedToId = other.id; snappedWall = 'top'; }
+    const distB = Math.abs((y + dh) - other.y);
+    if (distB < bestDy) { bestDy = distB; sy = other.y - dh; snappedToId = other.id; snappedWall = 'bottom'; }
   }
 
   return { x: sx, y: sy, snappedToId, snappedWall };

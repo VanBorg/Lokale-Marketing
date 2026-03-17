@@ -461,17 +461,47 @@ export function updateVertexWallLength(
   const out = verts.map(v => ({ ...v }));
   out[v2Idx] = { x: newV2x, y: newV2y };
 
-  if (n === 4 && isRectangularVertices(verts)) {
-    const oppositeIdx = (wallIndex + 2) % 4;
-    const oppositeLocked = wallLocks?.[oppositeIdx] ?? false;
+  const isHoriz = Math.abs(dy) < 0.001;
+  const isVert = Math.abs(dx) < 0.001;
 
-    if (!oppositeLocked) {
+  if (n === 4 && isRectangularVertices(verts)) {
+    // Simple rectangle: shift the diagonally-opposite vertex to maintain shape.
+    const oppositeIdx = (wallIndex + 2) % 4;
+    if (!(wallLocks?.[oppositeIdx] ?? false)) {
       const v3Idx = (wallIndex + 2) % 4;
-      const isHorizontal = Math.abs(dy) < 0.001;
-      if (isHorizontal) {
+      if (isHoriz) {
         out[v3Idx] = { x: out[v3Idx].x + deltaX, y: out[v3Idx].y };
       } else {
         out[v3Idx] = { x: out[v3Idx].x, y: out[v3Idx].y + deltaY };
+      }
+    }
+  } else if (n > 4 && (isHoriz || isVert)) {
+    // Orthogonal polygon (L, T, U, Z, S, I, …):
+    // Ripple-propagate the delta forward through perpendicular walls until a
+    // parallel wall can absorb the length change. Use the ORIGINAL vertices to
+    // determine each segment's orientation so partially-updated positions don't
+    // confuse the direction check.
+    let curIdx = v2Idx;
+    for (let step = 0; step < n - 2; step++) {
+      const nextIdx = (curIdx + 1) % n;
+      if (nextIdx === v1Idx) break; // would close back to the fixed anchor – stop
+
+      const origDx = verts[nextIdx].x - verts[curIdx].x;
+      const origDy = verts[nextIdx].y - verts[curIdx].y;
+      const segIsVert = Math.abs(origDx) < 0.001;
+      const segIsHoriz = Math.abs(origDy) < 0.001;
+
+      if (isHoriz && segIsVert) {
+        // Perpendicular (vertical) segment: shift its end vertex in X.
+        out[nextIdx] = { x: out[nextIdx].x + deltaX, y: out[nextIdx].y };
+        curIdx = nextIdx;
+      } else if (isVert && segIsHoriz) {
+        // Perpendicular (horizontal) segment: shift its end vertex in Y.
+        out[nextIdx] = { x: out[nextIdx].x, y: out[nextIdx].y + deltaY };
+        curIdx = nextIdx;
+      } else {
+        // Parallel segment — it absorbs the length change; stop here.
+        break;
       }
     }
   }

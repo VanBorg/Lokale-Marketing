@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, shapePointsToVertices } from '../types';
-import RoomShapes from '../RoomShapes';
+import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox } from '../types';
+import RoomShapes, { SpecialRoomsSection } from '../RoomShapes';
 import RoomProperties from '../RoomProperties';
 import PlattegrondCanvas, { PlattegrondCanvasHandle } from '../PlattegrondCanvas';
 import EtageTabBar from '../components/EtageTabBar';
@@ -191,17 +191,43 @@ export default function TabPlattegrond({
         detectSubRooms(prev.map(r => {
           if (r.id !== id) return r;
           const merged = { ...r, ...updates };
+
           if (updates.wallLengths) {
-            merged.length = updates.wallLengths.top;
-            merged.width = updates.wallLengths.right;
+            if (updates.length === undefined) merged.length = updates.wallLengths.top;
+            if (updates.width === undefined) merged.width = updates.wallLengths.right;
           } else {
-            if (updates.length !== undefined) {
-              merged.wallLengths = { ...merged.wallLengths, top: updates.length, bottom: merged.wallLengths.bottom === r.length ? updates.length : merged.wallLengths.bottom };
+            const baseVerts = (r.vertices && r.vertices.length >= 3)
+              ? r.vertices
+              : ensureVertices(r);
+
+            const baseBB = verticesBoundingBox(baseVerts);
+            const actualLength = Math.max(baseBB.w, 0.01);
+            const actualWidth  = Math.max(baseBB.h, 0.01);
+
+            let scaledVerts = baseVerts;
+            let didScale = false;
+
+            if (updates.length !== undefined && updates.length > 0) {
+              const scaleX = updates.length / actualLength;
+              scaledVerts = scaledVerts.map(v => ({ x: v.x * scaleX, y: v.y }));
+              didScale = true;
             }
-            if (updates.width !== undefined) {
-              merged.wallLengths = { ...merged.wallLengths, right: updates.width, left: merged.wallLengths.left === r.width ? updates.width : merged.wallLengths.left };
+
+            if (updates.width !== undefined && updates.width > 0) {
+              const scaleY = updates.width / actualWidth;
+              scaledVerts = scaledVerts.map(v => ({ x: v.x, y: v.y * scaleY }));
+              didScale = true;
+            }
+
+            if (didScale) {
+              merged.vertices = scaledVerts;
+              const synced = syncRoomFromVertices(scaledVerts);
+              merged.wallLengths = synced.wallLengths;
+              merged.length = updates.length ?? synced.length;
+              merged.width  = updates.width  ?? synced.width;
             }
           }
+
           return merged;
         })),
       );
@@ -211,7 +237,7 @@ export default function TabPlattegrond({
 
   const deleteRoom = useCallback(
     (id: string) => {
-      updateActiveFloorRooms(prev => detectSubRooms(prev.filter(r => r.id !== id)));
+      updateActiveFloorRooms(prev => detectSubRooms(prev.filter(r => r.id !== id && r.parentRoomId !== id)));
       setSelectedRoomId(null);
       setPlacingElement(null);
     },
@@ -391,7 +417,6 @@ export default function TabPlattegrond({
             <RoomShapes
               selectedShape={lastShape}
               onSelect={addRoom}
-              onAddSpecialRoom={addSpecialRoom}
               selectedRoom={selectedRoom}
               onUpdateRoom={updateRoom}
             />
@@ -406,6 +431,8 @@ export default function TabPlattegrond({
                 onToggleWallIndex={toggleWallIndex}
               />
             )}
+
+            <SpecialRoomsSection onAddSpecialRoom={addSpecialRoom} />
           </div>
 
           <div className="p-4 border-t border-dark-border">

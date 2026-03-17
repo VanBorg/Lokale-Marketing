@@ -27,6 +27,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.disable-transitions,
+.disable-transitions * {
+  transition: none !important;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--color-border)) rgb(var(--color-bg));
