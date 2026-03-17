@@ -50,6 +50,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<DraggingHandle>(null);
   const [snapHighlight, setSnapHighlight] = useState<{ roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null>(null);
+  const [dragFromWalls, setDragFromWalls] = useState<{ roomId: string; walls: WallId[] } | null>(null);
 
   useEffect(() => {
     if (!placingElement) setGhostPos(null);
@@ -118,10 +119,13 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               placingElement={placingElement ?? null} ghostPos={ghostPos}
               draggingHandle={draggingHandle} cutRoomId={cutRoomId}
               canvasColors={canvasColors} theme={theme}
+              activeDragWalls={dragFromWalls?.roomId === room.id ? dragFromWalls.walls : null}
               onSelectRoom={onSelectRoom} onMoveRoom={onMoveRoom}
               onUpdateRoom={onUpdateRoom} onUpdateElement={onUpdateElement}
               onPlaceElement={onPlaceElement} onSetSelectedElement={setSelectedElementId}
               onSetDraggingHandle={setDraggingHandle} onSnapHighlight={setSnapHighlight}
+              onDragStartWalls={(roomId, walls) => setDragFromWalls({ roomId, walls })}
+              onDragEndRoom={() => setDragFromWalls(null)}
             />
           ))}
           {snapHighlight && (() => {

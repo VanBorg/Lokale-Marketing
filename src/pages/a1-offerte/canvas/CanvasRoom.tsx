@@ -7,6 +7,18 @@ import { WallId, HandleType, DraggingHandle, PX_PER_M, HANDLE_CURSORS } from './
 import { clamp, isNonRect, quadBounds, boundingSize, snapPosition } from './canvasUtils';
 import { renderElementContent } from './renderElementContent';
 
+const GRAB_EDGE_RATIO = 0.22;
+
+function getDragFromWalls(localX: number, localY: number, w: number, h: number): WallId[] {
+  const walls: WallId[] = [];
+  const cx = w / 2, cy = h / 2;
+  if (localX <= -cx + w * GRAB_EDGE_RATIO) walls.push('left');
+  if (localX >= cx - w * GRAB_EDGE_RATIO) walls.push('right');
+  if (localY <= -cy + h * GRAB_EDGE_RATIO) walls.push('top');
+  if (localY >= cy - h * GRAB_EDGE_RATIO) walls.push('bottom');
+  return walls.length > 0 ? walls : ['left', 'right', 'top', 'bottom'];
+}
+
 interface CanvasRoomProps {
   room: Room;
   rooms: Room[];
@@ -18,6 +30,7 @@ interface CanvasRoomProps {
   cutRoomId?: string | null;
   canvasColors: CanvasColors;
   theme: string;
+  activeDragWalls: WallId[] | null;
   onSelectRoom: (id: string | null) => void;
   onMoveRoom: (id: string, x: number, y: number) => void;
   onUpdateRoom?: (id: string, updates: Partial<Room>) => void;
@@ -26,6 +39,8 @@ interface CanvasRoomProps {
   onSetSelectedElement: (id: string | null) => void;
   onSetDraggingHandle: (handle: DraggingHandle) => void;
   onSnapHighlight: (snap: { roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null) => void;
+  onDragStartWalls: (roomId: string, walls: WallId[]) => void;
+  onDragEndRoom: () => void;
 }
 
 export default function CanvasRoom({
@@ -47,6 +62,9 @@ export default function CanvasRoom({
   onSetSelectedElement,
   onSetDraggingHandle,
   onSnapHighlight,
+  activeDragWalls,
+  onDragStartWalls,
+  onDragEndRoom,
 }: CanvasRoomProps) {
   const snapHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalizedStripeGreen = theme === 'dark' ? 'rgba(200, 255, 220, 0.28)' : 'rgba(134, 239, 172, 0.45)';
@@ -85,12 +103,20 @@ export default function CanvasRoom({
       rotation={rot}
       opacity={room.id === cutRoomId ? 0.4 : 1}
       draggable={!placingElement && !draggingHandle && !room.isFinalized}
+      onDragStart={(e: Konva.KonvaEventObject<DragEvent>) => {
+        const pos = e.target.getRelativePointerPosition();
+        if (pos) {
+          const walls = getDragFromWalls(pos.x, pos.y, w, h);
+          onDragStartWalls(room.id, walls);
+        }
+      }}
       onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
         const newX = e.target.x() - cx;
         const newY = e.target.y() - cy;
-        const snapped = snapPosition(room.id, newX, newY, rooms);
+        const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
         e.target.x(snapped.x + cx);
         e.target.y(snapped.y + cy);
+        onDragEndRoom();
         onMoveRoom(room.id, snapped.x, snapped.y);
         if (snapped.snappedToId && snapped.snappedWall && room.roomType !== 'normal') {
           onSnapHighlight({ roomId: snapped.snappedToId, wall: snapped.snappedWall });
@@ -240,6 +266,22 @@ export default function CanvasRoom({
           opacity={strokeOpacity}
           dash={dashPattern}
         />
+      )}
+      {activeDragWalls && activeDragWalls.length > 0 && (
+        <Group listening={false}>
+          {activeDragWalls.includes('left') && (
+            <Line points={[0, 0, 0, h]} stroke={theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(255,180,80,0.85)'} strokeWidth={2.5} />
+          )}
+          {activeDragWalls.includes('right') && (
+            <Line points={[w, 0, w, h]} stroke={theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(255,180,80,0.85)'} strokeWidth={2.5} />
+          )}
+          {activeDragWalls.includes('top') && (
+            <Line points={[0, 0, w, 0]} stroke={theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(255,180,80,0.85)'} strokeWidth={2.5} />
+          )}
+          {activeDragWalls.includes('bottom') && (
+            <Line points={[0, h, w, h]} stroke={theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(255,180,80,0.85)'} strokeWidth={2.5} />
+          )}
+        </Group>
       )}
       {room.isFinalized && (
         <Shape
