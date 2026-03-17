@@ -121,6 +121,20 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
 
   const handleRoomClick = useCallback((roomId: string, evt: MouseEvent) => {
     if (evt.ctrlKey || evt.metaKey) {
+      const clickedRoom = rooms.find(r => r.id === roomId);
+      const clickedFinalized = !!clickedRoom?.isFinalized;
+      const currentHasFinalized = selectedRoomIds.size > 0 && Array.from(selectedRoomIds).some(rid => {
+        const r = rooms.find(r => r.id === rid);
+        return r?.isFinalized;
+      });
+
+      if (selectedRoomIds.size > 0 && clickedFinalized !== currentHasFinalized) {
+        setSelectedRoomIds(new Set([roomId]));
+        internalSelectRef.current = true;
+        onSelectRoom(roomId);
+        return;
+      }
+
       const isInSet = selectedRoomIds.has(roomId);
       if (isInSet) {
         const next = new Set(selectedRoomIds);
@@ -143,11 +157,17 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     }
 
     if (evt.shiftKey && selectedRoomId) {
+      const primaryRoom = rooms.find(r => r.id === selectedRoomId);
+      const primaryFinalized = !!primaryRoom?.isFinalized;
       const startIdx = rooms.findIndex(r => r.id === selectedRoomId);
       const endIdx = rooms.findIndex(r => r.id === roomId);
       if (startIdx !== -1 && endIdx !== -1) {
         const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
-        const rangeIds = new Set(rooms.slice(from, to + 1).map(r => r.id));
+        const rangeIds = new Set(
+          rooms.slice(from, to + 1)
+            .filter(r => !!r.isFinalized === primaryFinalized)
+            .map(r => r.id)
+        );
         setSelectedRoomIds(rangeIds);
         internalSelectRef.current = true;
         onSelectRoom(roomId);
@@ -174,11 +194,11 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       const moves = Array.from(selectedRoomIds)
         .map(rid => {
           const r = rooms.find(r => r.id === rid);
-          if (!r) return null;
+          if (!r || r.isFinalized) return null;
           return { id: rid, x: rid === id ? x : r.x + dx, y: rid === id ? y : r.y + dy };
         })
         .filter((m): m is { id: string; x: number; y: number } => m !== null);
-      onMoveRooms(moves);
+      if (moves.length > 0) onMoveRooms(moves);
     } else {
       onMoveRoom(id, x, y);
     }
@@ -302,8 +322,15 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       const top = Math.min(marquee.startY, marquee.endY);
       const bottom = Math.max(marquee.startY, marquee.endY);
 
+      const currentHasFinalized = Array.from(selectedRoomIds).some(rid => {
+        const r = rooms.find(r => r.id === rid);
+        return r?.isFinalized;
+      });
+
       const newSelection = new Set<string>();
       for (const room of rooms) {
+        if (currentHasFinalized && !room.isFinalized) continue;
+        if (!currentHasFinalized && room.isFinalized) continue;
         const { w, h } = boundingSize(room);
         if (room.x < right && room.x + w > left && room.y < bottom && room.y + h > top) {
           newSelection.add(room.id);
@@ -319,6 +346,8 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         internalSelectRef.current = true;
         onSelectRoom(null);
       }
+      justFinishedDragRef.current = true;
+      requestAnimationFrame(() => { justFinishedDragRef.current = false; });
       setMarquee(null);
       return;
     }
@@ -426,7 +455,8 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               selectedWallIndices={room.id === selectedRoomId ? (selectedWallIndices ?? []) : []}
               isMultiSelected={selectedRoomIds.has(room.id) && selectedRoomIds.size > 1}
               multiDragOffset={
-                selectedRoomIds.size > 1 && selectedRoomIds.has(room.id) && multiDragDelta && multiDragOriginIdRef.current !== room.id
+                selectedRoomIds.size > 1 && selectedRoomIds.has(room.id) && multiDragDelta
+                  && multiDragOriginIdRef.current !== room.id && !room.isFinalized
                   ? multiDragDelta
                   : null
               }
