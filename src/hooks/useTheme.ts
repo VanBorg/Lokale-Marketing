@@ -3,7 +3,7 @@ import React from 'react';
 
 type Theme = 'dark' | 'light';
 
-interface CanvasColors {
+export interface CanvasColors {
   stageBg: string;
   roomFill: string;
   roomStroke: string;

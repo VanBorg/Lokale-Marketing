@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall } from '../types';
 import RoomShapes from '../RoomShapes';
 import RoomProperties from '../RoomProperties';
-import PlattegrondCanvas from '../PlattegrondCanvas';
+import PlattegrondCanvas, { PlattegrondCanvasHandle } from '../PlattegrondCanvas';
 import EtageTabBar from '../components/EtageTabBar';
 
 let counter = 0;
@@ -64,6 +64,8 @@ export default function TabPlattegrond({
 
   const [deleteFloorId, setDeleteFloorId] = useState<string | null>(null);
   const [deleteRoomId, setDeleteRoomId] = useState<string | null>(null);
+
+  const canvasRef = useRef<PlattegrondCanvasHandle | null>(null);
 
   const activeFloor = floors.find(f => f.id === activeFloorId)!;
   const rooms = activeFloor.rooms;
@@ -308,6 +310,10 @@ export default function TabPlattegrond({
   }, [clipboard, isCut, cutRoomId, updateActiveFloorRooms]);
 
   useEffect(() => {
+    canvasRef.current?.goToCenter();
+  }, [activeFloorId]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!selectedRoomId) return;
       if (e.key !== 'Backspace' && e.key !== 'Delete') return;
@@ -340,6 +346,7 @@ export default function TabPlattegrond({
 
       <div className="flex flex-1 min-h-0">
         <PlattegrondCanvas
+          ref={canvasRef}
           rooms={rooms}
           selectedRoomId={selectedRoomId}
           onSelectRoom={setSelectedRoomId}
