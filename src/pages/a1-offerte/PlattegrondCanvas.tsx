@@ -53,10 +53,26 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
           handleWizardFillRef.current(wizardGapsRef.current[0]);
         }
       }
+      // D = Definitief maken (als een kamer geselecteerd is en nog niet definitief)
+      if ((e.key === 'd' || e.key === 'D') && selectedRoomId && onUpdateRoom) {
+        const room = rooms.find(r => r.id === selectedRoomId);
+        if (room && !room.isFinalized) {
+          e.preventDefault();
+          onUpdateRoom(selectedRoomId, { isFinalized: true });
+        }
+      }
+      // B = Bewerken (als een kamer geselecteerd is en definitief is)
+      if ((e.key === 'b' || e.key === 'B') && selectedRoomId && onUpdateRoom) {
+        const room = rooms.find(r => r.id === selectedRoomId);
+        if (room?.isFinalized) {
+          e.preventDefault();
+          onUpdateRoom(selectedRoomId, { isFinalized: false });
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onCancelPlacing]);
+  }, [onCancelPlacing, selectedRoomId, rooms, onUpdateRoom]);
 
   const [ghostPos, setGhostPos] = useState<{ wall: WallId; position: number } | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -558,9 +574,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       </Stage>
       {wizardGaps.length > 0 && !draggingHandle && !isDraggingVertex && !marquee && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ height: size.height }}>
-          {wizardGaps.map(gap => (
+          {wizardGaps.map((gap, i) => (
             <WizardWand
-              key={gap.referenceRoomId}
+              key={`${gap.referenceRoomId}-${gap.edgePairs[0]?.targetEdgeIdx ?? i}`}
               gap={gap}
               scale={scale}
               stagePos={stagePos}

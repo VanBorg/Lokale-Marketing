@@ -142,34 +142,23 @@ export function detectRoomGaps(
     const pairs = findFacingEdgePairs(placedRoom, ref);
     if (pairs.length === 0) continue;
 
-    let gapArea = 0;
-    for (const p of pairs) {
-      gapArea += (p.gapPx / PX_PER_M) * (p.overlapPx / PX_PER_M);
-    }
-    if (gapArea < GAP_MIN_AREA) continue;
+    for (const pair of pairs) {
+      const area = (pair.gapPx / PX_PER_M) * (pair.overlapPx / PX_PER_M);
+      if (area < GAP_MIN_AREA) continue;
 
-    let sumX = 0, sumY = 0, sumW = 0;
-    for (const p of pairs) {
-      const midPerp = (p.targetPos + p.refPos) / 2;
-      const midPar = (p.overlapMin + p.overlapMax) / 2;
-      const w = p.overlapPx;
-      if (p.axis === 'x') {
-        sumX += midPerp * w;
-        sumY += midPar * w;
-      } else {
-        sumX += midPar * w;
-        sumY += midPerp * w;
-      }
-      sumW += w;
-    }
+      const midPerp = (pair.targetPos + pair.refPos) / 2;
+      const midPar = (pair.overlapMin + pair.overlapMax) / 2;
+      const wizX = pair.axis === 'x' ? midPerp : midPar;
+      const wizY = pair.axis === 'x' ? midPar : midPerp;
 
-    gaps.push({
-      roomId: placedRoom.id,
-      referenceRoomId: ref.id,
-      gapAreaM2: gapArea,
-      wizardWorldPos: { x: sumX / sumW, y: sumY / sumW },
-      edgePairs: pairs,
-    });
+      gaps.push({
+        roomId: placedRoom.id,
+        referenceRoomId: ref.id,
+        gapAreaM2: area,
+        wizardWorldPos: { x: wizX, y: wizY },
+        edgePairs: [pair],
+      });
+    }
   }
 
   return gaps;

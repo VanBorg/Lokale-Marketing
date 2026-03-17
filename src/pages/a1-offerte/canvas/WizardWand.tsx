@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wand2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown } from 'lucide-react';
 import { GapInfo } from './canvasTypes';
 
 interface WizardWandProps {
@@ -11,6 +11,20 @@ interface WizardWandProps {
   onHoverEnd: () => void;
 }
 
+function directionInfo(gap: GapInfo) {
+  const pair = gap.edgePairs[0];
+  if (!pair) return { label: 'Muur verplaatsen', Arrow: ArrowRight };
+  const positive = pair.refPos > pair.targetPos;
+  if (pair.axis === 'x') {
+    return positive
+      ? { label: 'Muur naar rechts', Arrow: ArrowRight }
+      : { label: 'Muur naar links', Arrow: ArrowLeft };
+  }
+  return positive
+    ? { label: 'Muur omlaag', Arrow: ArrowDown }
+    : { label: 'Muur omhoog', Arrow: ArrowUp };
+}
+
 export default function WizardWand({
   gap,
   scale,
@@ -20,6 +34,7 @@ export default function WizardWand({
   onHoverEnd,
 }: WizardWandProps) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const { label, Arrow } = directionInfo(gap);
 
   const screenX = gap.wizardWorldPos.x * scale + stagePos.x;
   const screenY = gap.wizardWorldPos.y * scale + stagePos.y;
@@ -52,14 +67,14 @@ export default function WizardWand({
           onHoverEnd();
         }}
       >
-        <Wand2 size={iconSize} strokeWidth={2.5} />
+        <Arrow size={iconSize} strokeWidth={2.5} />
       </button>
       {showTooltip && (
         <div
           className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap px-2.5 py-1 rounded-lg bg-dark-card border border-dark-border shadow-xl text-[11px] text-light/80 font-medium pointer-events-none"
           style={{ top: btnSize + 6 }}
         >
-          Ruimte opvullen
+          {label}
           <span className="ml-1.5 text-[10px] text-light/40 font-mono">[W]</span>
         </div>
       )}

@@ -9,6 +9,8 @@ const SHORTCUTS = [
   { keys: ['S'], description: 'Centreer canvas' },
   { keys: ['Esc'], description: 'Plaatsing annuleren' },
   { keys: ['Delete'], description: 'Kamer verwijderen' },
+  { keys: ['D'], description: 'Definitief maken (kamer geselecteerd)' },
+  { keys: ['B'], description: 'Bewerken (kamer geselecteerd)' },
   { keys: ['Ctrl', 'Klik'], description: 'Multi-selectie' },
   { keys: ['Shift', 'Klik'], description: 'Reeks selecteren' },
   { keys: ['Ctrl', 'Sleep'], description: 'Marquee selectie' },
