@@ -168,9 +168,6 @@ export function snapPosition(
           const dist = Math.abs(dragEdgeWorld - otherX);
           if (dist >= bestDist) continue;
           const candidateSx = x + (otherX - dragEdgeWorld);
-          // #region agent log
-          fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'415d68'},body:JSON.stringify({sessionId:'415d68',location:'canvasSnapping.ts:snapX',message:'X snap candidate',data:{dragOffset,dragEdgeWorld,otherX,dist,candidateSx,draggedType:dragged.roomType,otherId:other.id,otherType:other.roomType},timestamp:Date.now(),hypothesisId:'H1-H2'})}).catch(()=>{});
-          // #endregion
           bestDist = dist;
           sx = candidateSx;
           snappedToId = other.id;

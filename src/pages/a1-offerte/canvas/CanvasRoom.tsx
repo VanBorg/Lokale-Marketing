@@ -174,9 +174,6 @@ export default function CanvasRoom({
         // Special rooms: always snap both X and Y so they can attach to any wall
         const snapWalls = room.roomType !== 'normal' ? null : activeDragWalls;
         const snapped = snapPosition(room.id, newX, newY, rooms, snapWalls);
-        // #region agent log
-        fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'415d68'},body:JSON.stringify({sessionId:'415d68',location:'CanvasRoom.tsx:onDragEnd',message:'drag end snap result',data:{roomType:room.roomType,newX,newY,snappedX:snapped.x,snappedY:snapped.y,snappedToId:snapped.snappedToId,snappedWall:snapped.snappedWall,activeDragWalls,snapWalls},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-        // #endregion
         e.target.x(snapped.x + cx);
         e.target.y(snapped.y + cy);
         onDragEndRoom();
