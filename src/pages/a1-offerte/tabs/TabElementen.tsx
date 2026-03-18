@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Stage as KonvaStage, Layer, Line, Rect, Arc, Text, Group } from 'react-konva';
 import Konva from 'konva';
 import { Trash2 } from 'lucide-react';
-import { Floor, Room, RoomElement, ELEMENT_DEFAULTS, getShapePoints, computeQuadCorners, ROOM_TYPE_ICONS, ensureVertices, verticesToPoints, verticesBoundingBox } from '../types';
+import { Floor, Room, RoomElement, ELEMENT_DEFAULTS, getShapePoints, computeQuadCorners, ROOM_TYPE_ICONS, ensureVertices, verticesToPoints, verticesBoundingBox, getRoomFillKey } from '../types';
 import { useTheme } from '../../../hooks/useTheme';
 import KamerSelector from '../components/KamerSelector';
 
@@ -308,7 +308,7 @@ export default function TabElementen({
                           const { w: rw, h: rh } = miniBounds(r);
                           const isSel = r.id === selectedRoomId;
                           const pts = miniPoints(r, rw, rh);
-                          const fill = r.isSubRoom ? canvasColors.subRoomFill : canvasColors.roomFill;
+                          const fill = canvasColors[getRoomFillKey(r)];
                           const strokeColor = isSel ? canvasColors.roomStrokeSelected : (r.isSubRoom ? canvasColors.subRoomStroke : canvasColors.roomStroke);
                           return (
                             <Group key={r.id} x={r.x} y={r.y}>
@@ -348,7 +348,7 @@ export default function TabElementen({
                       <Line
                         points={getShapePoints(selectedRoom.shape, roomW, roomH)}
                         closed
-                        fill={canvasColors.roomFill}
+                        fill={canvasColors[getRoomFillKey(selectedRoom)]}
                         stroke={canvasColors.roomStrokeSelected}
                         strokeWidth={2 / canvasScale}
                       />

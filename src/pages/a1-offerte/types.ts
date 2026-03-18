@@ -109,6 +109,24 @@ export const SPECIAL_ROOMS: { type: RoomType; label: string; length: number; wid
   { type: 'logia', label: 'Logia', length: 3.0, width: 1.5 },
 ];
 
+export const SPECIAL_ROOM_TYPES = new Set<RoomType>(SPECIAL_ROOMS.map((room) => room.type));
+
+export function isSpecialRoomType(type: RoomType): boolean {
+  return SPECIAL_ROOM_TYPES.has(type);
+}
+
+export function isSpecialRoom(room: Room): boolean {
+  return isSpecialRoomType(room.roomType);
+}
+
+export type RoomFillKey = 'roomFill' | 'subRoomFill' | 'specialFinalizedFill';
+
+export function getRoomFillKey(room: Room): RoomFillKey {
+  if (room.isFinalized && isSpecialRoom(room)) return 'specialFinalizedFill';
+  if (room.isSubRoom) return 'subRoomFill';
+  return 'roomFill';
+}
+
 export function calcWallArea(wall: WallSide, wallWidth: number): number {
   return ((wall.heightLeft + wall.heightRight) / 2) * wallWidth;
 }
@@ -253,6 +271,9 @@ export function isOverlapping(container: Room, inner: Room): boolean {
 /** Use a slightly larger threshold when a special room is next to a normal room (small rooms). */
 const ADJACENCY_THRESHOLD_SPECIAL = 28;
 
+/** Larger threshold for "belongs to this room" when finalizing (Badkamer, Berging, Trapgat, Logia etc.). */
+export const ADJACENCY_THRESHOLD_FINALIZE = 52;
+
 export function isAdjacent(roomA: Room, roomB: Room, threshold?: number): boolean {
   const t = threshold ?? (roomA.roomType !== 'normal' || roomB.roomType !== 'normal' ? ADJACENCY_THRESHOLD_SPECIAL : 20);
   const a = roomBounds(roomA);
@@ -274,6 +295,38 @@ export function isAdjacent(roomA: Room, roomB: Room, threshold?: number): boolea
 
   return (touchingHorizontally && hasVerticalRange) ||
          (touchingVertically && hasHorizontalRange);
+}
+
+export function getSpecialRoomsForParent(parent: Room, rooms: Room[]): Room[] {
+  if (parent.roomType !== 'normal') return [];
+  return rooms.filter(
+    (room) =>
+      room.id !== parent.id &&
+      isSpecialRoom(room) &&
+      (room.parentRoomId === parent.id ||
+        isOverlapping(parent, room) ||
+        isAdjacent(room, parent, ADJACENCY_THRESHOLD_FINALIZE))
+  );
+}
+
+export function getDependentRoomsForFinalization(parent: Room, rooms: Room[]): Room[] {
+  if (parent.roomType !== 'normal') return [];
+  const childRooms = rooms.filter((room) => room.parentRoomId === parent.id);
+  const specialRooms = getSpecialRoomsForParent(parent, rooms);
+  const byId = new Map<string, Room>();
+  childRooms.forEach((room) => byId.set(room.id, room));
+  specialRooms.forEach((room) => byId.set(room.id, room));
+  return Array.from(byId.values());
+}
+
+export function getAdjacentOrContainedRooms(parent: Room, rooms: Room[]): Room[] {
+  return rooms.filter((room) => {
+    if (room.id === parent.id) return false;
+    const overlapsParent = isOverlapping(parent, room);
+    const parentInsideRoom = isOverlapping(room, parent);
+    const adjacent = isAdjacent(room, parent, ADJACENCY_THRESHOLD_FINALIZE);
+    return overlapsParent || parentInsideRoom || adjacent || room.parentRoomId === parent.id;
+  });
 }
 
 export function computeQuadCorners(wl: Room['wallLengths']): number[] {

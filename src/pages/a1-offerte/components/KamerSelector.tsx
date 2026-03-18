@@ -52,29 +52,10 @@ export default function KamerSelector({
   const activeFloor = floors.find(f => f.id === activeFloorId);
   const rooms: Room[] = activeFloor?.rooms ?? [];
 
-  const groupedRooms = useMemo(() => {
-    const result: { room: Room; isChild: boolean }[] = [];
-    const mainRooms = rooms.filter(r => !r.isSubRoom);
-    const childRooms = rooms.filter(r => r.isSubRoom);
-
-    for (const main of mainRooms) {
-      result.push({ room: main, isChild: false });
-      for (const child of childRooms) {
-        if (child.parentRoomId === main.id) {
-          result.push({ room: child, isChild: true });
-        }
-      }
-    }
-
-    const orphanSubs = childRooms.filter(
-      c => !mainRooms.some(m => m.id === c.parentRoomId),
-    );
-    for (const orphan of orphanSubs) {
-      result.push({ room: orphan, isChild: false });
-    }
-
-    return result;
-  }, [rooms]);
+  const groupedRooms = useMemo(
+    () => rooms.map((room) => ({ room, isChild: room.isSubRoom })),
+    [rooms],
+  );
 
   return (
     <div className="flex flex-col h-full">

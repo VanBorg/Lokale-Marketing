@@ -6,6 +6,8 @@ type Theme = 'dark' | 'light';
 export interface CanvasColors {
   stageBg: string;
   roomFill: string;
+  /** Finalized special rooms: solid fill (same for dark/light) */
+  specialFinalizedFill: string;
   roomStroke: string;
   roomStrokeSelected: string;
   gridThin: string;
@@ -37,9 +39,14 @@ interface ThemeContextValue {
   canvasColors: CanvasColors;
 }
 
+const FINALIZED_STRIPE_COLOR = 'rgba(134, 239, 172, 0.45)';
+const FINALIZED_STRIPE_LINE_WIDTH = 4;
+const SPECIAL_FINALIZED_FILL = '#CDEEDD';
+
 const DARK_CANVAS: CanvasColors = {
   stageBg: '#0E0E0E',
   roomFill: '#1F1F1F',
+  specialFinalizedFill: SPECIAL_FINALIZED_FILL,
   roomStroke: 'rgba(255,255,255,0.22)',
   roomStrokeSelected: '#FF5C1A',
   gridThin: 'rgba(255,255,255,0.12)',
@@ -54,13 +61,14 @@ const DARK_CANVAS: CanvasColors = {
   handleStroke: '#fff',
   subRoomFill: '#232222',
   subRoomStroke: '#FF5C1A',
-  finalizedRoomStripe: 'rgba(200, 255, 220, 0.28)',
-  finalizedRoomStripeLineWidth: 1.5,
+  finalizedRoomStripe: FINALIZED_STRIPE_COLOR,
+  finalizedRoomStripeLineWidth: FINALIZED_STRIPE_LINE_WIDTH,
 };
 
 const LIGHT_CANVAS: CanvasColors = {
   stageBg: '#FAFAFA',
   roomFill: '#EBEBEB',
+  specialFinalizedFill: SPECIAL_FINALIZED_FILL,
   roomStroke: 'rgba(0,0,0,0.38)',
   roomStrokeSelected: '#FF5C1A',
   gridThin: 'rgba(0,0,0,0.14)',
@@ -75,8 +83,8 @@ const LIGHT_CANVAS: CanvasColors = {
   handleStroke: '#333',
   subRoomFill: '#E4E2E0',
   subRoomStroke: '#E85A1A',
-  finalizedRoomStripe: 'rgba(134, 239, 172, 0.45)',
-  finalizedRoomStripeLineWidth: 4,
+  finalizedRoomStripe: FINALIZED_STRIPE_COLOR,
+  finalizedRoomStripeLineWidth: FINALIZED_STRIPE_LINE_WIDTH,
 };
 
 const ThemeContext = createContext<ThemeContextValue>({

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef, useMemo } from 'react';
 import { Stage as KonvaStage, Layer, Rect, Line } from 'react-konva';
 import Konva from 'konva';
-import { calcTotalWalls, ensureVertices, syncRoomFromVertices } from './types';
+import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getAdjacentOrContainedRooms } from './types';
 import { useTheme } from '../../hooks/useTheme';
 import { WallId, DraggingHandle, DraggingVertex, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
 import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill } from './canvas/canvasUtils';
@@ -91,24 +91,22 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         if (!room || room.isFinalized) return;
         e.preventDefault();
 
-        if (room.roomType === 'normal') {
-          const childRooms = rooms.filter(r => r.parentRoomId === room.id);
-          onUpdateRoom(room.id, { isFinalized: true });
-          childRooms.forEach(child => {
-            if (!child.isFinalized) {
-              onUpdateRoom(child.id, { isFinalized: true });
-            }
-          });
-        } else {
-          onUpdateRoom(room.id, { isFinalized: true });
-        }
+        const dependents = getAdjacentOrContainedRooms(room, rooms);
+        onUpdateRoom(room.id, { isFinalized: true });
+        dependents.forEach((dependent) => {
+          if (!dependent.isFinalized) onUpdateRoom(dependent.id, { isFinalized: true });
+        });
       }
-      // B = Bewerken (als een kamer geselecteerd is en definitief is)
+      // B = Bewerken (als een kamer geselecteerd is en definitief is) — hoofdkamer + speciale kamers terug op bewerken
       if ((e.key === 'b' || e.key === 'B') && selectedRoomId && onUpdateRoom) {
         const room = rooms.find(r => r.id === selectedRoomId);
         if (room?.isFinalized) {
           e.preventDefault();
           onUpdateRoom(selectedRoomId, { isFinalized: false });
+          const dependents = getAdjacentOrContainedRooms(room, rooms);
+          dependents.forEach((dependent) => {
+            if (dependent.isFinalized) onUpdateRoom(dependent.id, { isFinalized: false });
+          });
         }
       }
     };

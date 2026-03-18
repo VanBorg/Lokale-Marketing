@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Room, calcTotalWalls, polygonArea, positionSpecialOnWall } from './types';
+import { Room, calcTotalWalls, polygonArea, positionSpecialOnWall, getAdjacentOrContainedRooms } from './types';
 import RoomWalls from './RoomWalls';
 
 interface RoomPropertiesProps {
@@ -16,6 +16,83 @@ function parseNum(value: string, fallback: number): number {
   return isNaN(n) ? fallback : n;
 }
 
+/** Reusable Lengte/Breedte/Hoogte inputs for use in Afmetingen and under Speciale ruimtes. */
+export function RoomDimensionInputs({
+  room,
+  onUpdate,
+  disabled,
+  inputCls = 'w-full px-2 py-1.5 rounded-lg bg-dark-card border border-dark-border text-light text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50',
+}: {
+  room: Room;
+  onUpdate: (id: string, updates: Partial<Room>) => void;
+  disabled?: boolean;
+  inputCls?: string;
+}) {
+  const cls = `${inputCls} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <div>
+        <label className="block text-xs text-light/50 mb-1">Lengte (m)</label>
+        <input
+          type="number"
+          step={0.1}
+          min={1}
+          value={room.length || ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            onUpdate(room.id, { length: v === '' ? 0 : parseNum(v, 0) });
+          }}
+          disabled={disabled}
+          className={cls}
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-light/50 mb-1">Breedte (m)</label>
+        <input
+          type="number"
+          step={0.1}
+          min={1}
+          value={room.width || ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            onUpdate(room.id, { width: v === '' ? 0 : parseNum(v, 0) });
+          }}
+          disabled={disabled}
+          className={cls}
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-light/50 mb-1">Hoogte (m)</label>
+        <input
+          type="number"
+          step={0.1}
+          min={2}
+          value={room.height || ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '') {
+              onUpdate(room.id, { height: 0 });
+              return;
+            }
+            const h = parseNum(v, 0);
+            const wc = room.wallsCustomized ?? { top: false, right: false, bottom: false, left: false };
+            const side = { heightLeft: h, heightRight: h };
+            const newWalls = {
+              top: wc.top ? room.walls.top : side,
+              right: wc.right ? room.walls.right : side,
+              bottom: wc.bottom ? room.walls.bottom : side,
+              left: wc.left ? room.walls.left : side,
+            };
+            onUpdate(room.id, { height: h, walls: newWalls });
+          }}
+          disabled={disabled}
+          className={cls}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function RoomProperties({ room, rooms, onUpdate, onDelete, selectedWallIndices, onToggleWallIndex }: RoomPropertiesProps) {
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -23,6 +100,7 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
   const floor = room.vertices && room.vertices.length >= 3 ? polygonArea(room.vertices) : room.length * room.width;
   const walls = calcTotalWalls(room);
   const childRooms = rooms.filter(r => r.parentRoomId === room.id);
+  const allChildAndSpecialRooms = getAdjacentOrContainedRooms(room, rooms);
   const insideChildren = childRooms.filter(r => r.attachedWall === 'inside');
   const insideSubtraction = insideChildren.reduce((sum, c) => sum + (c.vertices && c.vertices.length >= 3 ? polygonArea(c.vertices) : c.length * c.width), 0);
   const netFloor = floor - insideSubtraction;
@@ -87,57 +165,7 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <label className="block text-xs text-light/50 mb-1">Lengte (m)</label>
-            <input
-              type="number" step={0.1} min={1} value={room.length || ''}
-              onChange={(e) => {
-                const v = e.target.value;
-                onUpdate(room.id, { length: v === '' ? 0 : parseNum(v, 0) });
-              }}
-              disabled={room.isFinalized}
-              className={`${inputCls} ${room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''}`}
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-light/50 mb-1">Breedte (m)</label>
-            <input
-              type="number" step={0.1} min={1} value={room.width || ''}
-              onChange={(e) => {
-                const v = e.target.value;
-                onUpdate(room.id, { width: v === '' ? 0 : parseNum(v, 0) });
-              }}
-              disabled={room.isFinalized}
-              className={`${inputCls} ${room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''}`}
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-light/50 mb-1">Hoogte (m)</label>
-            <input
-              type="number" step={0.1} min={2} value={room.height || ''}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === '') {
-                  onUpdate(room.id, { height: 0 });
-                  return;
-                }
-                const h = parseNum(v, 0);
-                const wc = room.wallsCustomized ?? { top: false, right: false, bottom: false, left: false };
-                const side = { heightLeft: h, heightRight: h };
-                const newWalls = {
-                  top: wc.top ? room.walls.top : side,
-                  right: wc.right ? room.walls.right : side,
-                  bottom: wc.bottom ? room.walls.bottom : side,
-                  left: wc.left ? room.walls.left : side,
-                };
-                onUpdate(room.id, { height: h, walls: newWalls });
-              }}
-              disabled={room.isFinalized}
-              className={`${inputCls} ${room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''}`}
-            />
-          </div>
-        </div>
+        <RoomDimensionInputs room={room} onUpdate={onUpdate} disabled={room.isFinalized} inputCls={inputCls} />
 
         <div className="rounded-lg bg-dark-card border border-dark-border p-3 space-y-1.5">
           {insideChildren.length > 0 ? (
@@ -259,11 +287,12 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
                   setFinalizeError(`Let op: '${room.name}' is onderdeel van '${parentRoom.name}'. Maak eerst de hoofdkamer definitief.`);
                   return;
                 }
-                if (childRooms.length > 0) {
+                if (allChildAndSpecialRooms.length > 0) {
                   setShowSubRoomConfirm(true);
                   return;
                 }
                 onUpdate(room.id, { isFinalized: true });
+                allChildAndSpecialRooms.forEach((c) => onUpdate(c.id, { isFinalized: true }));
               }}
               className="w-full px-3 py-2 rounded-lg text-sm font-medium
                 bg-green-500/10 text-green-400 border border-green-500/20
@@ -279,7 +308,10 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
           <div className="flex items-center justify-between rounded-lg bg-dark-card border border-dark-border p-2.5">
             <span className="text-xs text-light/40">Afmetingen vastgesteld</span>
             <button
-              onClick={() => onUpdate(room.id, { isFinalized: false })}
+              onClick={() => {
+                onUpdate(room.id, { isFinalized: false });
+                allChildAndSpecialRooms.forEach((c) => onUpdate(c.id, { isFinalized: false }));
+              }}
               className="px-2.5 py-1 rounded text-xs font-medium
                 bg-accent/10 text-accent border border-accent/20
                 hover:bg-accent/20 transition-colors cursor-pointer"
@@ -340,7 +372,7 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-sm text-light/90 mb-4">
-              Je kamer &apos;{room.name}&apos; bevat {childRooms.length} aanliggende ruimte(s): {childRooms.map(c => c.name).join(', ')}.
+              Je kamer &apos;{room.name}&apos; bevat {allChildAndSpecialRooms.length} aanliggende ruimte(s): {allChildAndSpecialRooms.map(c => c.name).join(', ')}.
               Deze worden meegenomen als onderdeel van deze kamer. Wil je doorgaan?
             </p>
             <div className="flex gap-3 justify-end">
@@ -355,7 +387,7 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
               <button
                 onClick={() => {
                   onUpdate(room.id, { isFinalized: true });
-                  childRooms.forEach(c => onUpdate(c.id, { isFinalized: true }));
+                  allChildAndSpecialRooms.forEach((c) => onUpdate(c.id, { isFinalized: true }));
                   setShowSubRoomConfirm(false);
                 }}
                 className="px-4 py-2 rounded-lg text-sm font-medium

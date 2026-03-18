@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, computeWallOffset, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea } from '../types';
 import RoomShapes, { SpecialRoomsSection } from '../RoomShapes';
-import RoomProperties from '../RoomProperties';
+import RoomProperties, { RoomDimensionInputs } from '../RoomProperties';
 import FreeFormBuilder from '../FreeFormBuilder';
 import PlattegrondCanvas, { PlattegrondCanvasHandle } from '../PlattegrondCanvas';
 import EtageTabBar from '../components/EtageTabBar';
@@ -10,19 +10,24 @@ let counter = 0;
 
 function detectSubRooms(rooms: Room[]): Room[] {
   const normalRooms = rooms.filter(r => r.roomType === 'normal');
+  const specialRooms = rooms.filter(r => r.roomType !== 'normal');
   let updated = rooms.map(r => {
     if (r.roomType === 'normal') return r;
 
-    for (const normal of normalRooms) {
-      if (isOverlapping(normal, r)) {
-        return { ...r, parentRoomId: normal.id, isSubRoom: true, attachedWall: 'inside' as const };
+    const parentCandidates = [
+      ...normalRooms,
+      ...specialRooms.filter(candidate => candidate.id !== r.id),
+    ];
+    for (const parent of parentCandidates) {
+      if (isOverlapping(parent, r)) {
+        return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: 'inside' as const };
       }
     }
-    for (const normal of normalRooms) {
-      if (isAdjacent(r, normal)) {
-        const wall = detectAttachedWall(r, normal);
-        const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, normal, wall) : undefined;
-        return { ...r, parentRoomId: normal.id, isSubRoom: true, attachedWall: wall, wallOffset };
+    for (const parent of parentCandidates) {
+      if (isAdjacent(r, parent)) {
+        const wall = detectAttachedWall(r, parent);
+        const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
+        return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
       }
     }
     return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null, wallOffset: undefined };
@@ -84,6 +89,7 @@ export default function TabPlattegrond({
   const [showFreeFormBuilder, setShowFreeFormBuilder] = useState(false);
 
   const canvasRef = useRef<PlattegrondCanvasHandle | null>(null);
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
 
   const activeFloor = floors.find(f => f.id === activeFloorId)!;
   const rooms = activeFloor.rooms;
@@ -476,6 +482,10 @@ export default function TabPlattegrond({
     setPlacingElement(null);
   }, [setActiveFloorId]);
 
+  const handleSelectRoom = useCallback((id: string | null) => {
+    setSelectedRoomId(id);
+  }, []);
+
   const deleteFloorObj = deleteFloorId ? floors.find(f => f.id === deleteFloorId) : null;
   const deleteRoomObj = deleteRoomId ? rooms.find(r => r.id === deleteRoomId) : null;
   const deleteMultipleRoomsCount = deleteMultipleRoomIds ? deleteMultipleRoomIds.size : 0;
@@ -495,7 +505,7 @@ export default function TabPlattegrond({
           ref={canvasRef}
           rooms={rooms}
           selectedRoomId={selectedRoomId}
-          onSelectRoom={setSelectedRoomId}
+          onSelectRoom={handleSelectRoom}
             selectedRoomIds={selectedRoomIds}
             onSelectedRoomIdsChange={setSelectedRoomIds}
           onMoveRoom={moveRoom}
@@ -522,7 +532,7 @@ export default function TabPlattegrond({
           onRedo={onRedo}
         />
 
-        <div className="w-80 shrink-0 border-l border-dark-border bg-dark overflow-y-auto flex flex-col">
+        <div ref={sidebarRef} className="w-80 shrink-0 border-l border-dark-border bg-dark overflow-y-auto flex flex-col">
           <div className="flex-1">
             {showFreeFormBuilder ? (
               <FreeFormBuilder
@@ -551,6 +561,19 @@ export default function TabPlattegrond({
                 )}
 
                 <SpecialRoomsSection onAddSpecialRoom={addSpecialRoom} />
+
+                {selectedRoom && (
+                  <div className="p-4 border-b border-dark-border">
+                    <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-3">
+                      Afmetingen
+                    </h3>
+                    <RoomDimensionInputs
+                      room={selectedRoom}
+                      onUpdate={updateRoom}
+                      disabled={selectedRoom.isFinalized}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>

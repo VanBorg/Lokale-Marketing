@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Line, Circle, Group, Rect } from 'react-konva';
 import Konva from 'konva';
-import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints } from '../types';
+import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints, isSpecialRoom, getRoomFillKey } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
 import { WallId, DraggingHandle, PX_PER_M } from './canvasTypes';
 import { isNonRect, quadBounds, boundingSize, snapPosition } from './canvasUtils';
@@ -127,13 +127,13 @@ export default function CanvasRoom({
   const points = hasVertices
     ? verticesToPoints(ensureVertices(room))
     : qb ? qb.pts : getShapePoints(room.shape, w, h);
-  const isLooseSpecial = !room.isSubRoom && room.roomType !== 'normal';
-  const isSpecialRoom = room.roomType !== 'normal';
-  const showWallNumbers = !isSpecialRoom;
+  const specialRoom = isSpecialRoom(room);
+  const isLooseSpecial = !room.isSubRoom && specialRoom;
+  const showWallNumbers = !specialRoom;
   const subRoomCount = rooms.filter(r => r.parentRoomId === room.id).length;
 
   const stroke = isSelected ? canvasColors.roomStrokeSelected : canvasColors.roomStroke;
-  const roomFill = room.isSubRoom ? canvasColors.subRoomFill : canvasColors.roomFill;
+  const roomFill = canvasColors[getRoomFillKey(room)];
   const strokeOpacity = 1;
   const dashPattern = undefined;
 
@@ -213,9 +213,9 @@ export default function CanvasRoom({
         isSelected={isSelected}
         room={room}
         isLooseSpecial={isLooseSpecial}
-        isSpecialRoom={isSpecialRoom}
-        finalizedRoomStripe={room.isFinalized ? canvasColors.finalizedRoomStripe : undefined}
-        finalizedRoomStripeLineWidth={room.isFinalized ? canvasColors.finalizedRoomStripeLineWidth : undefined}
+        isSpecialRoom={specialRoom}
+        finalizedRoomStripe={room.isFinalized && !specialRoom ? canvasColors.finalizedRoomStripe : undefined}
+        finalizedRoomStripeLineWidth={room.isFinalized && !specialRoom ? canvasColors.finalizedRoomStripeLineWidth : undefined}
       />
       {activeDragWalls && activeDragWalls.length > 0 && (
         <Group listening={false}>

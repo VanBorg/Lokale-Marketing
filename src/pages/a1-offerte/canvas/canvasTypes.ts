@@ -2,8 +2,8 @@ import { Room, RoomElement, Vertex } from '../types';
 
 export const PX_PER_M = 40;
 export const SNAP_THRESHOLD = 40;
-/** Larger threshold so WC, Kast, Nis, etc. magnet more easily to normal room walls. */
-export const SNAP_THRESHOLD_SPECIAL = 60;
+/** Special rooms: only snap when very close to a wall so they stay freely placeable. */
+export const SNAP_THRESHOLD_SPECIAL = 18;
 export const SCALE_BY = 1.08;
 export const MIN_SCALE = 0.15;
 export const MAX_SCALE = 4;
