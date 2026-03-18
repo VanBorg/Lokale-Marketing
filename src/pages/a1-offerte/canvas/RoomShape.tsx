@@ -101,6 +101,18 @@ export default function RoomShape({
       {room.isFinalized && finalizedRoomStripe != null && finalizedRoomStripeLineWidth != null && (
         <Shape
           sceneFunc={(ctx: any) => {
+            const xs: number[] = [];
+            const ys: number[] = [];
+            for (let i = 0; i < points.length; i += 2) {
+              xs.push(points[i]);
+              ys.push(points[i + 1]);
+            }
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            const span = Math.max(maxX - minX, maxY - minY);
+
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(points[0], points[1]);
@@ -111,16 +123,16 @@ export default function RoomShape({
             ctx.lineWidth = finalizedRoomStripeLineWidth;
             ctx.lineCap = 'butt';
             const step = 12;
-            for (let y = -w; y <= h + w; y += step) {
+            for (let y = minY - span; y <= maxY + span; y += step) {
               ctx.beginPath();
-              ctx.moveTo(0, y);
-              ctx.lineTo(w, y + w);
+              ctx.moveTo(minX - span, y);
+              ctx.lineTo(maxX + span, y + span);
               ctx.stroke();
             }
-            for (let y = -w; y <= h + w; y += step) {
+            for (let y = minY - span; y <= maxY + span; y += step) {
               ctx.beginPath();
-              ctx.moveTo(w, y);
-              ctx.lineTo(0, y - w);
+              ctx.moveTo(maxX + span, y);
+              ctx.lineTo(minX - span, y - span);
               ctx.stroke();
             }
             ctx.restore();

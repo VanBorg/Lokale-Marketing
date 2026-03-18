@@ -147,7 +147,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   useEffect(() => {
     if (!selectedRoomId) { setWizardGaps([]); return; }
     const room = rooms.find(r => r.id === selectedRoomId);
-    if (!room || room.isFinalized) { setWizardGaps([]); return; }
+    if (!room || room.isFinalized || room.roomType !== 'normal') { setWizardGaps([]); return; }
     setWizardGaps(detectRoomGaps(room, rooms));
   }, [rooms, selectedRoomId]);
 

@@ -35,6 +35,17 @@ function getDragFromWalls(localX: number, localY: number, w: number, h: number):
   return ['bottom'];
 }
 
+function getNearestWall(localX: number, localY: number, w: number, h: number): WallId[] {
+  const dLeft = localX;
+  const dRight = w - localX;
+  const dTop = localY;
+  const dBottom = h - localY;
+  if (dLeft <= dRight && dLeft <= dTop && dLeft <= dBottom) return ['left'];
+  if (dRight <= dTop && dRight <= dBottom) return ['right'];
+  if (dTop <= dBottom) return ['top'];
+  return ['bottom'];
+}
+
 interface CanvasRoomProps {
   room: Room;
   rooms: Room[];
@@ -136,7 +147,9 @@ export default function CanvasRoom({
       onDragStart={(e: Konva.KonvaEventObject<DragEvent>) => {
         const pos = e.target.getRelativePointerPosition();
         if (pos) {
-          const walls = getDragFromWalls(pos.x, pos.y, w, h);
+          const walls = room.roomType === 'normal'
+            ? getDragFromWalls(pos.x, pos.y, w, h)
+            : getNearestWall(pos.x, pos.y, w, h);
           onDragStartWalls(room.id, walls);
         }
       }}

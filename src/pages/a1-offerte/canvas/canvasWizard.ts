@@ -1,175 +1,185 @@
-import { Room, Vertex, ensureVertices } from '../types';
-import { PX_PER_M, FacingEdgePair, GapInfo } from './canvasTypes';
-import { boundingSize } from './canvasGeometry';
+import { Room, Vertex, ensureVertices, syncRoomFromVertices } from '../types';
+import { PX_PER_M, GapInfo, FacingEdgePair } from './canvasTypes';
 
-/* ── Constants ──────────────────────────────────────────────────── */
+/* ── Constants ── */
+const GAP_MAX_PX = 120;
+const GAP_MIN_PX = 1;
+const OVERLAP_MIN_PX = 2;
 
-const GAP_MAX_DIST = 120;
-const GAP_MIN_DIST = 2;
-const OVERLAP_MIN = 4;
-const GAP_MIN_AREA = 0.01;
-
-/* ── World-edge helpers ─────────────────────────────────────────── */
-
-type WorldEdge = {
-  idx: number;
-  perpCoord: number;
-  parallelMin: number;
-  parallelMax: number;
+/* ── Types ── */
+type WorldSegment = {
+  wallIndex: number;
+  x1: number; y1: number;
+  x2: number; y2: number;
   isVertical: boolean;
-  facesPositive: boolean;
+  isHorizontal: boolean;
 };
 
-function polygonIsClockwise(verts: Vertex[]): boolean {
-  let sum = 0;
-  for (let i = 0; i < verts.length; i++) {
-    const a = verts[i];
-    const b = verts[(i + 1) % verts.length];
-    sum += a.x * b.y - b.x * a.y;
-  }
-  return sum > 0;
+/* ── Helpers ── */
+
+function isIShape(room: Room): boolean {
+  return room.shape === 'i-vorm';
 }
 
-function buildWorldEdges(room: Room): WorldEdge[] {
-  const verts = ensureVertices(room);
-  const cw = polygonIsClockwise(verts);
-  const { w, h } = boundingSize(room);
-  const cx = w / 2;
-  const cy = h / 2;
-  const rot = room.rotation || 0;
-  const rad = (rot * Math.PI) / 180;
-  const cosR = Math.cos(rad);
-  const sinR = Math.sin(rad);
+function getLocalBoundsPx(verts: Vertex[]) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const v of verts) {
+    const x = v.x * PX_PER_M;
+    const y = v.y * PX_PER_M;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  return { minX, minY, maxX, maxY };
+}
 
-  const edges: WorldEdge[] = [];
+function getRoomWorldSegments(room: Room): WorldSegment[] {
+  const verts = ensureVertices(room);
+  const segments: WorldSegment[] = [];
   const EPS = 0.5;
+  const bounds = isIShape(room) ? getLocalBoundsPx(verts) : null;
+  const minXWorld = bounds ? room.x + bounds.minX : 0;
+  const maxXWorld = bounds ? room.x + bounds.maxX : 0;
+  const minYWorld = bounds ? room.y + bounds.minY : 0;
+  const maxYWorld = bounds ? room.y + bounds.maxY : 0;
 
   for (let i = 0; i < verts.length; i++) {
     const v1 = verts[i];
     const v2 = verts[(i + 1) % verts.length];
-    const lx1 = v1.x * PX_PER_M, ly1 = v1.y * PX_PER_M;
-    const lx2 = v2.x * PX_PER_M, ly2 = v2.y * PX_PER_M;
-    const x1 = (lx1 - cx) * cosR - (ly1 - cy) * sinR + room.x + cx;
-    const y1 = (lx1 - cx) * sinR + (ly1 - cy) * cosR + room.y + cy;
-    const x2 = (lx2 - cx) * cosR - (ly2 - cy) * sinR + room.x + cx;
-    const y2 = (lx2 - cx) * sinR + (ly2 - cy) * cosR + room.y + cy;
+    const x1 = room.x + v1.x * PX_PER_M;
+    const y1 = room.y + v1.y * PX_PER_M;
+    const x2 = room.x + v2.x * PX_PER_M;
+    const y2 = room.y + v2.y * PX_PER_M;
+    const isVertical = Math.abs((v2.x - v1.x) * PX_PER_M) < EPS;
+    const isHorizontal = Math.abs((v2.y - v1.y) * PX_PER_M) < EPS;
 
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const isVert = Math.abs(dx) < EPS;
-    const isHoriz = Math.abs(dy) < EPS;
-    if (!isVert && !isHoriz) continue;
-
-    if (isVert) {
-      const facesPositive = cw ? dy > 0 : dy < 0;
-      edges.push({
-        idx: i,
-        perpCoord: (x1 + x2) / 2,
-        parallelMin: Math.min(y1, y2),
-        parallelMax: Math.max(y1, y2),
-        isVertical: true,
-        facesPositive,
-      });
-    } else {
-      const facesPositive = cw ? dx < 0 : dx > 0;
-      edges.push({
-        idx: i,
-        perpCoord: (y1 + y2) / 2,
-        parallelMin: Math.min(x1, x2),
-        parallelMax: Math.max(x1, x2),
-        isVertical: false,
-        facesPositive,
-      });
+    if (bounds) {
+      if (isVertical && Math.abs(x1 - minXWorld) >= EPS && Math.abs(x1 - maxXWorld) >= EPS) continue;
+      if (isHorizontal && Math.abs(y1 - minYWorld) >= EPS && Math.abs(y1 - maxYWorld) >= EPS) continue;
     }
-  }
 
-  return edges;
+    segments.push({
+      wallIndex: i,
+      x1,
+      y1,
+      x2,
+      y2,
+      isVertical,
+      isHorizontal,
+    });
+  }
+  return segments;
 }
 
-/* ── Core: find facing edge pairs ───────────────────────────────── */
-
-function findFacingEdgePairs(target: Room, ref: Room): FacingEdgePair[] {
-  const tEdges = buildWorldEdges(target);
-  const rEdges = buildWorldEdges(ref);
-  const pairs: FacingEdgePair[] = [];
-
-  for (const te of tEdges) {
-    for (const re of rEdges) {
-      if (te.isVertical !== re.isVertical) continue;
-
-      const oMin = Math.max(te.parallelMin, re.parallelMin);
-      const oMax = Math.min(te.parallelMax, re.parallelMax);
-      if (oMax - oMin < OVERLAP_MIN) continue;
-
-      const gap = Math.abs(te.perpCoord - re.perpCoord);
-      if (gap < GAP_MIN_DIST || gap > GAP_MAX_DIST) continue;
-
-      const targetCloser = te.perpCoord < re.perpCoord;
-      if (targetCloser) {
-        if (!te.facesPositive || re.facesPositive) continue;
-      } else {
-        if (te.facesPositive || !re.facesPositive) continue;
-      }
-
-      pairs.push({
-        targetEdgeIdx: te.idx,
-        refEdgeIdx: re.idx,
-        gapPx: gap,
-        overlapPx: oMax - oMin,
-        axis: te.isVertical ? 'x' : 'y',
-        targetPos: te.perpCoord,
-        refPos: re.perpCoord,
-        overlapMin: oMin,
-        overlapMax: oMax,
-      });
-    }
-  }
-
-  return pairs;
+function segmentOverlap(
+  aMin: number, aMax: number, bMin: number, bMax: number
+): number {
+  return Math.max(0, Math.min(aMax, bMax) - Math.max(aMin, bMin));
 }
 
-/* ── Gap detection ──────────────────────────────────────────────── */
+/* ── Gap Detection ── */
 
 export function detectRoomGaps(
-  placedRoom: Room,
-  rooms: Room[],
+  selectedRoom: Room,
+  allRooms: Room[],
 ): GapInfo[] {
-  if (placedRoom.isFinalized) return [];
+  // Wizard is available only for editable normal rooms.
+  if (selectedRoom.roomType !== 'normal') return [];
+  if (selectedRoom.isFinalized) return [];
 
+  const selSegments = getRoomWorldSegments(selectedRoom);
   const gaps: GapInfo[] = [];
 
-  for (const ref of rooms) {
-    if (ref.id === placedRoom.id || !ref.isFinalized) continue;
+  for (const other of allRooms) {
+    if (other.id === selectedRoom.id) continue;
+    // Normal rooms only use finalized rooms as references.
+    if (!other.isFinalized) continue;
 
-    const pairs = findFacingEdgePairs(placedRoom, ref);
-    if (pairs.length === 0) continue;
+    const otherSegments = getRoomWorldSegments(other);
+    const foundPairs: FacingEdgePair[] = [];
 
-    const groups = new Map<string, FacingEdgePair>();
-    for (const pair of pairs) {
-      const area = (pair.gapPx / PX_PER_M) * (pair.overlapPx / PX_PER_M);
-      if (area < GAP_MIN_AREA) continue;
+    for (const selSeg of selSegments) {
+      for (const othSeg of otherSegments) {
+        if (selSeg.isVertical && othSeg.isVertical) {
+          const gap = Math.abs(selSeg.x1 - othSeg.x1);
+          if (gap < GAP_MIN_PX || gap > GAP_MAX_PX) continue;
 
-      const dir = pair.refPos > pair.targetPos ? '+' : '-';
-      const key = `${pair.axis}-${dir}`;
-      const existing = groups.get(key);
-      if (!existing || pair.gapPx < existing.gapPx) {
-        groups.set(key, pair);
+          const selMinY = Math.min(selSeg.y1, selSeg.y2);
+          const selMaxY = Math.max(selSeg.y1, selSeg.y2);
+          const othMinY = Math.min(othSeg.y1, othSeg.y2);
+          const othMaxY = Math.max(othSeg.y1, othSeg.y2);
+          const overlap = segmentOverlap(selMinY, selMaxY, othMinY, othMaxY);
+          if (overlap < OVERLAP_MIN_PX) continue;
+
+          foundPairs.push({
+            targetEdgeIdx: selSeg.wallIndex,
+            refEdgeIdx: othSeg.wallIndex,
+            gapPx: gap,
+            overlapPx: overlap,
+            axis: 'x',
+            targetPos: selSeg.x1,
+            refPos: othSeg.x1,
+            overlapMin: Math.max(selMinY, othMinY),
+            overlapMax: Math.min(selMaxY, othMaxY),
+          });
+        }
+
+        if (selSeg.isHorizontal && othSeg.isHorizontal) {
+          const gap = Math.abs(selSeg.y1 - othSeg.y1);
+          if (gap < GAP_MIN_PX || gap > GAP_MAX_PX) continue;
+
+          const selMinX = Math.min(selSeg.x1, selSeg.x2);
+          const selMaxX = Math.max(selSeg.x1, selSeg.x2);
+          const othMinX = Math.min(othSeg.x1, othSeg.x2);
+          const othMaxX = Math.max(othSeg.x1, othSeg.x2);
+          const overlap = segmentOverlap(selMinX, selMaxX, othMinX, othMaxX);
+          if (overlap < OVERLAP_MIN_PX) continue;
+
+          foundPairs.push({
+            targetEdgeIdx: selSeg.wallIndex,
+            refEdgeIdx: othSeg.wallIndex,
+            gapPx: gap,
+            overlapPx: overlap,
+            axis: 'y',
+            targetPos: selSeg.y1,
+            refPos: othSeg.y1,
+            overlapMin: Math.max(selMinX, othMinX),
+            overlapMax: Math.min(selMaxX, othMaxX),
+          });
+        }
       }
     }
 
-    for (const pair of Array.from(groups.values())) {
-      const area = (pair.gapPx / PX_PER_M) * (pair.overlapPx / PX_PER_M);
-      const midPerp = (pair.targetPos + pair.refPos) / 2;
-      const midPar = (pair.overlapMin + pair.overlapMax) / 2;
-      const wizX = pair.axis === 'x' ? midPerp : midPar;
-      const wizY = pair.axis === 'x' ? midPar : midPerp;
+    if (foundPairs.length === 0) continue;
+
+    const wallMap = new Map<number, FacingEdgePair[]>();
+    for (const pair of foundPairs) {
+      const list = wallMap.get(pair.targetEdgeIdx) ?? [];
+      list.push(pair);
+      wallMap.set(pair.targetEdgeIdx, list);
+    }
+
+    for (const [wallIdx, pairs] of Array.from(wallMap.entries())) {
+      if (pairs.length === 0) continue;
+      const closest = pairs.reduce(
+        (best, p) => (p.gapPx < best.gapPx ? p : best),
+        pairs[0]
+      );
+
+      const midPerp = (closest.targetPos + closest.refPos) / 2;
+      const midPar = (closest.overlapMin + closest.overlapMax) / 2;
+      const wizX = closest.axis === 'x' ? midPerp : midPar;
+      const wizY = closest.axis === 'x' ? midPar : midPerp;
+
+      const gapM2 = (closest.gapPx / PX_PER_M) * (closest.overlapPx / PX_PER_M);
 
       gaps.push({
-        roomId: placedRoom.id,
-        referenceRoomId: ref.id,
-        gapAreaM2: area,
+        roomId: selectedRoom.id,
+        referenceRoomId: other.id,
+        gapAreaM2: gapM2,
         wizardWorldPos: { x: wizX, y: wizY },
-        edgePairs: [pair],
+        edgePairs: pairs,
       });
     }
   }
@@ -177,7 +187,7 @@ export function detectRoomGaps(
   return gaps;
 }
 
-/* ── Fill computation ───────────────────────────────────────────── */
+/* ── Fill: move one wall to close the gap ── */
 
 type WizardFillResult = {
   vertices: Vertex[];
@@ -191,8 +201,10 @@ type WizardFillResult = {
 function noChange(room: Room): WizardFillResult {
   return {
     vertices: ensureVertices(room),
-    x: room.x, y: room.y,
-    length: room.length, width: room.width,
+    x: room.x,
+    y: room.y,
+    length: room.length,
+    width: room.width,
     wallLengths: { ...room.wallLengths },
   };
 }
@@ -201,17 +213,64 @@ export function computeWizardFill(
   targetRoom: Room,
   gap: GapInfo,
 ): WizardFillResult {
-  const pair = gap.edgePairs[0];
-  if (!pair) return noChange(targetRoom);
+  if (gap.edgePairs.length === 0) return noChange(targetRoom);
 
-  const deltaPx = pair.refPos - pair.targetPos;
+  const verts = ensureVertices(targetRoom).map(v => ({ x: v.x, y: v.y }));
+  const n = verts.length;
+
+  const wallIndices = Array.from(
+    gap.edgePairs.reduce((set, pair) => {
+      set.add(pair.targetEdgeIdx);
+      return set;
+    }, new Set<number>())
+  );
+  const movedVertices = new Set<number>();
+
+  for (const wallIdx of wallIndices) {
+    const pairs = gap.edgePairs.filter(p => p.targetEdgeIdx === wallIdx);
+    const best = pairs.reduce((a, b) => a.gapPx < b.gapPx ? a : b);
+
+    const v1Idx = wallIdx;
+    const v2Idx = (wallIdx + 1) % n;
+
+    const deltaM = (best.refPos - best.targetPos) / PX_PER_M;
+
+    if (best.axis === 'x') {
+      if (!movedVertices.has(v1Idx)) {
+        verts[v1Idx] = { x: verts[v1Idx].x + deltaM, y: verts[v1Idx].y };
+        movedVertices.add(v1Idx);
+      }
+      if (!movedVertices.has(v2Idx)) {
+        verts[v2Idx] = { x: verts[v2Idx].x + deltaM, y: verts[v2Idx].y };
+        movedVertices.add(v2Idx);
+      }
+    } else {
+      if (!movedVertices.has(v1Idx)) {
+        verts[v1Idx] = { x: verts[v1Idx].x, y: verts[v1Idx].y + deltaM };
+        movedVertices.add(v1Idx);
+      }
+      if (!movedVertices.has(v2Idx)) {
+        verts[v2Idx] = { x: verts[v2Idx].x, y: verts[v2Idx].y + deltaM };
+        movedVertices.add(v2Idx);
+      }
+    }
+  }
+
+  const minX = Math.min(...verts.map(v => v.x));
+  const minY = Math.min(...verts.map(v => v.y));
+  const normalized: Vertex[] = verts.map(v => ({
+    x: parseFloat((v.x - minX).toFixed(4)),
+    y: parseFloat((v.y - minY).toFixed(4)),
+  }));
+
+  const synced = syncRoomFromVertices(normalized);
 
   return {
-    vertices: ensureVertices(targetRoom),
-    x: pair.axis === 'x' ? targetRoom.x + deltaPx : targetRoom.x,
-    y: pair.axis === 'y' ? targetRoom.y + deltaPx : targetRoom.y,
-    length: targetRoom.length,
-    width: targetRoom.width,
-    wallLengths: { ...targetRoom.wallLengths },
+    vertices: normalized,
+    x: targetRoom.x + minX * PX_PER_M,
+    y: targetRoom.y + minY * PX_PER_M,
+    length: synced.length,
+    width: synced.width,
+    wallLengths: synced.wallLengths,
   };
 }
