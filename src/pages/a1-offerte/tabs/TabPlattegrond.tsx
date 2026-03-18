@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox } from '../types';
+import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea } from '../types';
 import RoomShapes, { SpecialRoomsSection } from '../RoomShapes';
 import RoomProperties from '../RoomProperties';
+import FreeFormBuilder from '../FreeFormBuilder';
 import PlattegrondCanvas, { PlattegrondCanvasHandle } from '../PlattegrondCanvas';
 import EtageTabBar from '../components/EtageTabBar';
 
@@ -30,8 +31,9 @@ function detectSubRooms(rooms: Room[]): Room[] {
     const insideChildren = updated.filter(
       r => r.parentRoomId === room.id && r.attachedWall === 'inside',
     );
-    const subtracted = insideChildren.reduce((sum, c) => sum + c.length * c.width, 0);
-    return { ...room, effectiveArea: room.length * room.width - subtracted };
+    const subtracted = insideChildren.reduce((sum, c) => sum + (c.vertices && c.vertices.length >= 3 ? polygonArea(c.vertices) : c.length * c.width), 0);
+    const baseArea = room.vertices && room.vertices.length >= 3 ? polygonArea(room.vertices) : room.length * room.width;
+    return { ...room, effectiveArea: baseArea - subtracted };
   });
 
   return updated;
@@ -77,12 +79,15 @@ export default function TabPlattegrond({
 
   const [deleteFloorId, setDeleteFloorId] = useState<string | null>(null);
   const [deleteRoomId, setDeleteRoomId] = useState<string | null>(null);
+  const [deleteMultipleRoomIds, setDeleteMultipleRoomIds] = useState<Set<string> | null>(null);
+  const [showFreeFormBuilder, setShowFreeFormBuilder] = useState(false);
 
   const canvasRef = useRef<PlattegrondCanvasHandle | null>(null);
 
   const activeFloor = floors.find(f => f.id === activeFloorId)!;
   const rooms = activeFloor.rooms;
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId) ?? null;
+  const [selectedRoomIds, setSelectedRoomIds] = useState<Set<string>>(new Set());
   const totalRooms = floors.reduce((sum, f) => sum + f.rooms.length, 0);
 
   const updateActiveFloorRooms = useCallback(
@@ -152,6 +157,49 @@ export default function TabPlattegrond({
       };
       updateActiveFloorRooms(prev => detectSubRooms([...prev, newRoom]));
       setSelectedRoomId(newRoom.id);
+      setPlacingElement(null);
+    },
+    [rooms.length, updateActiveFloorRooms],
+  );
+
+  const addFreeFormRoom = useCallback(
+    (rawVertices: { x: number; y: number }[]) => {
+      if (rawVertices.length < 3) return;
+      const { vertices: normVerts, offsetX, offsetY } = normalizeVertices(rawVertices);
+      const synced = syncRoomFromVertices(normVerts);
+      const area = polygonArea(normVerts);
+      counter += 1;
+      const newRoom: Room = {
+        id: crypto.randomUUID(),
+        name: `Kamer${counter}`,
+        shape: 'vrije-vorm',
+        shapeType: 'rect',
+        rotation: 0,
+        length: synced.length,
+        width: synced.width,
+        height: 2.6,
+        x: 50 + rooms.length * 30 + offsetX * 40,
+        y: 50 + rooms.length * 30 + offsetY * 40,
+        elements: [],
+        wallLengths: synced.wallLengths,
+        vertices: normVerts,
+        walls: createDefaultWalls(2.6),
+        wallsCustomized: createDefaultWallsCustomized(),
+        slopedCeiling: false,
+        highestPoint: 2.6,
+        ridgeCeiling: false,
+        ridgeHeight: 2.6,
+        isFinalized: false,
+        tasks: [],
+        roomType: 'normal',
+        parentRoomId: null,
+        isSubRoom: false,
+        attachedWall: null,
+        effectiveArea: area,
+      };
+      updateActiveFloorRooms(prev => detectSubRooms([...prev, newRoom]));
+      setSelectedRoomId(newRoom.id);
+      setShowFreeFormBuilder(false);
       setPlacingElement(null);
     },
     [rooms.length, updateActiveFloorRooms],
@@ -250,8 +298,23 @@ export default function TabPlattegrond({
 
   const deleteRoom = useCallback(
     (id: string) => {
-      updateActiveFloorRooms(prev => detectSubRooms(prev.filter(r => r.id !== id && r.parentRoomId !== id)));
+      const ids = new Set<string>([id]);
+      updateActiveFloorRooms(prev => detectSubRooms(prev.filter(r => !ids.has(r.id) && !ids.has(r.parentRoomId ?? ''))));
       setSelectedRoomId(null);
+      setSelectedRoomIds(new Set());
+      setPlacingElement(null);
+    },
+    [updateActiveFloorRooms],
+  );
+
+  const deleteRooms = useCallback(
+    (ids: Set<string>) => {
+      if (ids.size === 0) return;
+      updateActiveFloorRooms(prev =>
+        detectSubRooms(prev.filter(r => !ids.has(r.id) && !ids.has(r.parentRoomId ?? '')))
+      );
+      setSelectedRoomId(null);
+      setSelectedRoomIds(new Set());
       setPlacingElement(null);
     },
     [updateActiveFloorRooms],
@@ -378,15 +441,27 @@ export default function TabPlattegrond({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!selectedRoomId) return;
       if (e.key !== 'Backspace' && e.key !== 'Delete') return;
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      setDeleteRoomId(selectedRoomId);
+
+      const idsToDelete =
+        selectedRoomIds.size > 0
+          ? selectedRoomIds
+          : (selectedRoomId ? new Set<string>([selectedRoomId]) : new Set<string>());
+
+      if (idsToDelete.size === 0) return;
+
+      if (idsToDelete.size === 1) {
+        const onlyId = Array.from(idsToDelete)[0];
+        setDeleteRoomId(onlyId);
+      } else {
+        setDeleteMultipleRoomIds(new Set(idsToDelete));
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRoomId]);
+  }, [selectedRoomId, selectedRoomIds]);
 
   const toggleWallIndex = useCallback((i: number) => {
     setSelectedWallIndices(prev =>
@@ -402,6 +477,7 @@ export default function TabPlattegrond({
 
   const deleteFloorObj = deleteFloorId ? floors.find(f => f.id === deleteFloorId) : null;
   const deleteRoomObj = deleteRoomId ? rooms.find(r => r.id === deleteRoomId) : null;
+  const deleteMultipleRoomsCount = deleteMultipleRoomIds ? deleteMultipleRoomIds.size : 0;
 
   return (
     <div className="flex flex-col h-full relative">
@@ -419,6 +495,8 @@ export default function TabPlattegrond({
           rooms={rooms}
           selectedRoomId={selectedRoomId}
           onSelectRoom={setSelectedRoomId}
+            selectedRoomIds={selectedRoomIds}
+            onSelectedRoomIdsChange={setSelectedRoomIds}
           onMoveRoom={moveRoom}
           onUpdateRoom={updateRoom}
           onUpdateElement={updateElement}
@@ -445,25 +523,35 @@ export default function TabPlattegrond({
 
         <div className="w-80 shrink-0 border-l border-dark-border bg-dark overflow-y-auto flex flex-col">
           <div className="flex-1">
-            <RoomShapes
-              selectedShape={lastShape}
-              onSelect={addRoom}
-              selectedRoom={selectedRoom}
-              onUpdateRoom={updateRoom}
-            />
-
-            {selectedRoom && (
-              <RoomProperties
-                room={selectedRoom}
-                rooms={rooms}
-                onUpdate={updateRoom}
-                onDelete={deleteRoom}
-                selectedWallIndices={selectedWallIndices}
-                onToggleWallIndex={toggleWallIndex}
+            {showFreeFormBuilder ? (
+              <FreeFormBuilder
+                onConfirm={addFreeFormRoom}
+                onCancel={() => setShowFreeFormBuilder(false)}
               />
-            )}
+            ) : (
+              <>
+                <RoomShapes
+                  selectedShape={lastShape}
+                  onSelect={addRoom}
+                  onSelectFreeForm={() => setShowFreeFormBuilder(true)}
+                  selectedRoom={selectedRoom}
+                  onUpdateRoom={updateRoom}
+                />
 
-            <SpecialRoomsSection onAddSpecialRoom={addSpecialRoom} />
+                {selectedRoom && (
+                  <RoomProperties
+                    room={selectedRoom}
+                    rooms={rooms}
+                    onUpdate={updateRoom}
+                    onDelete={deleteRoom}
+                    selectedWallIndices={selectedWallIndices}
+                    onToggleWallIndex={toggleWallIndex}
+                  />
+                )}
+
+                <SpecialRoomsSection onAddSpecialRoom={addSpecialRoom} />
+              </>
+            )}
           </div>
 
           <div className="p-4 border-t border-dark-border">
@@ -492,6 +580,43 @@ export default function TabPlattegrond({
               </button>
               <button
                 onClick={() => { deleteRoom(deleteRoomId!); setDeleteRoomId(null); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors cursor-pointer"
+              >
+                Ja, verwijderen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteMultipleRoomIds && deleteMultipleRoomsCount > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setDeleteMultipleRoomIds(null)}
+        >
+          <div
+            className="rounded-xl bg-dark-card border border-dark-border p-5 shadow-xl max-w-sm mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm text-light/90 mb-4">
+              Weet je zeker dat je{' '}
+              <span className="font-medium text-light">{deleteMultipleRoomsCount}</span>{' '}
+              kamers wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteMultipleRoomIds(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-dark-hover text-light/60 border border-dark-border hover:text-light transition-colors cursor-pointer"
+              >
+                Nee
+              </button>
+              <button
+                onClick={() => {
+                  if (deleteMultipleRoomIds) {
+                    deleteRooms(deleteMultipleRoomIds);
+                  }
+                  setDeleteMultipleRoomIds(null);
+                }}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors cursor-pointer"
               >
                 Ja, verwijderen

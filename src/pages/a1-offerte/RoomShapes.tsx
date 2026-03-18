@@ -41,6 +41,11 @@ const shapeIcons: Record<string, React.ReactNode> = {
       <path d="M12 3 H21 V14 H12 V21 H3 V10 H12 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
+  'vrije-vorm': (
+    <svg viewBox="0 0 24 24" className="w-6 h-6">
+      <path d="M12 4 L16 8 L14 14 L8 18 L6 12 Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  ),
 };
 
 const ROTATIONS = [0, 90, 180, 270] as const;
@@ -48,6 +53,7 @@ const ROTATIONS = [0, 90, 180, 270] as const;
 interface RoomShapesProps {
   selectedShape: string | null;
   onSelect: (shape: string) => void;
+  onSelectFreeForm?: () => void;
   selectedRoom: Room | null;
   onUpdateRoom: (id: string, updates: Partial<Room>) => void;
 }
@@ -55,6 +61,7 @@ interface RoomShapesProps {
 export default function RoomShapes({
   selectedShape,
   onSelect,
+  onSelectFreeForm,
   selectedRoom,
   onUpdateRoom,
 }: RoomShapesProps) {
@@ -67,7 +74,7 @@ export default function RoomShapes({
         {SHAPES.map((shape) => (
           <button
             key={shape.id}
-            onClick={() => onSelect(shape.id)}
+            onClick={() => (shape.id === 'vrije-vorm' && onSelectFreeForm ? onSelectFreeForm() : onSelect(shape.id))}
             title={shape.label}
             className={`
               flex items-center justify-center p-1.5 rounded-lg

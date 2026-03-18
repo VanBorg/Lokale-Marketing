@@ -1,27 +1,37 @@
-import { Room } from '../types';
+import { Room, ensureVertices } from '../types';
 import { WallId, SnapResult, PX_PER_M, SNAP_THRESHOLD, SNAP_THRESHOLD_SPECIAL } from './canvasTypes';
 import { boundingSize } from './canvasGeometry';
 
-function getShapeSnapEdges(room: Room): { x: number[]; y: number[] } {
+/**
+ * Extract all unique x and y coordinates from a room's vertices,
+ * returned as pixel offsets from the room's (x, y) position that
+ * account for the Konva rotation transform (pivot = boundingSize centre).
+ * Works universally for rectangles, L-shapes, vrije-vorm, etc.
+ */
+function getLocalEdgeCoords(room: Room): { x: number[]; y: number[] } {
+  const verts = ensureVertices(room);
   const { w, h } = boundingSize(room);
-  switch (room.shape) {
-    case 'i-vorm': {
-      const barH = h * 0.25;
-      const stemW = w * 0.3;
-      const sx = (w - stemW) / 2;
-      return { x: [0, sx, sx + stemW, w], y: [0, barH, h - barH, h] };
-    }
-    case 't-vorm':
-      return { x: [0, w * 0.33, w * 0.67, w], y: [0, h * 0.4, h] };
-    case 'u-vorm':
-      return { x: [0, w * 0.33, w * 0.67, w], y: [0, h * 0.6, h] };
-    case 'l-vorm':
-      return { x: [0, w * 0.5, w], y: [0, h * 0.5, h] };
-    case 'boog':
-      return { x: [0, w * 0.5, w], y: [0, h * 0.5, h] };
-    default:
-      return { x: [0, w], y: [0, h] };
+  const cx = w / 2;
+  const cy = h / 2;
+  const rot = room.rotation || 0;
+  const rad = (rot * Math.PI) / 180;
+  const cosR = Math.cos(rad);
+  const sinR = Math.sin(rad);
+
+  const xSet = new Set<number>();
+  const ySet = new Set<number>();
+  for (const v of verts) {
+    const lx = v.x * PX_PER_M;
+    const ly = v.y * PX_PER_M;
+    const dx = lx - cx;
+    const dy = ly - cy;
+    xSet.add(Math.round((dx * cosR - dy * sinR + cx) * 100) / 100);
+    ySet.add(Math.round((dx * sinR + dy * cosR + cy) * 100) / 100);
   }
+  return {
+    x: Array.from(xSet).sort((a, b) => a - b),
+    y: Array.from(ySet).sort((a, b) => a - b),
+  };
 }
 
 export function snapPosition(
@@ -42,104 +52,80 @@ export function snapPosition(
 
   const walls: readonly WallId[] = activeWalls && activeWalls.length > 0 ? activeWalls : ['left', 'right', 'top', 'bottom'];
 
-  // When dragging a special room (WC, Kast, Nis, etc.), only snap to normal rooms so they magnet to main walls.
   const snapTargets = dragged.roomType !== 'normal'
     ? rooms.filter(r => r.id !== draggedId && r.roomType === 'normal')
     : rooms.filter(r => r.id !== draggedId);
 
-  const tryRoomSnapX = (): boolean => {
-    let bestDx = threshold;
-    for (const other of snapTargets) {
-      const ow = boundingSize(other).w;
-      if (walls.includes('left')) {
-        const dAdj = Math.abs(x - (other.x + ow));
-        if (dAdj < bestDx) { bestDx = dAdj; sx = other.x + ow; snappedToId = other.id; snappedWall = 'left'; }
-        const dAlign = Math.abs(x - other.x);
-        if (dAlign < bestDx) { bestDx = dAlign; sx = other.x; snappedToId = other.id; snappedWall = 'left'; }
-      }
-      if (walls.includes('right')) {
-        const dAdj = Math.abs((x + dw) - other.x);
-        if (dAdj < bestDx) { bestDx = dAdj; sx = other.x - dw; snappedToId = other.id; snappedWall = 'right'; }
-        const dAlign = Math.abs((x + dw) - (other.x + ow));
-        if (dAlign < bestDx) { bestDx = dAlign; sx = other.x + ow - dw; snappedToId = other.id; snappedWall = 'right'; }
-      }
-    }
-    return bestDx < threshold;
-  };
-
-  const tryRoomSnapY = (): boolean => {
-    let bestDy = threshold;
-    for (const other of snapTargets) {
-      const oh = boundingSize(other).h;
-      if (walls.includes('top')) {
-        const dAdj = Math.abs(y - (other.y + oh));
-        if (dAdj < bestDy) { bestDy = dAdj; sy = other.y + oh; snappedToId = other.id; snappedWall = 'top'; }
-        const dAlign = Math.abs(y - other.y);
-        if (dAlign < bestDy) { bestDy = dAlign; sy = other.y; snappedToId = other.id; snappedWall = 'top'; }
-      }
-      if (walls.includes('bottom')) {
-        const dAdj = Math.abs((y + dh) - other.y);
-        if (dAdj < bestDy) { bestDy = dAdj; sy = other.y - dh; snappedToId = other.id; snappedWall = 'bottom'; }
-        const dAlign = Math.abs((y + dh) - (other.y + oh));
-        if (dAlign < bestDy) { bestDy = dAlign; sy = other.y + oh - dh; snappedToId = other.id; snappedWall = 'bottom'; }
-      }
-    }
-    return bestDy < threshold;
-  };
-
+  const dragEdges = getLocalEdgeCoords(dragged);
   const hasXWalls = walls.includes('left') || walls.includes('right');
   const hasYWalls = walls.includes('top') || walls.includes('bottom');
 
   if (hasXWalls) {
-    tryRoomSnapX();
-  }
-  if (hasYWalls) {
-    tryRoomSnapY();
-  }
-
-  if (!hasXWalls && !hasYWalls) {
-    const dragEdges = getShapeSnapEdges(dragged);
-    let bestDx = threshold, bestDy = threshold;
+    let bestDx = threshold;
     for (const other of snapTargets) {
-      const ow = boundingSize(other).w;
-      const oh = boundingSize(other).h;
+      const otherEdges = getLocalEdgeCoords(other);
       for (const de of dragEdges.x) {
-        const distL = Math.abs((x + de) - (other.x + ow));
-        if (distL < bestDx) {
-          bestDx = distL;
-          sx = other.x + ow - de;
-          snappedToId = other.id;
-          snappedWall = 'left';
-        }
-        const distR = Math.abs((x + de) - other.x);
-        if (distR < bestDx) {
-          bestDx = distR;
-          sx = other.x - de;
-          snappedToId = other.id;
-          snappedWall = 'right';
-        }
-      }
-      for (const de of dragEdges.y) {
-        const distT = Math.abs((y + de) - (other.y + oh));
-        if (distT < bestDy) {
-          bestDy = distT;
-          sy = other.y + oh - de;
-          snappedToId = other.id;
-          snappedWall = 'top';
-        }
-        const distB = Math.abs((y + de) - other.y);
-        if (distB < bestDy) {
-          bestDy = distB;
-          sy = other.y - de;
-          snappedToId = other.id;
-          snappedWall = 'bottom';
+        for (const oe of otherEdges.x) {
+          const dist = Math.abs((x + de) - (other.x + oe));
+          if (dist < bestDx) {
+            bestDx = dist;
+            sx = other.x + oe - de;
+            snappedToId = other.id;
+            snappedWall = de <= dw / 2 ? 'left' : 'right';
+          }
         }
       }
     }
   }
 
-  // For special rooms (WC, Kast, Nis, etc.): align perpendicular axis so the room stays
-  // adjacent to the target wall and detectSubRooms can set attachedWall correctly.
+  if (hasYWalls) {
+    let bestDy = threshold;
+    for (const other of snapTargets) {
+      const otherEdges = getLocalEdgeCoords(other);
+      for (const de of dragEdges.y) {
+        for (const oe of otherEdges.y) {
+          const dist = Math.abs((y + de) - (other.y + oe));
+          if (dist < bestDy) {
+            bestDy = dist;
+            sy = other.y + oe - de;
+            snappedToId = other.id;
+            snappedWall = de <= dh / 2 ? 'top' : 'bottom';
+          }
+        }
+      }
+    }
+  }
+
+  if (!hasXWalls && !hasYWalls) {
+    let bestDx = threshold;
+    let bestDy = threshold;
+    for (const other of snapTargets) {
+      const otherEdges = getLocalEdgeCoords(other);
+      for (const de of dragEdges.x) {
+        for (const oe of otherEdges.x) {
+          const dist = Math.abs((x + de) - (other.x + oe));
+          if (dist < bestDx) {
+            bestDx = dist;
+            sx = other.x + oe - de;
+            snappedToId = other.id;
+            snappedWall = de <= dw / 2 ? 'left' : 'right';
+          }
+        }
+      }
+      for (const de of dragEdges.y) {
+        for (const oe of otherEdges.y) {
+          const dist = Math.abs((y + de) - (other.y + oe));
+          if (dist < bestDy) {
+            bestDy = dist;
+            sy = other.y + oe - de;
+            snappedToId = other.id;
+            snappedWall = de <= dh / 2 ? 'top' : 'bottom';
+          }
+        }
+      }
+    }
+  }
+
   if (dragged.roomType !== 'normal' && snappedToId && snappedWall) {
     const other = rooms.find(r => r.id === snappedToId);
     if (other) {
@@ -175,24 +161,40 @@ export function snapToRooms(
   let snappedToId: string | undefined;
   let snappedWall: 'top' | 'right' | 'bottom' | 'left' | undefined;
 
+  const dragEdges = getLocalEdgeCoords(dragged);
+
   let bestDx = threshold;
   for (const other of rooms) {
     if (other.id === draggedId) continue;
-    const ow = boundingSize(other).w;
-    const distL = Math.abs(x - (other.x + ow));
-    if (distL < bestDx) { bestDx = distL; sx = other.x + ow; snappedToId = other.id; snappedWall = 'left'; }
-    const distR = Math.abs((x + dw) - other.x);
-    if (distR < bestDx) { bestDx = distR; sx = other.x - dw; snappedToId = other.id; snappedWall = 'right'; }
+    const otherEdges = getLocalEdgeCoords(other);
+    for (const de of dragEdges.x) {
+      for (const oe of otherEdges.x) {
+        const dist = Math.abs((x + de) - (other.x + oe));
+        if (dist < bestDx) {
+          bestDx = dist;
+          sx = other.x + oe - de;
+          snappedToId = other.id;
+          snappedWall = de <= dw / 2 ? 'left' : 'right';
+        }
+      }
+    }
   }
 
   let bestDy = threshold;
   for (const other of rooms) {
     if (other.id === draggedId) continue;
-    const oh = boundingSize(other).h;
-    const distT = Math.abs(y - (other.y + oh));
-    if (distT < bestDy) { bestDy = distT; sy = other.y + oh; snappedToId = other.id; snappedWall = 'top'; }
-    const distB = Math.abs((y + dh) - other.y);
-    if (distB < bestDy) { bestDy = distB; sy = other.y - dh; snappedToId = other.id; snappedWall = 'bottom'; }
+    const otherEdges = getLocalEdgeCoords(other);
+    for (const de of dragEdges.y) {
+      for (const oe of otherEdges.y) {
+        const dist = Math.abs((y + de) - (other.y + oe));
+        if (dist < bestDy) {
+          bestDy = dist;
+          sy = other.y + oe - de;
+          snappedToId = other.id;
+          snappedWall = de <= dh / 2 ? 'top' : 'bottom';
+        }
+      }
+    }
   }
 
   return { x: sx, y: sy, snappedToId, snappedWall };

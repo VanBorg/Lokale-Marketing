@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Room, calcTotalWalls } from './types';
+import { Room, calcTotalWalls, polygonArea } from './types';
 import RoomWalls from './RoomWalls';
 
 interface RoomPropertiesProps {
@@ -20,11 +20,11 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSubRoomConfirm, setShowSubRoomConfirm] = useState(false);
-  const floor = room.length * room.width;
+  const floor = room.vertices && room.vertices.length >= 3 ? polygonArea(room.vertices) : room.length * room.width;
   const walls = calcTotalWalls(room);
   const childRooms = rooms.filter(r => r.parentRoomId === room.id);
   const insideChildren = childRooms.filter(r => r.attachedWall === 'inside');
-  const insideSubtraction = insideChildren.reduce((sum, c) => sum + c.length * c.width, 0);
+  const insideSubtraction = insideChildren.reduce((sum, c) => sum + (c.vertices && c.vertices.length >= 3 ? polygonArea(c.vertices) : c.length * c.width), 0);
   const netFloor = floor - insideSubtraction;
   const parentRoom = room.parentRoomId ? rooms.find(r => r.id === room.parentRoomId) : null;
 

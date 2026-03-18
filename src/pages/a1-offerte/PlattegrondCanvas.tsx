@@ -20,7 +20,7 @@ export interface PlattegrondCanvasHandle {
 }
 
 const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasProps>(function PlattegrondCanvas({
-  rooms, selectedRoomId, onSelectRoom, onMoveRoom, onUpdateRoom, onUpdateElement,
+  rooms, selectedRoomId, onSelectRoom, selectedRoomIds, onSelectedRoomIdsChange, onMoveRoom, onUpdateRoom, onUpdateElement,
   placingElement, onPlaceElement, onCancelPlacing,
   selectedRoom, clipboard, isCut, cutRoomId,
   onDuplicate, onCopy, onCut, onPaste,
@@ -88,7 +88,15 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const [snapHighlight, setSnapHighlight] = useState<{ roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null>(null);
   const [dragFromWalls, setDragFromWalls] = useState<{ roomId: string; walls: WallId[] } | null>(null);
 
-  const [selectedRoomIds, setSelectedRoomIds] = useState<Set<string>>(new Set());
+  const [internalSelectedRoomIds, setInternalSelectedRoomIds] = useState<Set<string>>(new Set());
+  const selectedRoomIdsValue = selectedRoomIds ?? internalSelectedRoomIds;
+  const setSelectedRoomIds = useCallback((ids: Set<string>) => {
+    if (onSelectedRoomIdsChange) {
+      onSelectedRoomIdsChange(ids);
+    } else {
+      setInternalSelectedRoomIds(ids);
+    }
+  }, [onSelectedRoomIdsChange]);
   const [multiDragDelta, setMultiDragDelta] = useState<{ dx: number; dy: number } | null>(null);
   const multiDragOriginIdRef = useRef<string | null>(null);
   const [marquee, setMarquee] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
@@ -126,15 +134,15 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       return;
     }
     setSelectedRoomIds(selectedRoomId ? new Set([selectedRoomId]) : new Set());
-  }, [selectedRoomId]);
+  }, [selectedRoomId, setSelectedRoomIds]);
 
   useEffect(() => {
     const roomIds = new Set(rooms.map(r => r.id));
-    setSelectedRoomIds(prev => {
-      const next = new Set(Array.from(prev).filter(id => roomIds.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [rooms]);
+    const filtered = new Set<string>(Array.from(selectedRoomIdsValue).filter(id => roomIds.has(id)));
+    if (filtered.size !== selectedRoomIdsValue.size) {
+      setSelectedRoomIds(filtered);
+    }
+  }, [rooms, selectedRoomIdsValue, setSelectedRoomIds]);
 
   useEffect(() => {
     if (!selectedRoomId) { setWizardGaps([]); return; }
@@ -156,27 +164,27 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     multiDragOriginIdRef.current = null;
     internalSelectRef.current = true;
     onSelectRoom(id);
-  }, [onSelectRoom]);
+  }, [onSelectRoom, setSelectedRoomIds]);
 
   const handleRoomClick = useCallback((roomId: string, evt: MouseEvent) => {
     if (evt.ctrlKey || evt.metaKey) {
       const clickedRoom = rooms.find(r => r.id === roomId);
       const clickedFinalized = !!clickedRoom?.isFinalized;
-      const currentHasFinalized = selectedRoomIds.size > 0 && Array.from(selectedRoomIds).some(rid => {
+      const currentHasFinalized = selectedRoomIdsValue.size > 0 && Array.from(selectedRoomIdsValue).some(rid => {
         const r = rooms.find(r => r.id === rid);
         return r?.isFinalized;
       });
 
-      if (selectedRoomIds.size > 0 && clickedFinalized !== currentHasFinalized) {
+      if (selectedRoomIdsValue.size > 0 && clickedFinalized !== currentHasFinalized) {
         setSelectedRoomIds(new Set([roomId]));
         internalSelectRef.current = true;
         onSelectRoom(roomId);
         return;
       }
 
-      const isInSet = selectedRoomIds.has(roomId);
+      const isInSet = selectedRoomIdsValue.has(roomId);
       if (isInSet) {
-        const next = new Set(selectedRoomIds);
+        const next = new Set(selectedRoomIdsValue);
         next.delete(roomId);
         setSelectedRoomIds(next);
         if (selectedRoomId === roomId) {
@@ -185,7 +193,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
           onSelectRoom(remaining.length > 0 ? remaining[0] : null);
         }
       } else {
-        const next = new Set(selectedRoomIds);
+        const next = new Set(selectedRoomIdsValue);
         next.add(roomId);
         if (selectedRoomId) next.add(selectedRoomId);
         setSelectedRoomIds(next);
@@ -215,7 +223,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     }
 
     selectRoom(roomId);
-  }, [selectedRoomIds, selectedRoomId, rooms, onSelectRoom, selectRoom]);
+  }, [selectedRoomIdsValue, selectedRoomId, rooms, onSelectRoom, selectRoom]);
 
   const handleRoomDragMove = useCallback((roomId: string, dx: number, dy: number) => {
     multiDragOriginIdRef.current = roomId;
@@ -225,12 +233,12 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const handleMoveRoom = useCallback((id: string, x: number, y: number) => {
     setMultiDragDelta(null);
     multiDragOriginIdRef.current = null;
-    if (selectedRoomIds.size > 1 && selectedRoomIds.has(id) && onMoveRooms) {
+    if (selectedRoomIdsValue.size > 1 && selectedRoomIdsValue.has(id) && onMoveRooms) {
       const room = rooms.find(r => r.id === id);
       if (!room) { onMoveRoom(id, x, y); return; }
       const dx = x - room.x;
       const dy = y - room.y;
-      const moves = Array.from(selectedRoomIds)
+      const moves = Array.from(selectedRoomIdsValue)
         .map(rid => {
           const r = rooms.find(r => r.id === rid);
           if (!r || r.isFinalized) return null;
@@ -241,7 +249,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     } else {
       onMoveRoom(id, x, y);
     }
-  }, [selectedRoomIds, rooms, onMoveRoom, onMoveRooms]);
+  }, [selectedRoomIdsValue, rooms, onMoveRoom, onMoveRooms]);
 
   const handleStageMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if ((e.evt.ctrlKey || e.evt.metaKey) && e.target === e.target.getStage()) {
@@ -361,7 +369,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       const top = Math.min(marquee.startY, marquee.endY);
       const bottom = Math.max(marquee.startY, marquee.endY);
 
-      const currentHasFinalized = Array.from(selectedRoomIds).some(rid => {
+      const currentHasFinalized = Array.from(selectedRoomIdsValue).some(rid => {
         const r = rooms.find(r => r.id === rid);
         return r?.isFinalized;
       });
@@ -528,9 +536,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               canvasColors={canvasColors} theme={theme}
               activeDragWalls={dragFromWalls?.roomId === room.id ? dragFromWalls.walls : null}
               selectedWallIndices={room.id === selectedRoomId ? (selectedWallIndices ?? []) : []}
-              isMultiSelected={selectedRoomIds.has(room.id) && selectedRoomIds.size > 1}
+              isMultiSelected={selectedRoomIdsValue.has(room.id) && selectedRoomIdsValue.size > 1}
               multiDragOffset={
-                selectedRoomIds.size > 1 && selectedRoomIds.has(room.id) && multiDragDelta
+                selectedRoomIdsValue.size > 1 && selectedRoomIdsValue.has(room.id) && multiDragDelta
                   && multiDragOriginIdRef.current !== room.id && !room.isFinalized
                   ? multiDragDelta
                   : null
@@ -583,7 +591,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ height: size.height }}>
           {wizardGaps.map((gap, i) => (
             <WizardWand
-              key={`${gap.referenceRoomId}-${gap.edgePairs[0]?.targetEdgeIdx ?? i}`}
+              key={`${gap.referenceRoomId}-${gap.edgePairs[0]?.axis ?? 'x'}-${i}`}
               gap={gap}
               scale={scale}
               stagePos={stagePos}

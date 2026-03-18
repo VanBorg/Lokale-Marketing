@@ -1,5 +1,6 @@
-import { Room, Vertex, ensureVertices, syncRoomFromVertices } from '../types';
+import { Room, Vertex, ensureVertices } from '../types';
 import { PX_PER_M, FacingEdgePair, GapInfo } from './canvasTypes';
+import { boundingSize } from './canvasGeometry';
 
 /* ── Constants ──────────────────────────────────────────────────── */
 
@@ -32,18 +33,26 @@ function polygonIsClockwise(verts: Vertex[]): boolean {
 function buildWorldEdges(room: Room): WorldEdge[] {
   const verts = ensureVertices(room);
   const cw = polygonIsClockwise(verts);
-  const ox = room.x;
-  const oy = room.y;
+  const { w, h } = boundingSize(room);
+  const cx = w / 2;
+  const cy = h / 2;
+  const rot = room.rotation || 0;
+  const rad = (rot * Math.PI) / 180;
+  const cosR = Math.cos(rad);
+  const sinR = Math.sin(rad);
+
   const edges: WorldEdge[] = [];
   const EPS = 0.5;
 
   for (let i = 0; i < verts.length; i++) {
     const v1 = verts[i];
     const v2 = verts[(i + 1) % verts.length];
-    const x1 = ox + v1.x * PX_PER_M;
-    const y1 = oy + v1.y * PX_PER_M;
-    const x2 = ox + v2.x * PX_PER_M;
-    const y2 = oy + v2.y * PX_PER_M;
+    const lx1 = v1.x * PX_PER_M, ly1 = v1.y * PX_PER_M;
+    const lx2 = v2.x * PX_PER_M, ly2 = v2.y * PX_PER_M;
+    const x1 = (lx1 - cx) * cosR - (ly1 - cy) * sinR + room.x + cx;
+    const y1 = (lx1 - cx) * sinR + (ly1 - cy) * cosR + room.y + cy;
+    const x2 = (lx2 - cx) * cosR - (ly2 - cy) * sinR + room.x + cx;
+    const y2 = (lx2 - cx) * sinR + (ly2 - cy) * cosR + room.y + cy;
 
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -126,21 +135,30 @@ export function detectRoomGaps(
   rooms: Room[],
 ): GapInfo[] {
   if (placedRoom.isFinalized) return [];
-  if ((placedRoom.rotation || 0) !== 0) return [];
 
   const gaps: GapInfo[] = [];
 
   for (const ref of rooms) {
     if (ref.id === placedRoom.id || !ref.isFinalized) continue;
-    if ((ref.rotation || 0) !== 0) continue;
 
     const pairs = findFacingEdgePairs(placedRoom, ref);
     if (pairs.length === 0) continue;
 
+    const groups = new Map<string, FacingEdgePair>();
     for (const pair of pairs) {
       const area = (pair.gapPx / PX_PER_M) * (pair.overlapPx / PX_PER_M);
       if (area < GAP_MIN_AREA) continue;
 
+      const dir = pair.refPos > pair.targetPos ? '+' : '-';
+      const key = `${pair.axis}-${dir}`;
+      const existing = groups.get(key);
+      if (!existing || pair.gapPx < existing.gapPx) {
+        groups.set(key, pair);
+      }
+    }
+
+    for (const pair of Array.from(groups.values())) {
+      const area = (pair.gapPx / PX_PER_M) * (pair.overlapPx / PX_PER_M);
       const midPerp = (pair.targetPos + pair.refPos) / 2;
       const midPar = (pair.overlapMin + pair.overlapMax) / 2;
       const wizX = pair.axis === 'x' ? midPerp : midPar;
@@ -183,60 +201,17 @@ export function computeWizardFill(
   targetRoom: Room,
   gap: GapInfo,
 ): WizardFillResult {
-  const origVerts = ensureVertices(targetRoom);
-  const verts = origVerts.map(v => ({ x: v.x, y: v.y }));
-  const n = verts.length;
+  const pair = gap.edgePairs[0];
+  if (!pair) return noChange(targetRoom);
 
-  if (gap.edgePairs.length === 0) return noChange(targetRoom);
-
-  const dx: number[] = new Array(n).fill(0);
-  const dy: number[] = new Array(n).fill(0);
-  const dxSet: boolean[] = new Array(n).fill(false);
-  const dySet: boolean[] = new Array(n).fill(false);
-
-  for (const pair of gap.edgePairs) {
-    const i1 = pair.targetEdgeIdx;
-    const i2 = (i1 + 1) % n;
-    const deltaM = (pair.refPos - pair.targetPos) / PX_PER_M;
-
-    for (const i of [i1, i2]) {
-      if (pair.axis === 'x') {
-        if (!dxSet[i] || Math.abs(deltaM) < Math.abs(dx[i])) {
-          dx[i] = deltaM;
-          dxSet[i] = true;
-        }
-      } else {
-        if (!dySet[i] || Math.abs(deltaM) < Math.abs(dy[i])) {
-          dy[i] = deltaM;
-          dySet[i] = true;
-        }
-      }
-    }
-  }
-
-  let anyMoved = false;
-  for (let i = 0; i < n; i++) {
-    if (dx[i] !== 0 || dy[i] !== 0) anyMoved = true;
-    verts[i].x = parseFloat((verts[i].x + dx[i]).toFixed(4));
-    verts[i].y = parseFloat((verts[i].y + dy[i]).toFixed(4));
-  }
-  if (!anyMoved) return noChange(targetRoom);
-
-  const minX = Math.min(...verts.map(v => v.x));
-  const minY = Math.min(...verts.map(v => v.y));
-  const normalised: Vertex[] = verts.map(v => ({
-    x: parseFloat((v.x - minX).toFixed(4)),
-    y: parseFloat((v.y - minY).toFixed(4)),
-  }));
-
-  const synced = syncRoomFromVertices(normalised);
+  const deltaPx = pair.refPos - pair.targetPos;
 
   return {
-    vertices: normalised,
-    x: targetRoom.x + minX * PX_PER_M,
-    y: targetRoom.y + minY * PX_PER_M,
-    length: synced.length,
-    width: synced.width,
-    wallLengths: synced.wallLengths,
+    vertices: ensureVertices(targetRoom),
+    x: pair.axis === 'x' ? targetRoom.x + deltaPx : targetRoom.x,
+    y: pair.axis === 'y' ? targetRoom.y + deltaPx : targetRoom.y,
+    length: targetRoom.length,
+    width: targetRoom.width,
+    wallLengths: { ...targetRoom.wallLengths },
   };
 }

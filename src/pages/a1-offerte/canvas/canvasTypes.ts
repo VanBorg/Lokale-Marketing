@@ -66,6 +66,8 @@ export interface PlattegrondCanvasProps {
   rooms: Room[];
   selectedRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
+  selectedRoomIds?: Set<string>;
+  onSelectedRoomIdsChange?: (ids: Set<string>) => void;
   onMoveRoom: (id: string, x: number, y: number) => void;
   onUpdateRoom?: (id: string, updates: Partial<Room>) => void;
   onUpdateElement?: (roomId: string, elementId: string, updates: Partial<RoomElement>) => void;

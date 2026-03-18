@@ -109,7 +109,7 @@ export default function CanvasRoom({
   const cx = w / 2;
   const cy = h / 2;
   const isSelected = room.id === selectedRoomId;
-  const area = room.length * room.width;
+  const area = room.effectiveArea ?? room.length * room.width;
   const points = hasVertices
     ? verticesToPoints(ensureVertices(room))
     : qb ? qb.pts : getShapePoints(room.shape, w, h);

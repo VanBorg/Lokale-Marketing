@@ -112,6 +112,11 @@ export function calcWallArea(wall: WallSide, wallWidth: number): number {
 }
 
 export function calcTotalWalls(room: Room): number {
+  if (room.vertices && room.vertices.length >= 3) {
+    const lengths = vertexWallLengths(room.vertices);
+    const h = room.height;
+    return lengths.reduce((sum, len) => sum + len * h, 0);
+  }
   const rotated = room.rotation === 90 || room.rotation === 270;
   const nsWidth = rotated ? room.width : room.length;
   const ewWidth = rotated ? room.length : room.width;
@@ -132,6 +137,7 @@ export const SHAPES = [
   { id: 'z-vorm', label: 'Z-vorm' },
   { id: 'z-vorm-inv', label: 'S-vorm (Z inv)' },
   { id: 'i-vorm', label: 'I-profiel' },
+  { id: 'vrije-vorm', label: 'Vrij vorm' },
 ] as const;
 
 export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> = {
@@ -143,6 +149,7 @@ export const SHAPE_DEFAULTS: Record<string, { length: number; width: number }> =
   boog: { length: 4, width: 3 },
   'z-vorm': { length: 5, width: 4 },
   'z-vorm-inv': { length: 5, width: 4 },
+  'vrije-vorm': { length: 6, width: 6 },
 };
 
 export function getShapeType(_shape: string): Room['shapeType'] {
@@ -183,10 +190,26 @@ export function getShapePoints(shape: string, w: number, h: number): number[] {
     case 'z-vorm-inv':
       // S-shape (inverted Z): top arm right, straight centre bar, bottom arm left
       return [w, 0, w * 0.5, 0, w * 0.5, h * 0.4, 0, h * 0.4, 0, h, w * 0.5, h, w * 0.5, h * 0.6, w, h * 0.6];
+    case 'vrije-vorm':
+      // Fallback when no vertices; normal flow uses room.vertices
+      return [0, 0, w, 0, w, h, 0, h];
     case 'rechthoek':
     default:
       return [0, 0, w, 0, w, h, 0, h];
   }
+}
+
+/** Shoelace formula: area of closed polygon (vertices in order). */
+export function polygonArea(vertices: Vertex[]): number {
+  if (vertices.length < 3) return 0;
+  let area = 0;
+  const n = vertices.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += vertices[i].x * vertices[j].y;
+    area -= vertices[j].x * vertices[i].y;
+  }
+  return Math.abs(area) / 2;
 }
 
 export const ELEMENT_DEFAULTS: Record<

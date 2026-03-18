@@ -13,16 +13,16 @@ interface WizardWandProps {
 
 function directionInfo(gap: GapInfo) {
   const pair = gap.edgePairs[0];
-  if (!pair) return { label: 'Muur verplaatsen', Arrow: ArrowRight };
+  if (!pair) return { label: 'Verschuif kamer', Arrow: ArrowRight };
   const positive = pair.refPos > pair.targetPos;
   if (pair.axis === 'x') {
     return positive
-      ? { label: 'Muur naar rechts', Arrow: ArrowRight }
-      : { label: 'Muur naar links', Arrow: ArrowLeft };
+      ? { label: 'Verschuif naar rechts', Arrow: ArrowRight }
+      : { label: 'Verschuif naar links', Arrow: ArrowLeft };
   }
   return positive
-    ? { label: 'Muur omlaag', Arrow: ArrowDown }
-    : { label: 'Muur omhoog', Arrow: ArrowUp };
+    ? { label: 'Verschuif omlaag', Arrow: ArrowDown }
+    : { label: 'Verschuif omhoog', Arrow: ArrowUp };
 }
 
 export default function WizardWand({
