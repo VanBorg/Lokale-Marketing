@@ -76,6 +76,8 @@ interface CanvasRoomProps {
   selectionModifierHeld?: boolean;
   onRoomClick?: (roomId: string, evt: MouseEvent) => void;
   onRoomDragMove?: (roomId: string, dx: number, dy: number) => void;
+  /** Called during drag with screen pointer and current room top-left in world so parent can run edge-based auto-pan and keep room under cursor. */
+  onRoomDragMovePosition?: (pointerX: number, pointerY: number, roomWorldX: number, roomWorldY: number) => void;
 }
 
 export default function CanvasRoom({
@@ -108,6 +110,7 @@ export default function CanvasRoom({
   selectionModifierHeld,
   onRoomClick,
   onRoomDragMove,
+  onRoomDragMovePosition,
 }: CanvasRoomProps) {
   const snapHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -157,11 +160,23 @@ export default function CanvasRoom({
         if (isMultiSelected && onRoomDragMove) {
           onRoomDragMove(room.id, e.target.x() - cx - room.x, e.target.y() - cy - room.y);
         }
+        const stage = e.target.getStage();
+        const pointer = stage?.getPointerPosition();
+        if (pointer && onRoomDragMovePosition) {
+          const worldX = e.target.x() - cx;
+          const worldY = e.target.y() - cy;
+          onRoomDragMovePosition(pointer.x, pointer.y, worldX, worldY);
+        }
       }}
       onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
         const newX = e.target.x() - cx;
         const newY = e.target.y() - cy;
-        const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
+        // Special rooms: always snap both X and Y so they can attach to any wall
+        const snapWalls = room.roomType !== 'normal' ? null : activeDragWalls;
+        const snapped = snapPosition(room.id, newX, newY, rooms, snapWalls);
+        // #region agent log
+        fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'415d68'},body:JSON.stringify({sessionId:'415d68',location:'CanvasRoom.tsx:onDragEnd',message:'drag end snap result',data:{roomType:room.roomType,newX,newY,snappedX:snapped.x,snappedY:snapped.y,snappedToId:snapped.snappedToId,snappedWall:snapped.snappedWall,activeDragWalls,snapWalls},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
         e.target.x(snapped.x + cx);
         e.target.y(snapped.y + cy);
         onDragEndRoom();

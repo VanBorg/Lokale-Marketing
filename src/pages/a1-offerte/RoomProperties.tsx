@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Room, calcTotalWalls, polygonArea } from './types';
+import { Room, calcTotalWalls, polygonArea, positionSpecialOnWall } from './types';
 import RoomWalls from './RoomWalls';
 
 interface RoomPropertiesProps {
@@ -59,6 +59,33 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
             className={`${inputCls} px-3 ${room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
         </div>
+
+        {/* Position along wall for special rooms attached to a wall */}
+        {parentRoom && room.attachedWall && room.attachedWall !== 'inside' && (
+          <div>
+            <label className="block text-sm font-medium text-light/70 mb-1">
+              Positie langs muur
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.02}
+              value={room.wallOffset ?? 0}
+              onChange={(e) => {
+                const off = parseFloat(e.target.value);
+                const pos = positionSpecialOnWall(room, parentRoom, room.attachedWall!, off);
+                onUpdate(room.id, { wallOffset: off, x: pos.x, y: pos.y });
+              }}
+              disabled={room.isFinalized}
+              className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-accent disabled:opacity-50"
+            />
+            <div className="flex justify-between text-xs text-light/50 mt-0.5">
+              <span>{room.attachedWall === 'left' || room.attachedWall === 'right' ? 'Boven' : 'Links'}</span>
+              <span>{room.attachedWall === 'left' || room.attachedWall === 'right' ? 'Onder' : 'Rechts'}</span>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           <div>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea } from '../types';
+import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, computeWallOffset, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea } from '../types';
 import RoomShapes, { SpecialRoomsSection } from '../RoomShapes';
 import RoomProperties from '../RoomProperties';
 import FreeFormBuilder from '../FreeFormBuilder';
@@ -21,10 +21,11 @@ function detectSubRooms(rooms: Room[]): Room[] {
     for (const normal of normalRooms) {
       if (isAdjacent(r, normal)) {
         const wall = detectAttachedWall(r, normal);
-        return { ...r, parentRoomId: normal.id, isSubRoom: true, attachedWall: wall };
+        const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, normal, wall) : undefined;
+        return { ...r, parentRoomId: normal.id, isSubRoom: true, attachedWall: wall, wallOffset };
       }
     }
-    return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null };
+    return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null, wallOffset: undefined };
   });
 
   updated = updated.map(room => {

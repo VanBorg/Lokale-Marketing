@@ -62,6 +62,8 @@ export type Room = {
   parentRoomId: string | null;
   isSubRoom: boolean;
   attachedWall: AttachedWall;
+  /** 0–1 position along the attached wall (when attachedWall is top/right/bottom/left). 0 = start, 1 = end. */
+  wallOffset?: number;
   effectiveArea: number;
 };
 
@@ -248,23 +250,27 @@ export function isOverlapping(container: Room, inner: Room): boolean {
   return i.left >= c.left && i.top >= c.top && i.right <= c.right && i.bottom <= c.bottom;
 }
 
-export function isAdjacent(roomA: Room, roomB: Room, threshold: number = 20): boolean {
+/** Use a slightly larger threshold when a special room is next to a normal room (small rooms). */
+const ADJACENCY_THRESHOLD_SPECIAL = 28;
+
+export function isAdjacent(roomA: Room, roomB: Room, threshold?: number): boolean {
+  const t = threshold ?? (roomA.roomType !== 'normal' || roomB.roomType !== 'normal' ? ADJACENCY_THRESHOLD_SPECIAL : 20);
   const a = roomBounds(roomA);
   const b = roomBounds(roomB);
 
   const touchingHorizontally =
-    Math.abs(a.right - b.left) <= threshold ||
-    Math.abs(a.left - b.right) <= threshold;
+    Math.abs(a.right - b.left) <= t ||
+    Math.abs(a.left - b.right) <= t;
 
   const touchingVertically =
-    Math.abs(a.bottom - b.top) <= threshold ||
-    Math.abs(a.top - b.bottom) <= threshold;
+    Math.abs(a.bottom - b.top) <= t ||
+    Math.abs(a.top - b.bottom) <= t;
 
   const hasVerticalRange =
-    a.top < b.bottom + threshold && a.bottom > b.top - threshold;
+    a.top < b.bottom + t && a.bottom > b.top - t;
 
   const hasHorizontalRange =
-    a.left < b.right + threshold && a.right > b.left - threshold;
+    a.left < b.right + t && a.right > b.left - t;
 
   return (touchingHorizontally && hasVerticalRange) ||
          (touchingVertically && hasHorizontalRange);
@@ -512,10 +518,13 @@ export function syncRoomFromVertices(verts: Vertex[]): {
   };
 }
 
+/** Pixel threshold for considering a special room attached to a normal room's wall. Slightly larger for small rooms. */
+const ATTACH_WALL_THRESHOLD = 28;
+
 export function detectAttachedWall(special: Room, normal: Room): AttachedWall {
   const s = roomBounds(special);
   const n = roomBounds(normal);
-  const threshold = 20;
+  const threshold = ATTACH_WALL_THRESHOLD;
 
   if (Math.abs(s.bottom - n.top) <= threshold) return 'top';
   if (Math.abs(s.top - n.bottom) <= threshold) return 'bottom';
@@ -531,4 +540,64 @@ export function detectAttachedWall(special: Room, normal: Room): AttachedWall {
   if (min === dBottom) return 'bottom';
   if (min === dLeft) return 'left';
   return 'right';
+}
+
+/**
+ * Compute position-along-wall offset (0–1) for a special room attached to a normal room.
+ * 0 = start of wall, 1 = end of wall (along the wall direction).
+ */
+export function computeWallOffset(special: Room, normal: Room, wall: AttachedWall): number {
+  if (wall === 'inside' || wall === null) return 0;
+  const s = roomBounds(special);
+  const n = roomBounds(normal);
+  if (wall === 'top' || wall === 'bottom') {
+    const range = Math.max(0.001, n.w - s.w);
+    const start = s.left - n.left;
+    return Math.max(0, Math.min(1, start / range));
+  }
+  // left or right: offset along vertical wall
+  const range = Math.max(0.001, n.h - s.h);
+  const start = s.top - n.top;
+  return Math.max(0, Math.min(1, start / range));
+}
+
+/**
+ * Place a special room on its parent's wall using attachedWall and wallOffset.
+ * Returns world x,y (top-left of the special room).
+ */
+export function positionSpecialOnWall(
+  special: Room,
+  parent: Room,
+  wall: AttachedWall,
+  wallOffset: number,
+): { x: number; y: number } {
+  const off = Math.max(0, Math.min(1, wallOffset));
+  const n = roomBounds(parent);
+  const s = roomBounds(special);
+  const sw = s.w;
+  const sh = s.h;
+  switch (wall) {
+    case 'top':
+      return {
+        x: n.left + off * (n.w - sw),
+        y: n.top - sh,
+      };
+    case 'bottom':
+      return {
+        x: n.left + off * (n.w - sw),
+        y: n.bottom,
+      };
+    case 'left':
+      return {
+        x: n.left - sw,
+        y: n.top + off * (n.h - sh),
+      };
+    case 'right':
+      return {
+        x: n.right,
+        y: n.top + off * (n.h - sh),
+      };
+    default:
+      return { x: special.x, y: special.y };
+  }
 }

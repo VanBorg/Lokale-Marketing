@@ -4,6 +4,7 @@ import { SCALE_BY, MIN_SCALE, MAX_SCALE } from './canvasTypes';
 
 export function useCanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<Konva.Stage | null>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   // Always-current size ref so goToCenter is never stale when called from
   // effects that captured an earlier closure (e.g. on first mount).
@@ -61,5 +62,17 @@ export function useCanvasStage() {
     setStagePos({ x: e.target.x(), y: e.target.y() });
   }, []);
 
-  return { containerRef, size, scale, stagePos, setStagePos, handleWheel, adjustZoom, resetZoom, goToCenter, handleStageDragEnd };
+  return {
+    containerRef,
+    stageRef,
+    size,
+    scale,
+    stagePos,
+    setStagePos,
+    handleWheel,
+    adjustZoom,
+    resetZoom,
+    goToCenter,
+    handleStageDragEnd,
+  };
 }

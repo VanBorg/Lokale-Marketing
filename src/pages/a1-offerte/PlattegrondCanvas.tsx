@@ -30,9 +30,34 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   canUndo, canRedo, onUndo, onRedo,
 }, ref) {
   const { theme, canvasColors } = useTheme();
-  const { containerRef, size, scale, stagePos, handleWheel, adjustZoom, resetZoom, goToCenter, handleStageDragEnd } = useCanvasStage();
+  const {
+    containerRef,
+    stageRef,
+    size,
+    scale,
+    stagePos,
+    setStagePos,
+    handleWheel,
+    adjustZoom,
+    resetZoom,
+    goToCenter,
+    handleStageDragEnd,
+  } = useCanvasStage();
   const goToCenterRef = useRef(goToCenter);
   goToCenterRef.current = goToCenter;
+
+  const autoPanFrameRef = useRef<number | null>(null);
+  const autoPanActiveRef = useRef(false);
+  const stagePosRef = useRef(stagePos);
+  const draggedRoomIdsRef = useRef<Set<string> | null>(null);
+  const draggedRoomPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
+
+  useEffect(() => {
+    stagePosRef.current = stagePos;
+  }, [stagePos]);
+
+  const EDGE_THRESHOLD = 60;
+  const SCROLL_SPEED = 2.5;
 
   const getSpawnPosition = useCallback(() => ({
     x: (size.width / 2 - stagePos.x) / scale,
@@ -60,12 +85,22 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
           handleWizardFillRef.current(wizardGapsRef.current[0]);
         }
       }
-      // D = Definitief maken (als een kamer geselecteerd is en nog niet definitief)
+      // D = Definitief maken
       if ((e.key === 'd' || e.key === 'D') && selectedRoomId && onUpdateRoom) {
         const room = rooms.find(r => r.id === selectedRoomId);
-        if (room && !room.isFinalized) {
-          e.preventDefault();
-          onUpdateRoom(selectedRoomId, { isFinalized: true });
+        if (!room || room.isFinalized) return;
+        e.preventDefault();
+
+        if (room.roomType === 'normal') {
+          const childRooms = rooms.filter(r => r.parentRoomId === room.id);
+          onUpdateRoom(room.id, { isFinalized: true });
+          childRooms.forEach(child => {
+            if (!child.isFinalized) {
+              onUpdateRoom(child.id, { isFinalized: true });
+            }
+          });
+        } else {
+          onUpdateRoom(room.id, { isFinalized: true });
         }
       }
       // B = Bewerken (als een kamer geselecteerd is en definitief is)
@@ -87,6 +122,16 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const [draggingVertex, setDraggingVertex] = useState<DraggingVertex>(null);
   const [snapHighlight, setSnapHighlight] = useState<{ roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null>(null);
   const [dragFromWalls, setDragFromWalls] = useState<{ roomId: string; walls: WallId[] } | null>(null);
+
+  // Keep dragged room positions in sync during drag (for auto-pan compensation)
+  if (dragFromWalls && draggedRoomIdsRef.current) {
+    const ids = Array.from(draggedRoomIdsRef.current);
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const r = rooms.find(room => room.id === id);
+      if (r && !r.isFinalized) draggedRoomPositionsRef.current[id] = { x: r.x, y: r.y };
+    }
+  }
 
   const [internalSelectedRoomIds, setInternalSelectedRoomIds] = useState<Set<string>>(new Set());
   const selectedRoomIdsValue = selectedRoomIds ?? internalSelectedRoomIds;
@@ -362,7 +407,16 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     });
   }, [draggingVertex, onUpdateRoom]);
 
+  const stopAutoPan = useCallback(() => {
+    if (autoPanFrameRef.current !== null) {
+      cancelAnimationFrame(autoPanFrameRef.current);
+      autoPanFrameRef.current = null;
+    }
+    autoPanActiveRef.current = false;
+  }, []);
+
   const handleMouseUp = useCallback(() => {
+    stopAutoPan();
     if (marquee) {
       const left = Math.min(marquee.startX, marquee.endX);
       const right = Math.max(marquee.startX, marquee.endX);
@@ -426,7 +480,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         }
       }
     }
-  }, [marquee, draggingHandle, draggingVertex, endBatch, rooms, onUpdateRoom, onSelectRoom]);
+  }, [marquee, draggingHandle, draggingVertex, endBatch, rooms, onUpdateRoom, onSelectRoom, stopAutoPan]);
 
   const handleVertexHandleMouseDown = useCallback((roomId: string, vertexIndex: number, worldX: number, worldY: number) => {
     beginBatch?.();
@@ -479,6 +533,102 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     setWizardPreview(null);
   }, []);
 
+  const autoPanStep = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) {
+      stopAutoPan();
+      return;
+    }
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      stopAutoPan();
+      return;
+    }
+
+    const { width, height } = size;
+    let dx = 0;
+    let dy = 0;
+
+    if (pointer.x < EDGE_THRESHOLD) {
+      dx = 1 - pointer.x / EDGE_THRESHOLD;
+    } else if (pointer.x > width - EDGE_THRESHOLD) {
+      dx = -1 + (width - pointer.x) / EDGE_THRESHOLD;
+    }
+
+    if (pointer.y < EDGE_THRESHOLD) {
+      dy = 1 - pointer.y / EDGE_THRESHOLD;
+    } else if (pointer.y > height - EDGE_THRESHOLD) {
+      dy = -1 + (height - pointer.y) / EDGE_THRESHOLD;
+    }
+
+    let intensity = Math.max(Math.abs(dx), Math.abs(dy));
+    if (!intensity) {
+      stopAutoPan();
+      return;
+    }
+    intensity = Math.pow(intensity, 1.2);
+
+    const speed = (SCROLL_SPEED * intensity) / scale;
+    const stageDx = dx * speed;
+    const stageDy = dy * speed;
+
+    const prevStage = stagePosRef.current;
+    const newStageX = prevStage.x + stageDx;
+    const newStageY = prevStage.y + stageDy;
+    stagePosRef.current = { x: newStageX, y: newStageY };
+    setStagePos({ x: newStageX, y: newStageY });
+
+    // When auto-panning during a room drag, move the room(s) in world coords so they stay
+    // under the cursor. Stage moved right => content shifted right on screen => subtract
+    // world delta from room position to keep it under the same screen point.
+    const draggedIds = draggedRoomIdsRef.current;
+    if (draggedIds && (onMoveRoom || onMoveRooms)) {
+      const worldDx = stageDx / scale;
+      const worldDy = stageDy / scale;
+      const moves: { id: string; x: number; y: number }[] = [];
+      const ids = Array.from(draggedIds);
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        const pos = draggedRoomPositionsRef.current[id];
+        if (pos) {
+          const newX = pos.x - worldDx;
+          const newY = pos.y - worldDy;
+          draggedRoomPositionsRef.current[id] = { x: newX, y: newY };
+          moves.push({ id, x: newX, y: newY });
+        }
+      }
+      if (moves.length > 0) {
+        if (moves.length === 1) {
+          onMoveRoom?.(moves[0].id, moves[0].x, moves[0].y);
+        } else {
+          onMoveRooms?.(moves);
+        }
+      }
+    }
+
+    autoPanFrameRef.current = requestAnimationFrame(autoPanStep);
+  }, [EDGE_THRESHOLD, SCROLL_SPEED, size, scale, setStagePos, stageRef, stopAutoPan, onMoveRoom, onMoveRooms]);
+
+  const ensureAutoPan = useCallback(() => {
+    if (autoPanActiveRef.current) return;
+    autoPanActiveRef.current = true;
+    autoPanStep();
+  }, [autoPanStep]);
+
+  /** Edge-based pan during room drag: driven from room onDragMove. Uses current Konva room position so the room stays under the cursor. */
+  const handleRoomDragMovePosition = useCallback((pointerX: number, pointerY: number, roomWorldX: number, roomWorldY: number) => {
+    if (dragFromWalls) {
+      draggedRoomPositionsRef.current[dragFromWalls.roomId] = { x: roomWorldX, y: roomWorldY };
+    }
+    const nearH = pointerX < EDGE_THRESHOLD || pointerX > size.width - EDGE_THRESHOLD;
+    const nearV = pointerY < EDGE_THRESHOLD || pointerY > size.height - EDGE_THRESHOLD;
+    if (nearH || nearV) {
+      ensureAutoPan();
+    } else {
+      stopAutoPan();
+    }
+  }, [EDGE_THRESHOLD, size.width, size.height, ensureAutoPan, stopAutoPan, dragFromWalls]);
+
   const combinedMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (marquee) {
       const stage = e.target.getStage();
@@ -494,14 +644,48 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     }
     if (draggingHandle) { handleHandleMouseMove(e); return; }
     if (draggingVertex) { handleVertexMouseMove(e); return; }
+
+    const stage = e.target.getStage();
+    const pointer = stage?.getPointerPosition();
+    const node: Konva.Node | null = e.target as any;
+    const isDraggingNode = typeof (node as any)?.isDragging === 'function' ? (node as any).isDragging() : false;
+
+    if (stage && pointer && isDraggingNode && node !== stage) {
+      const nearHorizontalEdge =
+        pointer.x < EDGE_THRESHOLD || pointer.x > size.width - EDGE_THRESHOLD;
+      const nearVerticalEdge =
+        pointer.y < EDGE_THRESHOLD || pointer.y > size.height - EDGE_THRESHOLD;
+
+      if (nearHorizontalEdge || nearVerticalEdge) {
+        ensureAutoPan();
+      } else {
+        stopAutoPan();
+      }
+    } else {
+      stopAutoPan();
+    }
+
     handleMouseMove(e);
-  }, [marquee, draggingHandle, draggingVertex, handleHandleMouseMove, handleVertexMouseMove, handleMouseMove]);
+  }, [
+    marquee,
+    draggingHandle,
+    draggingVertex,
+    handleHandleMouseMove,
+    handleVertexMouseMove,
+    handleMouseMove,
+    EDGE_THRESHOLD,
+    size,
+    ensureAutoPan,
+    stopAutoPan,
+    dragFromWalls,
+  ]);
 
   const isDraggingVertex = draggingVertex !== null;
 
   return (
     <div ref={containerRef} className="flex-1 flex flex-col min-h-0 relative">
       <Stage
+        ref={stageRef}
         width={size.width} height={size.height} scaleX={scale} scaleY={scale}
         x={stagePos.x} y={stagePos.y}
         draggable={!placingElement && !draggingHandle && !isDraggingVertex && !marquee}
@@ -546,13 +730,28 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               selectionModifierHeld={modifierHeld}
               onRoomClick={handleRoomClick}
               onRoomDragMove={handleRoomDragMove}
+              onRoomDragMovePosition={handleRoomDragMovePosition}
               onSelectRoom={selectRoom} onMoveRoom={handleMoveRoom}
               onUpdateRoom={onUpdateRoom} onUpdateElement={onUpdateElement}
               onPlaceElement={onPlaceElement} onSetSelectedElement={setSelectedElementId}
               onSetDraggingHandle={setDraggingHandle}
               onSnapHighlight={setSnapHighlight}
-              onDragStartWalls={(roomId, walls) => { setDragFromWalls({ roomId, walls }); setWizardGaps([]); setWizardPreview(null); }}
-              onDragEndRoom={() => setDragFromWalls(null)}
+              onDragStartWalls={(roomId, walls) => {
+                setDragFromWalls({ roomId, walls });
+                setWizardGaps([]);
+                setWizardPreview(null);
+                const ids = selectedRoomIdsValue.has(roomId) ? selectedRoomIdsValue : new Set([roomId]);
+                draggedRoomIdsRef.current = ids;
+                draggedRoomPositionsRef.current = {};
+                ids.forEach(id => {
+                  const r = rooms.find(room => room.id === id);
+                  if (r && !r.isFinalized) draggedRoomPositionsRef.current[id] = { x: r.x, y: r.y };
+                });
+              }}
+              onDragEndRoom={() => {
+                setDragFromWalls(null);
+                draggedRoomIdsRef.current = null;
+              }}
               onVertexHandleMouseDown={(vi, wx, wy) => handleVertexHandleMouseDown(room.id, vi, wx, wy)}
             />
           ))}

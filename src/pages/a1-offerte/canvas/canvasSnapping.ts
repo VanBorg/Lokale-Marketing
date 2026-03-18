@@ -166,12 +166,15 @@ export function snapPosition(
         const dragEdgeWorld = x + dragOffset;
         for (const otherX of otherEdges.xPositions) {
           const dist = Math.abs(dragEdgeWorld - otherX);
-          if (dist < bestDist) {
-            bestDist = dist;
-            sx = x + (otherX - dragEdgeWorld);
-            snappedToId = other.id;
-            snappedWall = dragOffset < dw / 2 ? 'left' : 'right';
-          }
+          if (dist >= bestDist) continue;
+          const candidateSx = x + (otherX - dragEdgeWorld);
+          // #region agent log
+          fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'415d68'},body:JSON.stringify({sessionId:'415d68',location:'canvasSnapping.ts:snapX',message:'X snap candidate',data:{dragOffset,dragEdgeWorld,otherX,dist,candidateSx,draggedType:dragged.roomType,otherId:other.id,otherType:other.roomType},timestamp:Date.now(),hypothesisId:'H1-H2'})}).catch(()=>{});
+          // #endregion
+          bestDist = dist;
+          sx = candidateSx;
+          snappedToId = other.id;
+          snappedWall = dragOffset < dw / 2 ? 'left' : 'right';
         }
       }
     }
@@ -188,12 +191,12 @@ export function snapPosition(
         const dragEdgeWorld = y + dragOffset;
         for (const otherY of otherEdges.yPositions) {
           const dist = Math.abs(dragEdgeWorld - otherY);
-          if (dist < bestDist) {
-            bestDist = dist;
-            sy = y + (otherY - dragEdgeWorld);
-            snappedToId = other.id;
-            snappedWall = dragOffset < dh / 2 ? 'top' : 'bottom';
-          }
+          if (dist >= bestDist) continue;
+          const candidateSy = y + (otherY - dragEdgeWorld);
+          bestDist = dist;
+          sy = candidateSy;
+          snappedToId = other.id;
+          snappedWall = dragOffset < dh / 2 ? 'top' : 'bottom';
         }
       }
     }
