@@ -69,25 +69,10 @@ export default function OfferteGenerator() {
   const suppressHistoryRef = useRef(0);
   const batchRef = useRef<HistorySnapshot | null>(null);
 
-  const pushToPast = useCallback((snapshot: HistorySnapshot, source: string) => {
+  const pushToPast = useCallback((snapshot: HistorySnapshot) => {
     pastRef.current = [...pastRef.current.slice(1 - MAX_HISTORY), snapshot];
     futureRef.current = [];
     setHistoryVersion(v => v + 1);
-    // #region agent log
-    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '677e36' },
-      body: JSON.stringify({
-        sessionId: '677e36',
-        location: 'OfferteGenerator.tsx:pushToPast',
-        message: 'history push',
-        data: { source, pastLen: pastRef.current.length },
-        timestamp: Date.now(),
-        hypothesisId: 'H_extra_push',
-        runId: 'silent_sync_fix',
-      }),
-    }).catch(() => {});
-    // #endregion
   }, []);
 
   const beginBatch = useCallback(() => {
@@ -98,7 +83,7 @@ export default function OfferteGenerator() {
 
   const endBatch = useCallback(() => {
     if (batchRef.current) {
-      pushToPast(batchRef.current, 'endBatch');
+      pushToPast(batchRef.current);
       batchRef.current = null;
     }
   }, [pushToPast]);
@@ -112,7 +97,7 @@ export default function OfferteGenerator() {
       setFloorsRaw(prev => {
         const next = typeof update === 'function' ? (update as (prev: Floor[]) => Floor[])(prev) : update;
         if (prev === next) return prev;
-        pushToPast({ floors: prev, activeFloorId }, 'setFloors');
+        pushToPast({ floors: prev, activeFloorId });
         return next;
       });
     },
@@ -142,7 +127,7 @@ export default function OfferteGenerator() {
       setActiveFloorIdRaw(prev => {
         const next = typeof update === 'function' ? (update as (prev: string) => string)(prev) : update;
         if (prev === next) return prev;
-        pushToPast({ floors, activeFloorId: prev }, 'setActiveFloorId');
+        pushToPast({ floors, activeFloorId: prev });
         return next;
       });
     },
