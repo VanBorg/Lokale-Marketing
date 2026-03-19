@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, computeWallOffset, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea } from '../types';
+import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, computeWallOffset, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea, PX_PER_M } from '../types';
 import RoomShapes, { SpecialRoomsSection } from '../RoomShapes';
 import RoomProperties, { RoomDimensionInputs } from '../RoomProperties';
 import FreeFormBuilder from '../FreeFormBuilder';
@@ -175,9 +175,17 @@ export default function TabPlattegrond({
   const addFreeFormRoom = useCallback(
     (rawVertices: { x: number; y: number }[]) => {
       if (rawVertices.length < 3) return;
-      const { vertices: normVerts, offsetX, offsetY } = normalizeVertices(rawVertices);
+      const { vertices: normVerts } = normalizeVertices(rawVertices);
       const synced = syncRoomFromVertices(normVerts);
       const area = polygonArea(normVerts);
+      const bb = verticesBoundingBox(normVerts);
+      const spawn = canvasRef.current?.getSpawnPosition?.();
+      const defaultX = 50 + rooms.length * 30;
+      const defaultY = 50 + rooms.length * 30;
+      const pixelW = bb.w * PX_PER_M;
+      const pixelH = bb.h * PX_PER_M;
+      const x = spawn ? spawn.x - pixelW / 2 : defaultX;
+      const y = spawn ? spawn.y - pixelH / 2 : defaultY;
       counter += 1;
       const newRoom: Room = {
         id: crypto.randomUUID(),
@@ -188,8 +196,8 @@ export default function TabPlattegrond({
         length: synced.length,
         width: synced.width,
         height: 2.6,
-        x: 50 + rooms.length * 30 + offsetX * 40,
-        y: 50 + rooms.length * 30 + offsetY * 40,
+        x,
+        y,
         elements: [],
         wallLengths: synced.wallLengths,
         vertices: normVerts,

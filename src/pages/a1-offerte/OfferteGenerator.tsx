@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Floor } from './types';
+import { ChevronLeft, ChevronRight, FilePlus2 } from 'lucide-react';
+import type { Floor, Room } from './types';
 import TabPlattegrond from './tabs/TabPlattegrond';
 import TabElementen from './tabs/TabElementen';
 import TabWerkzaamheden from './tabs/TabWerkzaamheden';
@@ -8,6 +8,12 @@ import TabPreview from './tabs/TabPreview';
 
 const MAX_HISTORY = 50;
 type HistorySnapshot = { floors: Floor[]; activeFloorId: string };
+
+/** One empty floor — use this instead of any removed `EMPTY_FLOORS` constant. */
+function createStarterFloors(): Floor[] {
+  const rooms: Room[] = [];
+  return [{ id: '1', name: 'Begane grond', rooms }];
+}
 
 function loadSavedFloors(): Floor[] {
   try {
@@ -17,7 +23,7 @@ function loadSavedFloors(): Floor[] {
       if (Array.isArray(data.floors) && data.floors.length > 0) return data.floors;
     }
   } catch {}
-  return [{ id: '1', name: 'Begane grond', rooms: [] }];
+  return createStarterFloors();
 }
 
 function loadSavedFloorId(): string {
@@ -173,6 +179,24 @@ export default function OfferteGenerator() {
   }, []);
 
   const goTo = useCallback((tab: 1 | 2 | 3 | 4) => setActiveTab(tab), []);
+
+  const startNewProject = useCallback(() => {
+    const ok = window.confirm(
+      'Weet je zeker dat je een nieuw project wilt starten? Alle huidige plattegronden, elementen en werkzaamheden worden gewist.',
+    );
+    if (!ok) return;
+    pastRef.current = [];
+    futureRef.current = [];
+    batchRef.current = null;
+    setHistoryVersion(v => v + 1);
+    isUndoRedoRef.current = true;
+    setFloorsRaw(createStarterFloors());
+    setActiveFloorIdRaw('1');
+    isUndoRedoRef.current = false;
+    setProjectName('');
+    setActiveTab(1);
+  }, []);
+
   const tabContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -222,6 +246,15 @@ export default function OfferteGenerator() {
         <div className="flex-1 min-w-0" aria-hidden />
 
         <div className="shrink-0 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={startNewProject}
+            title="Alles wissen en opnieuw beginnen"
+            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-medium text-light/80 bg-dark-card border border-dark-border hover:bg-dark-border hover:text-light transition-colors cursor-pointer"
+          >
+            <FilePlus2 size={16} className="opacity-80" aria-hidden />
+            Nieuw project
+          </button>
           <label className="text-xs font-medium text-light/50 whitespace-nowrap">Projectnaam</label>
           <input
             type="text"

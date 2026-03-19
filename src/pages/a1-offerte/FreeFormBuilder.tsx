@@ -6,23 +6,30 @@ import { useTheme } from '../../hooks/useTheme';
 /* ── Grid constants ───────────────────────────────────────────── */
 
 const GRID_MIN = 0;
-const GRID_MAX = 12;
-const GRID_STEP = 2;
-const GRID_VALUES = [0, 2, 4, 6, 8, 10, 12] as const;
+/** 10 nodes per axis (0…9 inclusive) → 10×10 dots, 1 m between neighbours. */
+const GRID_AXIS_NODES = 10;
+const GRID_MAX = GRID_MIN + GRID_AXIS_NODES - 1;
+/** One compass step = 1 m along each axis; vertices snap to integer metres. */
+const GRID_STEP = 1;
+/** Grid lines + start dots: exactly GRID_AXIS_NODES positions each way. */
+const METRE_GRID_VALUES = Array.from(
+  { length: GRID_AXIS_NODES },
+  (_, i) => GRID_MIN + i,
+);
 
 /* ── Directions ───────────────────────────────────────────────── */
 
 type DirectionId = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
 
 const DIRECTIONS: Record<DirectionId, { dx: number; dy: number; label: string }> = {
-  N:  { dx:  0, dy: -2, label: 'Omhoog' },
-  NE: { dx:  2, dy: -2, label: 'Rechtsboven' },
-  E:  { dx:  2, dy:  0, label: 'Rechts' },
-  SE: { dx:  2, dy:  2, label: 'Rechtsonder' },
-  S:  { dx:  0, dy:  2, label: 'Omlaag' },
-  SW: { dx: -2, dy:  2, label: 'Linksonder' },
-  W:  { dx: -2, dy:  0, label: 'Links' },
-  NW: { dx: -2, dy: -2, label: 'Linksboven' },
+  N:  { dx:  0, dy: -1, label: 'Omhoog' },
+  NE: { dx:  1, dy: -1, label: 'Rechtsboven' },
+  E:  { dx:  1, dy:  0, label: 'Rechts' },
+  SE: { dx:  1, dy:  1, label: 'Rechtsonder' },
+  S:  { dx:  0, dy:  1, label: 'Omlaag' },
+  SW: { dx: -1, dy:  1, label: 'Linksonder' },
+  W:  { dx: -1, dy:  0, label: 'Links' },
+  NW: { dx: -1, dy: -1, label: 'Linksboven' },
 };
 
 /**
@@ -117,8 +124,9 @@ export default function FreeFormBuilder({ onConfirm, onCancel }: FreeFormBuilder
   const dotColor = isDark ? '#ffffff' : '#1a1a1a';
   const lineColor = '#FF5C1A';
   const lineOutlineColor = isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)';
-  const gridLineColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-  const gridDotColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)';
+  const gridLineMinor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const gridLineMajor = isDark ? 'rgba(255,255,255,0.11)' : 'rgba(0,0,0,0.11)';
+  const gridDotColor = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)';
   const gridDotHoverColor = isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)';
 
   /* ── Handlers ── */
@@ -190,9 +198,12 @@ export default function FreeFormBuilder({ onConfirm, onCancel }: FreeFormBuilder
     return d.dx === forbiddenDir.dx && d.dy === forbiddenDir.dy;
   };
 
-  /* ── SVG canvas sizing ── */
-  const w = (GRID_MAX - GRID_MIN) * PX_PER_M;
-  const h = w;
+  /* ── SVG canvas: span from corner dot (0,0) to corner dot (GRID_MAX, GRID_MAX); pad so edge dots fit inside the box */
+  const gridSpanPx = GRID_MAX * PX_PER_M;
+  const viewPad = 6;
+  const viewBoxSize = gridSpanPx + 2 * viewPad;
+  const w = gridSpanPx;
+  const h = gridSpanPx;
   const toSX = (x: number) => x * PX_PER_M;
   const toSY = (y: number) => y * PX_PER_M;
 
@@ -211,33 +222,38 @@ export default function FreeFormBuilder({ onConfirm, onCancel }: FreeFormBuilder
 
       {/* ── SVG Canvas ── */}
       <div
-        className="flex justify-center rounded-lg border p-2"
+        className="w-full rounded-lg border px-1 py-1.5"
         style={{
           background: isDark ? 'rgba(26,26,26,0.6)' : 'rgba(245,245,245,0.8)',
           borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)',
         }}
       >
-        <svg
-          width={w + 2}
-          height={h + 2}
-          viewBox={`-1 -1 ${w + 2} ${h + 2}`}
-          className="overflow-visible"
-        >
-          {/* Grid lines */}
-          {GRID_VALUES.map(v => (
-            <g key={`grid-${v}`}>
-              <line x1={toSX(v)} y1={0} x2={toSX(v)} y2={h} stroke={gridLineColor} strokeWidth="0.5" />
-              <line x1={0} y1={toSY(v)} x2={w} y2={toSY(v)} stroke={gridLineColor} strokeWidth="0.5" />
-            </g>
-          ))}
+        <div className="w-full aspect-square max-h-[min(72vw,320px)] sm:max-h-[360px] mx-auto">
+          <svg
+            viewBox={`-${viewPad} -${viewPad} ${viewBoxSize} ${viewBoxSize}`}
+            className="size-full block"
+            preserveAspectRatio="xMidYMid meet"
+          >
+          {/* Grid lines every 1 m; slightly stronger on even metres for orientation */}
+          {METRE_GRID_VALUES.map(v => {
+            const major = v % 2 === 0;
+            const stroke = major ? gridLineMajor : gridLineMinor;
+            const sw = major ? 0.55 : 0.35;
+            return (
+              <g key={`grid-${v}`}>
+                <line x1={toSX(v)} y1={0} x2={toSX(v)} y2={h} stroke={stroke} strokeWidth={sw} />
+                <line x1={0} y1={toSY(v)} x2={w} y2={toSY(v)} stroke={stroke} strokeWidth={sw} />
+              </g>
+            );
+          })}
 
-          {/* Grid dots — clickable before start */}
-          {GRID_VALUES.map(gx =>
-            GRID_VALUES.map(gy => (
+          {/* Start dots on 1 m lattice — aligns with each compass step */}
+          {METRE_GRID_VALUES.map(gx =>
+            METRE_GRID_VALUES.map(gy => (
               <circle
                 key={`dot-${gx}-${gy}`}
                 cx={toSX(gx)} cy={toSY(gy)}
-                r={!hasStarted ? 4 : 1.5}
+                r={!hasStarted ? 3 : 1.5}
                 fill={gridDotColor}
                 style={!hasStarted ? { cursor: 'pointer' } : { pointerEvents: 'none' }}
                 onClick={!hasStarted ? () => handleStartClick(gx, gy) : undefined}
@@ -285,19 +301,8 @@ export default function FreeFormBuilder({ onConfirm, onCancel }: FreeFormBuilder
               r={4} fill={dotColor} stroke={lineColor} strokeWidth={1.5}
             />
           )}
-
-          {/* Hint: click a dot to start */}
-          {!hasStarted && (
-            <text
-              x={w / 2} y={h + 14}
-              textAnchor="middle" fontSize="9"
-              fill={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)'}
-              fontFamily="DM Sans, sans-serif"
-            >
-              Klik een punt om te starten
-            </text>
-          )}
-        </svg>
+          </svg>
+        </div>
       </div>
 
       {/* ── Controls: Compass (left) + Actions (right) ── */}
@@ -418,7 +423,7 @@ export default function FreeFormBuilder({ onConfirm, onCancel }: FreeFormBuilder
             `}
           >
             <Redo2 size={14} />
-            <span>Heen</span>
+            <span>Volgende</span>
           </button>
 
           <div className="h-px bg-dark-border my-0.5" />
