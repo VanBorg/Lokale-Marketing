@@ -136,6 +136,50 @@ export function boundingSize(room: Room): { w: number; h: number } {
   };
 }
 
+const Y_LEVEL_EPS = 1e-3;
+
+function uniqueSortedYs(verts: Vertex[]): number[] {
+  const sorted = verts.map((v) => v.y).sort((a, b) => a - b);
+  const out: number[] = [];
+  for (const y of sorted) {
+    if (out.length === 0 || Math.abs(y - out[out.length - 1]) > Y_LEVEL_EPS) {
+      out.push(y);
+    }
+  }
+  return out;
+}
+
+/**
+ * Local pixel position for the room name label. T- and U-shapes use the main horizontal bar
+ * (top crossbar vs bottom base) so the label stays clear when sub-rooms fill the arms/stem.
+ */
+export function getRoomLabelCentreLocalPx(room: Room, wPx: number, hPx: number): { cx: number; cy: number } {
+  const halfW = wPx / 2;
+  const halfH = hPx / 2;
+  if (room.shape !== 't-vorm' && room.shape !== 'u-vorm') {
+    return { cx: halfW, cy: halfH };
+  }
+  const verts = ensureVertices(room);
+  const bb = verticesBoundingBox(verts);
+  if (bb.w < 1e-6 || bb.h < 1e-6) {
+    return { cx: halfW, cy: halfH };
+  }
+  const ys = uniqueSortedYs(verts);
+  if (ys.length < 2) {
+    return { cx: halfW, cy: halfH };
+  }
+  let yCentreM: number;
+  if (room.shape === 't-vorm') {
+    yCentreM = (ys[0] + ys[1]) / 2;
+  } else {
+    yCentreM = (ys[ys.length - 2] + ys[ys.length - 1]) / 2;
+  }
+  const cxM = (bb.minX + bb.maxX) / 2;
+  const cyPx = ((yCentreM - bb.minY) / bb.h) * hPx;
+  const cxPx = ((cxM - bb.minX) / bb.w) * wPx;
+  return { cx: cxPx, cy: cyPx };
+}
+
 export function miniPoints(room: Room, w: number, h: number): number[] {
   if (room.vertices && room.vertices.length >= 3) {
     return ensureVertices(room).flatMap(v => [v.x * PX_PER_M, v.y * PX_PER_M]);

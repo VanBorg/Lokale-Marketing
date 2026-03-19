@@ -6,7 +6,7 @@ import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, vertic
 import { CanvasColors } from '../../../hooks/useTheme';
 import { WallId, DraggingHandle, PX_PER_M } from './canvasTypes';
 import { isNonRect, quadBounds, boundingSize, snapPosition } from './canvasUtils';
-import { wallMidDragCursor, rotatedResizeCursor } from './canvasGeometry';
+import { wallMidDragCursor, rotatedResizeCursor, getRoomLabelCentreLocalPx } from './canvasGeometry';
 import RoomShape from './RoomShape';
 import RoomDimensionLines from './RoomDimensionLines';
 import RoomLabels from './RoomLabels';
@@ -128,6 +128,7 @@ export default function CanvasRoom({
   const rot = room.rotation || 0;
   const cx = w / 2;
   const cy = h / 2;
+  const { cx: labelCx, cy: labelCy } = getRoomLabelCentreLocalPx(room, w, h);
   const isSelected = room.id === selectedRoomId;
   const area = room.effectiveArea ?? room.length * room.width;
   const points = hasVertices
@@ -260,8 +261,8 @@ export default function CanvasRoom({
         rooms={rooms}
         w={w}
         h={h}
-        cx={cx}
-        cy={cy}
+        cx={labelCx}
+        cy={labelCy}
         rot={rot}
         area={area}
         isSelected={isSelected}

@@ -10,7 +10,15 @@
  *   shapes/index.ts    – getShapeConfig
  */
 
-export { clamp, nearestWall, isNonRect, vertexBounds, quadBounds, boundingSize } from './canvasGeometry';
+export {
+  clamp,
+  nearestWall,
+  isNonRect,
+  vertexBounds,
+  quadBounds,
+  boundingSize,
+  getRoomLabelCentreLocalPx,
+} from './canvasGeometry';
 export type { GridLines } from './canvasGeometry';
 export { computeGridLines, computeGhostPos, computeSnapHighlightRect } from './canvasGeometry';
 
