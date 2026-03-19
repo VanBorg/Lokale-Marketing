@@ -6,7 +6,7 @@ import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getDependentRooms
 import { useTheme } from '../../hooks/useTheme';
 import { WallId, DraggingHandle, DraggingVertex, DraggingWall, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
 import { wallNormal, projectWorldDeltaToNormalMetres, rotatedResizeCursor } from './canvas/canvasGeometry';
-import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill } from './canvas/canvasUtils';
+import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill, rotateVector2D } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
 import CanvasGrid from './canvas/CanvasGrid';
 import CanvasRoom from './canvas/CanvasRoom';
@@ -401,9 +401,33 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     const minY = Math.min(...newVerts.map(v => v.y));
     const normalizedVerts = newVerts.map(v => ({ x: v.x - minX, y: v.y - minY }));
 
-    // Compensate room position for the bounding-box shift
-    const newRoomX = draggingVertex.startRoomPos.x + minX * PX_PER_M;
-    const newRoomY = draggingVertex.startRoomPos.y + minY * PX_PER_M;
+    // Derive new room position by anchoring on an untouched reference vertex so its world
+    // position is preserved exactly (correct for all rotation angles).
+    const rotDeg = draggingVertex.startRotation || 0;
+    const newMaxX = Math.max(...normalizedVerts.map(v => v.x));
+    const newMaxY = Math.max(...normalizedVerts.map(v => v.y));
+    const newCx = newMaxX * PX_PER_M / 2;
+    const newCy = newMaxY * PX_PER_M / 2;
+
+    let newRoomX: number;
+    let newRoomY: number;
+
+    const refIdxV = sv.findIndex((_, i) => i !== draggingVertex.vertexIndex);
+    if (refIdxV < 0) {
+      // Degenerate: no untouched vertex. Fall back to simple bbox-min shift.
+      newRoomX = draggingVertex.startRoomPos.x + minX * PX_PER_M;
+      newRoomY = draggingVertex.startRoomPos.y + minY * PX_PER_M;
+    } else {
+      // Old world position of the reference vertex (correct: subtract centre before rotating).
+      const refOldRel = rotateVector2D(sv[refIdxV].x * PX_PER_M - startCx, sv[refIdxV].y * PX_PER_M - startCy, rotDeg);
+      const refWorldX = draggingVertex.startRoomPos.x + startCx + refOldRel.x;
+      const refWorldY = draggingVertex.startRoomPos.y + startCy + refOldRel.y;
+      // New local position of same vertex relative to new centre (note: normalizedVerts[refIdxV].x = sv[refIdxV].x - minX).
+      const refNewRel = rotateVector2D(normalizedVerts[refIdxV].x * PX_PER_M - newCx, normalizedVerts[refIdxV].y * PX_PER_M - newCy, rotDeg);
+      // new_pivot + refNewRel = refWorld → new_pivot = refWorld - refNewRel
+      newRoomX = refWorldX - refNewRel.x - newCx;
+      newRoomY = refWorldY - refNewRel.y - newCy;
+    }
 
     const synced = syncRoomFromVertices(normalizedVerts);
     onUpdateRoom(draggingVertex.roomId, {
@@ -452,8 +476,32 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     const minY = Math.min(...newVerts.map(v => v.y));
     const normalizedVerts = newVerts.map(v => ({ x: v.x - minX, y: v.y - minY }));
 
-    const newRoomX = draggingWall.startRoomPos.x + minX * PX_PER_M;
-    const newRoomY = draggingWall.startRoomPos.y + minY * PX_PER_M;
+    // Derive new room position by anchoring on an untouched reference vertex (correct for all rotations).
+    const rotDegW = draggingWall.startRotation || 0;
+    const svMaxX = Math.max(...sv.map(v => v.x)); // sv is normalized so min=0
+    const svMaxY = Math.max(...sv.map(v => v.y));
+    const startCxW = svMaxX * PX_PER_M / 2;
+    const startCyW = svMaxY * PX_PER_M / 2;
+    const newMaxXW = Math.max(...normalizedVerts.map(v => v.x));
+    const newMaxYW = Math.max(...normalizedVerts.map(v => v.y));
+    const newCxW = newMaxXW * PX_PER_M / 2;
+    const newCyW = newMaxYW * PX_PER_M / 2;
+
+    let newRoomX: number;
+    let newRoomY: number;
+
+    const refIdxW = sv.findIndex((_, i) => i !== wi && i !== j);
+    if (refIdxW < 0) {
+      newRoomX = draggingWall.startRoomPos.x + minX * PX_PER_M;
+      newRoomY = draggingWall.startRoomPos.y + minY * PX_PER_M;
+    } else {
+      const refOldRelW = rotateVector2D(sv[refIdxW].x * PX_PER_M - startCxW, sv[refIdxW].y * PX_PER_M - startCyW, rotDegW);
+      const refWorldXW = draggingWall.startRoomPos.x + startCxW + refOldRelW.x;
+      const refWorldYW = draggingWall.startRoomPos.y + startCyW + refOldRelW.y;
+      const refNewRelW = rotateVector2D(normalizedVerts[refIdxW].x * PX_PER_M - newCxW, normalizedVerts[refIdxW].y * PX_PER_M - newCyW, rotDegW);
+      newRoomX = refWorldXW - refNewRelW.x - newCxW;
+      newRoomY = refWorldYW - refNewRelW.y - newCyW;
+    }
 
     const synced = syncRoomFromVertices(normalizedVerts);
     onUpdateRoom(draggingWall.roomId, {

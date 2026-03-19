@@ -385,36 +385,6 @@ export default function TabPlattegrond({
             if (cx > pl && cx < pr && cy > pt && cy < pb) {
               finalX = Math.max(pl, Math.min(pr - rw, x));
               finalY = Math.max(pt, Math.min(pb - rh, y));
-              // #region agent log
-              if (prot === 90 || prot === 270) {
-                fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f23194' },
-                  body: JSON.stringify({
-                    sessionId: 'f23194',
-                    location: 'TabPlattegrond.tsx:moveRoom',
-                    message: 'inside-room clamp vs rotated parent',
-                    data: {
-                      prot,
-                      pl,
-                      pt,
-                      pr,
-                      pb,
-                      pw,
-                      ph,
-                      cx,
-                      cy,
-                      rw,
-                      rh,
-                      finalX,
-                      finalY,
-                    },
-                    timestamp: Date.now(),
-                    hypothesisId: 'H3',
-                  }),
-                }).catch(() => {});
-              }
-              // #endregion
               break;
             }
           }
