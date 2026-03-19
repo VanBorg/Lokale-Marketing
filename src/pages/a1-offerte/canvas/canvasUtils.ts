@@ -18,7 +18,7 @@ export { snapPosition, snapToRooms } from './canvasSnapping';
 
 export { computeHandleDrag, computeVertexDrag } from './canvasResize';
 
-export { detectRoomGaps, computeWizardFill } from './canvasWizard';
+export { detectRoomGaps, computeWizardFill, detectWizardTargets, applyWizardExtend } from './canvasWizard';
 
 export { computeWorldWallSegments, getSnapCandidateSegments, rotateVector2D } from './wallSegments';
 export type { WallSegment, ConnectZone } from './wallSegments';

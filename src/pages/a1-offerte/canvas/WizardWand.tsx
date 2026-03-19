@@ -1,32 +1,30 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown } from 'lucide-react';
-import { GapInfo } from './canvasTypes';
+import { WizardTarget } from './canvasTypes';
 
 interface WizardWandProps {
-  gap: GapInfo;
+  target: WizardTarget;
   scale: number;
   stagePos: { x: number; y: number };
-  onFill: (gap: GapInfo) => void;
-  onHoverStart: (gap: GapInfo) => void;
+  onFill: (target: WizardTarget) => void;
+  onHoverStart: (target: WizardTarget) => void;
   onHoverEnd: () => void;
 }
 
-function directionInfo(gap: GapInfo) {
-  const pair = gap.edgePairs[0];
-  if (!pair) return { label: 'Verschuif kamer', Arrow: ArrowRight };
-  const positive = pair.refPos > pair.targetPos;
-  if (pair.axis === 'x') {
-    return positive
+function directionInfo(target: WizardTarget) {
+  const { nx, ny } = target.direction;
+  if (Math.abs(nx) >= Math.abs(ny)) {
+    return nx >= 0
       ? { label: 'Verschuif naar rechts', Arrow: ArrowRight }
       : { label: 'Verschuif naar links', Arrow: ArrowLeft };
   }
-  return positive
+  return ny >= 0
     ? { label: 'Verschuif omlaag', Arrow: ArrowDown }
     : { label: 'Verschuif omhoog', Arrow: ArrowUp };
 }
 
 export default function WizardWand({
-  gap,
+  target,
   scale,
   stagePos,
   onFill,
@@ -34,10 +32,10 @@ export default function WizardWand({
   onHoverEnd,
 }: WizardWandProps) {
   const [showTooltip, setShowTooltip] = useState(false);
-  const { label, Arrow } = directionInfo(gap);
+  const { label, Arrow } = directionInfo(target);
 
-  const screenX = gap.wizardWorldPos.x * scale + stagePos.x;
-  const screenY = gap.wizardWorldPos.y * scale + stagePos.y;
+  const screenX = target.wizardWorldPos.x * scale + stagePos.x;
+  const screenY = target.wizardWorldPos.y * scale + stagePos.y;
   const btnSize = Math.max(28, Math.min(36, 32 / Math.sqrt(scale)));
   const iconSize = Math.round(btnSize * 0.5);
 
@@ -56,11 +54,11 @@ export default function WizardWand({
         style={{ width: btnSize, height: btnSize }}
         onClick={(e) => {
           e.stopPropagation();
-          onFill(gap);
+          onFill(target);
         }}
         onMouseEnter={() => {
           setShowTooltip(true);
-          onHoverStart(gap);
+          onHoverStart(target);
         }}
         onMouseLeave={() => {
           setShowTooltip(false);

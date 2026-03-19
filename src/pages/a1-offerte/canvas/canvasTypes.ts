@@ -88,6 +88,15 @@ export type GapInfo = {
   edgePairs: FacingEdgePair[];
 };
 
+export type WizardTarget = {
+  roomId: string;
+  wallIndex: number;
+  direction: { nx: number; ny: number };
+  targetDistance: number;
+  targetRoomId: string;
+  wizardWorldPos: { x: number; y: number };
+};
+
 export interface PlattegrondCanvasProps {
   rooms: Room[];
   selectedRoomId: string | null;
