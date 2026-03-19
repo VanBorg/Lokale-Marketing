@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Room, calcTotalWalls, polygonArea, positionSpecialOnWall, getAdjacentOrContainedRooms } from './types';
+import { Room, calcTotalWalls, polygonArea, positionSpecialOnWall, getDependentRoomsForFinalization } from './types';
 import RoomWalls from './RoomWalls';
 
 interface RoomPropertiesProps {
@@ -100,7 +100,7 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
   const floor = room.vertices && room.vertices.length >= 3 ? polygonArea(room.vertices) : room.length * room.width;
   const walls = calcTotalWalls(room);
   const childRooms = rooms.filter(r => r.parentRoomId === room.id);
-  const allChildAndSpecialRooms = getAdjacentOrContainedRooms(room, rooms);
+  const allChildAndSpecialRooms = getDependentRoomsForFinalization(room, rooms);
   const insideChildren = childRooms.filter(r => r.attachedWall === 'inside');
   const insideSubtraction = insideChildren.reduce((sum, c) => sum + (c.vertices && c.vertices.length >= 3 ? polygonArea(c.vertices) : c.length * c.width), 0);
   const netFloor = floor - insideSubtraction;

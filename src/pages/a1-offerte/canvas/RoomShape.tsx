@@ -26,6 +26,8 @@ export default function RoomShape({
   points,
   w,
   h,
+  cx,
+  cy,
   roomFill,
   stroke,
   strokeOpacity,
@@ -114,11 +116,19 @@ export default function RoomShape({
             const span = Math.max(maxX - minX, maxY - minY);
 
             ctx.save();
+            // Clip to room polygon first (in rotated local space — correct boundary)
             ctx.beginPath();
             ctx.moveTo(points[0], points[1]);
             for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
             ctx.closePath();
             ctx.clip();
+            // Counter-rotate around room centre so stripes stay world-aligned
+            const rotation = room.rotation ?? 0;
+            if (rotation !== 0) {
+              ctx.translate(cx, cy);
+              ctx.rotate(-rotation * Math.PI / 180);
+              ctx.translate(-cx, -cy);
+            }
             ctx.strokeStyle = finalizedRoomStripe;
             ctx.lineWidth = finalizedRoomStripeLineWidth;
             ctx.lineCap = 'butt';

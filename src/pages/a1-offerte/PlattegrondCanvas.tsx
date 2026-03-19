@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef, useMemo } from 'react';
 import { Stage as KonvaStage, Layer, Rect, Line } from 'react-konva';
 import Konva from 'konva';
-import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getAdjacentOrContainedRooms } from './types';
+import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getDependentRoomsForFinalization } from './types';
 import { useTheme } from '../../hooks/useTheme';
 import { WallId, DraggingHandle, DraggingVertex, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
 import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill } from './canvas/canvasUtils';
@@ -91,7 +91,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         if (!room || room.isFinalized) return;
         e.preventDefault();
 
-        const dependents = getAdjacentOrContainedRooms(room, rooms);
+        const dependents = getDependentRoomsForFinalization(room, rooms);
         onUpdateRoom(room.id, { isFinalized: true });
         dependents.forEach((dependent) => {
           if (!dependent.isFinalized) onUpdateRoom(dependent.id, { isFinalized: true });
@@ -103,7 +103,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         if (room?.isFinalized) {
           e.preventDefault();
           onUpdateRoom(selectedRoomId, { isFinalized: false });
-          const dependents = getAdjacentOrContainedRooms(room, rooms);
+          const dependents = getDependentRoomsForFinalization(room, rooms);
           dependents.forEach((dependent) => {
             if (dependent.isFinalized) onUpdateRoom(dependent.id, { isFinalized: false });
           });

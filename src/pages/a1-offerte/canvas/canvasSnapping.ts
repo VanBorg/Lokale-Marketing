@@ -1,135 +1,51 @@
-import { Room, ensureVertices } from '../types';
-import { WallId, SnapResult, PX_PER_M, SNAP_THRESHOLD, SNAP_THRESHOLD_SPECIAL } from './canvasTypes';
-import { boundingSize } from './canvasGeometry';
+import { Room } from '../types';
+import { WallId, SnapResult } from './canvasTypes';
+import { computeWorldWallSegments, getSnapCandidateSegments, rotateVector2D, WallSegment } from './wallSegments';
 
-/**
- * Extract all snap-worthy positions from a room's actual geometry.
- *
- * For axis-aligned wall segments: records the exact X or Y position of that wall.
- * For ALL vertices (corners): records their X and Y as snap points.
- * This means:
- *   - Orthogonal rooms (L, T, U, Z, S, I, plus): perfect wall-to-wall snapping
- *   - Diagonal rooms (trapezium, vijfhoek): corner-to-corner/wall snapping
- *   - Rectangles: works like before but with vertex data instead of bounding box
- */
-type SnapEdges = {
-  xPositions: number[]; // world-pixel X positions to snap to
-  yPositions: number[]; // world-pixel Y positions to snap to
-};
+const SNAP_THRESHOLD = 40;
+const SNAP_THRESHOLD_SPECIAL = 50;
+const MIN_OVERLAP_PX = 8;
 
-function isIShape(room: Room): boolean {
-  return room.shape === 'i-vorm';
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function offsetSegments(segs: WallSegment[], dx: number, dy: number): WallSegment[] {
+  return segs.map(s => ({
+    ...s,
+    p1: { x: s.p1.x + dx, y: s.p1.y + dy },
+    p2: { x: s.p2.x + dx, y: s.p2.y + dy },
+    midpoint: { x: s.midpoint.x + dx, y: s.midpoint.y + dy },
+  }));
 }
 
-function round2(v: number): number {
-  return Math.round(v * 100) / 100;
-}
-
-function getLocalBoundsPx(verts: { x: number; y: number }[]) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const v of verts) {
-    const x = v.x * PX_PER_M;
-    const y = v.y * PX_PER_M;
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x > maxX) maxX = x;
-    if (y > maxY) maxY = y;
+function normalForWallId(wall: WallId): { nx: number; ny: number } {
+  switch (wall) {
+    case 'left':   return { nx: -1, ny: 0 };
+    case 'right':  return { nx:  1, ny: 0 };
+    case 'top':    return { nx: 0, ny: -1 };
+    case 'bottom': return { nx: 0, ny:  1 };
   }
-  return { minX, minY, maxX, maxY };
-}
-
-function getSnapEdges(room: Room): SnapEdges {
-  const verts = ensureVertices(room);
-  const xSet = new Set<number>();
-  const ySet = new Set<number>();
-  const EPS = 0.5;
-
-  if (isIShape(room)) {
-    const bounds = getLocalBoundsPx(verts);
-    xSet.add(round2(room.x + bounds.minX));
-    xSet.add(round2(room.x + bounds.maxX));
-    ySet.add(round2(room.y + bounds.minY));
-    ySet.add(round2(room.y + bounds.maxY));
-    return {
-      xPositions: Array.from(xSet).sort((a, b) => a - b),
-      yPositions: Array.from(ySet).sort((a, b) => a - b),
-    };
-  }
-
-  for (let i = 0; i < verts.length; i++) {
-    const v1 = verts[i];
-    const v2 = verts[(i + 1) % verts.length];
-    const x1 = room.x + v1.x * PX_PER_M;
-    const y1 = room.y + v1.y * PX_PER_M;
-    const x2 = room.x + v2.x * PX_PER_M;
-    const y2 = room.y + v2.y * PX_PER_M;
-
-    // Axis-aligned vertical segment -> snap on its X position
-    if (Math.abs(x1 - x2) < EPS) {
-      xSet.add(round2((x1 + x2) / 2));
-    }
-    // Axis-aligned horizontal segment -> snap on its Y position
-    if (Math.abs(y1 - y2) < EPS) {
-      ySet.add(round2((y1 + y2) / 2));
-    }
-
-    // Always add vertex corner points as snap targets (handles diagonal walls)
-    xSet.add(round2(x1));
-    ySet.add(round2(y1));
-  }
-
-  return {
-    xPositions: Array.from(xSet).sort((a, b) => a - b),
-    yPositions: Array.from(ySet).sort((a, b) => a - b),
-  };
 }
 
 /**
- * Get the local (relative to room origin) snap positions for the dragged room.
- * These are the X/Y positions of the dragged room's own edges and corners.
+ * `wall` is in local room space (Konva child coords); segment normals are in world space
+ * after `rotationDeg`. Rotate the local outward normal to compare.
  */
-function getLocalSnapOffsets(room: Room): { xOffsets: number[]; yOffsets: number[] } {
-  const verts = ensureVertices(room);
-  const xSet = new Set<number>();
-  const ySet = new Set<number>();
-  const EPS = 0.5;
-
-  if (isIShape(room)) {
-    const bounds = getLocalBoundsPx(verts);
-    xSet.add(round2(bounds.minX));
-    xSet.add(round2(bounds.maxX));
-    ySet.add(round2(bounds.minY));
-    ySet.add(round2(bounds.maxY));
-    return {
-      xOffsets: Array.from(xSet).sort((a, b) => a - b),
-      yOffsets: Array.from(ySet).sort((a, b) => a - b),
-    };
-  }
-
-  for (let i = 0; i < verts.length; i++) {
-    const v1 = verts[i];
-    const v2 = verts[(i + 1) % verts.length];
-    const x1 = v1.x * PX_PER_M;
-    const y1 = v1.y * PX_PER_M;
-    const x2 = v2.x * PX_PER_M;
-    const y2 = v2.y * PX_PER_M;
-
-    if (Math.abs(x1 - x2) < EPS) {
-      xSet.add(round2((x1 + x2) / 2));
-    }
-    if (Math.abs(y1 - y2) < EPS) {
-      ySet.add(round2((y1 + y2) / 2));
-    }
-
-    xSet.add(round2(x1));
-    ySet.add(round2(y1));
-  }
-
-  return {
-    xOffsets: Array.from(xSet).sort((a, b) => a - b),
-    yOffsets: Array.from(ySet).sort((a, b) => a - b),
-  };
+function segmentMatchesActiveWall(
+  seg: WallSegment,
+  wall: WallId,
+  rotationDeg: number,
+): boolean {
+  const { nx, ny } = normalForWallId(wall);
+  const rot = ((rotationDeg % 360) + 360) % 360;
+  const wn = rotateVector2D(nx, ny, rot);
+  return seg.outwardNormal.x * wn.x + seg.outwardNormal.y * wn.y > 0.5;
 }
+
+// ---------------------------------------------------------------------------
+// Core snap logic
+// ---------------------------------------------------------------------------
 
 export function snapPosition(
   draggedId: string,
@@ -142,68 +58,128 @@ export function snapPosition(
   if (!dragged) return { x, y };
 
   const threshold = dragged.roomType !== 'normal' ? SNAP_THRESHOLD_SPECIAL : SNAP_THRESHOLD;
-  const { w: dw, h: dh } = boundingSize(dragged);
-  let sx = x, sy = y;
-  let snappedToId: string | undefined;
-  let snappedWall: 'top' | 'right' | 'bottom' | 'left' | undefined;
 
-  const dragOffsets = getLocalSnapOffsets(dragged);
+  // Compute all segments once, then derive candidates via filter
+  const ddx = x - dragged.x;
+  const ddy = y - dragged.y;
+  const allDragSegs = offsetSegments(computeWorldWallSegments(dragged), ddx, ddy);
 
-  const walls: readonly WallId[] = activeWalls && activeWalls.length > 0
-    ? activeWalls
-    : ['left', 'right', 'top', 'bottom'];
-  const checkX = walls.includes('left') || walls.includes('right') || walls.length === 4;
-  const checkY = walls.includes('top') || walls.includes('bottom') || walls.length === 4;
+  let dragCandidates = allDragSegs.filter(s => s.isConvex);
 
-  // Snap X: compare each X edge/corner of dragged room to each X edge/corner of other rooms
-  if (checkX) {
-    let bestDist = threshold;
+  // Filter by activeWalls if provided (normals must match world space → rotate by dragged.rotation)
+  const rotationDeg = dragged.rotation ?? 0;
+  if (activeWalls && activeWalls.length > 0) {
+    dragCandidates = dragCandidates.filter(seg =>
+      activeWalls.some(wall => segmentMatchesActiveWall(seg, wall, rotationDeg))
+    );
+    // Hardening: if everything was filtered out (unexpected), snap using all convex walls
+    if (dragCandidates.length === 0) {
+      dragCandidates = allDragSegs.filter(s => s.isConvex);
+    }
+  }
+
+  let bestDist = threshold;
+  let bestSnap: SnapResult | null = null;
+
+  // ── Wall-to-wall snapping ─────────────────────────────────────────────────
+  for (const dragSeg of dragCandidates) {
+    // Skip diagonal walls for position snapping (vertex-snap only)
+    if (dragSeg.axis === 'diagonal') continue;
+
     for (const other of rooms) {
       if (other.id === draggedId) continue;
-      const otherEdges = getSnapEdges(other);
 
-      for (const dragOffset of dragOffsets.xOffsets) {
-        const dragEdgeWorld = x + dragOffset;
-        for (const otherX of otherEdges.xPositions) {
-          const dist = Math.abs(dragEdgeWorld - otherX);
-          if (dist >= bestDist) continue;
-          const candidateSx = x + (otherX - dragEdgeWorld);
+      const otherCandidates = getSnapCandidateSegments(other);
+
+      for (const otherSeg of otherCandidates) {
+        if (otherSeg.axis === 'diagonal') continue;
+
+        // Must be same axis
+        if (dragSeg.axis !== otherSeg.axis) continue;
+
+        // Normals must be opposing: dot < -0.5
+        const dot = dragSeg.outwardNormal.x * otherSeg.outwardNormal.x
+                  + dragSeg.outwardNormal.y * otherSeg.outwardNormal.y;
+        if (dot > -0.5) continue;
+
+        let overlapPx: number;
+        let dist: number;
+        let dx = 0, dy = 0;
+
+        if (dragSeg.axis === 'horizontal') {
+          const dragMinX = Math.min(dragSeg.p1.x, dragSeg.p2.x);
+          const dragMaxX = Math.max(dragSeg.p1.x, dragSeg.p2.x);
+          const othMinX  = Math.min(otherSeg.p1.x, otherSeg.p2.x);
+          const othMaxX  = Math.max(otherSeg.p1.x, otherSeg.p2.x);
+          overlapPx = Math.min(dragMaxX, othMaxX) - Math.max(dragMinX, othMinX);
+          if (overlapPx < MIN_OVERLAP_PX) continue;
+
+          dist = Math.abs(dragSeg.p1.y - otherSeg.p1.y);
+          dy = otherSeg.p1.y - dragSeg.p1.y;
+        } else {
+          // vertical
+          const dragMinY = Math.min(dragSeg.p1.y, dragSeg.p2.y);
+          const dragMaxY = Math.max(dragSeg.p1.y, dragSeg.p2.y);
+          const othMinY  = Math.min(otherSeg.p1.y, otherSeg.p2.y);
+          const othMaxY  = Math.max(otherSeg.p1.y, otherSeg.p2.y);
+          overlapPx = Math.min(dragMaxY, othMaxY) - Math.max(dragMinY, othMinY);
+          if (overlapPx < MIN_OVERLAP_PX) continue;
+
+          dist = Math.abs(dragSeg.p1.x - otherSeg.p1.x);
+          dx = otherSeg.p1.x - dragSeg.p1.x;
+        }
+
+        if (dist < bestDist) {
           bestDist = dist;
-          sx = candidateSx;
-          snappedToId = other.id;
-          snappedWall = dragOffset < dw / 2 ? 'left' : 'right';
+          bestSnap = {
+            x: x + dx,
+            y: y + dy,
+            snappedToId: other.id,
+            snappedWall: otherSeg.outwardNormal.y < -0.5 ? 'top'
+              : otherSeg.outwardNormal.y > 0.5 ? 'bottom'
+              : otherSeg.outwardNormal.x < -0.5 ? 'left'
+              : 'right',
+          };
         }
       }
     }
   }
 
-  // Snap Y: compare each Y edge/corner of dragged room to each Y edge/corner of other rooms
-  if (checkY) {
-    let bestDist = threshold;
+  // ── Diagonal / vertex snapping ────────────────────────────────────────────
+  const hasDiagonal = allDragSegs.some(s => s.axis === 'diagonal');
+
+  if (hasDiagonal) {
+    // Collect unique vertices of the dragged room at new position
+    const dragVerts = collectVertices(allDragSegs);
+
     for (const other of rooms) {
       if (other.id === draggedId) continue;
-      const otherEdges = getSnapEdges(other);
+      const otherSegs = computeWorldWallSegments(other);
+      const otherVerts = collectVertices(otherSegs);
 
-      for (const dragOffset of dragOffsets.yOffsets) {
-        const dragEdgeWorld = y + dragOffset;
-        for (const otherY of otherEdges.yPositions) {
-          const dist = Math.abs(dragEdgeWorld - otherY);
-          if (dist >= bestDist) continue;
-          const candidateSy = y + (otherY - dragEdgeWorld);
-          bestDist = dist;
-          sy = candidateSy;
-          snappedToId = other.id;
-          snappedWall = dragOffset < dh / 2 ? 'top' : 'bottom';
+      for (const dv of dragVerts) {
+        for (const ov of otherVerts) {
+          const ex = ov.x - dv.x;
+          const ey = ov.y - dv.y;
+          const dist = Math.sqrt(ex * ex + ey * ey);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestSnap = {
+              x: x + ex,
+              y: y + ey,
+              snappedToId: other.id,
+            };
+          }
         }
       }
     }
   }
 
-  return { x: sx, y: sy, snappedToId, snappedWall };
+  return bestSnap ?? { x, y };
 }
 
 /**
- * Simplified snap used after handle/vertex drag - checks all directions.
+ * Simplified snap used after handle/vertex drag — checks all directions.
  */
 export function snapToRooms(
   draggedId: string,
@@ -212,4 +188,25 @@ export function snapToRooms(
   rooms: Room[],
 ): SnapResult {
   return snapPosition(draggedId, x, y, rooms, null);
+}
+
+// ---------------------------------------------------------------------------
+// Utility
+// ---------------------------------------------------------------------------
+
+function collectVertices(
+  segments: WallSegment[],
+): { x: number; y: number }[] {
+  const pts: { x: number; y: number }[] = [];
+  const EPS = 0.5;
+  for (const s of segments) {
+    const addIfNew = (p: { x: number; y: number }) => {
+      if (!pts.some(q => Math.abs(q.x - p.x) < EPS && Math.abs(q.y - p.y) < EPS)) {
+        pts.push(p);
+      }
+    };
+    addIfNew(s.p1);
+    addIfNew(s.p2);
+  }
+  return pts;
 }

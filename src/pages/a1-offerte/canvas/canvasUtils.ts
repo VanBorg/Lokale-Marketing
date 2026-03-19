@@ -6,6 +6,8 @@
  *   canvasSnapping.ts  – snapPosition, snapToRooms
  *   canvasResize.ts    – computeHandleDrag, computeVertexDrag
  *   canvasWizard.ts    – detectRoomGaps, computeWizardFill
+ *   wallSegments.ts    – computeWorldWallSegments, getSnapCandidateSegments
+ *   shapes/index.ts    – getShapeConfig
  */
 
 export { clamp, nearestWall, isNonRect, vertexBounds, quadBounds, boundingSize } from './canvasGeometry';
@@ -17,3 +19,9 @@ export { snapPosition, snapToRooms } from './canvasSnapping';
 export { computeHandleDrag, computeVertexDrag } from './canvasResize';
 
 export { detectRoomGaps, computeWizardFill } from './canvasWizard';
+
+export { computeWorldWallSegments, getSnapCandidateSegments, rotateVector2D } from './wallSegments';
+export type { WallSegment, ConnectZone } from './wallSegments';
+
+export { getShapeConfig } from './shapes/index';
+export type { ShapeConfig } from './shapes/index';
