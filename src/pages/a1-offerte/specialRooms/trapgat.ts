@@ -1,0 +1,20 @@
+import { SpecialRoomConfig } from './types';
+
+export const TRAPGAT_CONFIG: SpecialRoomConfig = {
+  type: 'trapgat',
+  label: 'Trapgat',
+  icon: '🪜',
+  defaultLength: 2.5,
+  defaultWidth: 1.5,
+  defaultHeight: 0,
+  minLength: 1.5,
+  maxLength: 4.0,
+  minWidth: 0.9,
+  maxWidth: 3.0,
+  placementModes: ['inside-room', 'against-wall'],
+  defaultPlacementMode: 'inside-room',
+  canRotate: true,
+  canPlaceOnDiagonalWall: false,
+  preferredAttachmentWallIndex: 0,
+  description: 'Opening in de vloer voor een trap',
+};

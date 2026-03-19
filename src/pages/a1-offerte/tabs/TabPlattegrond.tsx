@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, computeWallOffset, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea, PX_PER_M } from '../types';
+import { getSpecialRoomConfig } from '../specialRooms';
 import RoomShapes, { SpecialRoomsSection } from '../RoomShapes';
 import RoomProperties, { RoomDimensionInputs } from '../RoomProperties';
 import FreeFormBuilder from '../FreeFormBuilder';
@@ -14,22 +15,33 @@ function detectSubRooms(rooms: Room[]): Room[] {
   let updated = rooms.map(r => {
     if (r.roomType === 'normal') return r;
 
-    const parentCandidates = [
-      ...normalRooms,
-      ...specialRooms.filter(candidate => candidate.id !== r.id),
-    ];
-    for (const parent of parentCandidates) {
-      if (isOverlapping(parent, r)) {
-        return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: 'inside' as const };
+    if (r.specialRoomPlacementMode === 'freestanding') {
+      return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null };
+    }
+
+    const parentCandidates = normalRooms;
+    const placementMode = r.specialRoomPlacementMode;
+
+    // inside-room or no mode → try overlap (snaps inside)
+    if (placementMode !== 'against-wall') {
+      for (const parent of parentCandidates) {
+        if (isOverlapping(parent, r)) {
+          return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: 'inside' as const };
+        }
       }
     }
-    for (const parent of parentCandidates) {
-      if (isAdjacent(r, parent)) {
-        const wall = detectAttachedWall(r, parent);
-        const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
-        return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
+
+    // against-wall or no mode → try adjacency (snaps outside)
+    if (placementMode !== 'inside-room') {
+      for (const parent of parentCandidates) {
+        if (isAdjacent(r, parent)) {
+          const wall = detectAttachedWall(r, parent);
+          const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
+          return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
+        }
       }
     }
+
     return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null, wallOffset: undefined };
   });
 
@@ -225,37 +237,48 @@ export default function TabPlattegrond({
 
   const addSpecialRoom = useCallback(
     (type: RoomType, name: string, length: number, width: number) => {
+      const config = getSpecialRoomConfig(type);
+      const resolvedLength = config?.defaultLength ?? length;
+      const resolvedWidth = config?.defaultWidth ?? width;
+      const resolvedHeight = config?.defaultHeight ?? 2.4;
       const spawn = canvasRef.current?.getSpawnPosition?.();
       const defaultX = 50 + rooms.length * 30;
       const defaultY = 50 + rooms.length * 30;
-      const x = spawn ? spawn.x - (length * 40) / 2 : defaultX;
-      const y = spawn ? spawn.y - (width * 40) / 2 : defaultY;
+      const x = spawn ? spawn.x - (resolvedLength * 40) / 2 : defaultX;
+      const y = spawn ? spawn.y - (resolvedWidth * 40) / 2 : defaultY;
       const newRoom: Room = {
         id: crypto.randomUUID(),
         name,
         shape: 'rechthoek',
         shapeType: 'rect',
         rotation: 0,
-        length,
-        width,
-        height: 2.6,
+        length: resolvedLength,
+        width: resolvedWidth,
+        height: resolvedHeight,
         x,
         y,
         elements: [],
-        wallLengths: { top: length, right: width, bottom: length, left: width },
-        walls: createDefaultWalls(2.6),
+        wallLengths: {
+          top: resolvedLength,
+          right: resolvedWidth,
+          bottom: resolvedLength,
+          left: resolvedWidth,
+        },
+        walls: createDefaultWalls(resolvedHeight),
         wallsCustomized: createDefaultWallsCustomized(),
         slopedCeiling: false,
-        highestPoint: 2.6,
+        highestPoint: resolvedHeight,
         ridgeCeiling: false,
-        ridgeHeight: 2.6,
+        ridgeHeight: resolvedHeight,
         isFinalized: false,
         tasks: [],
         roomType: type,
         parentRoomId: null,
         isSubRoom: false,
         attachedWall: null,
-        effectiveArea: length * width,
+        effectiveArea: resolvedLength * resolvedWidth,
+        specialRoomPlacementMode: config?.defaultPlacementMode ?? 'against-wall',
+        wallRotationDeg: 0,
       };
       updateActiveFloorRooms(prev => detectSubRooms([...prev, newRoom]));
       setSelectedRoomId(newRoom.id);
@@ -456,6 +479,22 @@ export default function TabPlattegrond({
   useEffect(() => {
     setSelectedWallIndices([]);
   }, [selectedRoomId]);
+
+  useEffect(() => {
+    updateActiveFloorRooms(prev => {
+      const anyChanged = prev.some(r => {
+        if (r.roomType === 'normal' || !r.parentRoomId || !r.isFinalized) return false;
+        const parent = prev.find(p => p.id === r.parentRoomId);
+        return parent !== undefined && !parent.isFinalized;
+      });
+      if (!anyChanged) return prev;
+      return prev.map(r => {
+        if (r.roomType === 'normal' || !r.parentRoomId || !r.isFinalized) return r;
+        const parent = prev.find(p => p.id === r.parentRoomId);
+        return (parent && !parent.isFinalized) ? { ...r, isFinalized: false } : r;
+      });
+    });
+  }, [rooms]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -1,4 +1,5 @@
-import { SHAPES, SPECIAL_ROOMS, Room, RoomType } from './types';
+import { SHAPES, Room, RoomType } from './types';
+import { SPECIAL_ROOM_CONFIGS } from './specialRooms';
 import { Hammer } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -217,13 +218,15 @@ export function SpecialRoomsSection({
         Speciale ruimtes
       </h3>
       <div className="grid grid-cols-2 gap-1.5">
-        {SPECIAL_ROOMS.map(sr => (
+        {Object.values(SPECIAL_ROOM_CONFIGS).map(cfg => (
           <button
-            key={sr.type}
-            onClick={() => onAddSpecialRoom(sr.type, sr.label, sr.length, sr.width)}
-            className="px-2 py-1.5 rounded-lg text-xs font-medium bg-dark-card border border-dark-border text-accent hover:border-accent/40 hover:bg-accent/5 transition-colors cursor-pointer"
+            key={cfg.type}
+            onClick={() => onAddSpecialRoom(cfg.type as RoomType, cfg.label, cfg.defaultLength, cfg.defaultWidth)}
+            title={cfg.description}
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium bg-dark-card border border-dark-border text-accent hover:border-accent/40 hover:bg-accent/5 transition-colors cursor-pointer"
           >
-            + {sr.label}
+            <span>{cfg.icon}</span>
+            <span>{cfg.label}</span>
           </button>
         ))}
       </div>

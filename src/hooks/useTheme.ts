@@ -41,12 +41,13 @@ interface ThemeContextValue {
 
 const FINALIZED_STRIPE_COLOR = 'rgba(134, 239, 172, 0.45)';
 const FINALIZED_STRIPE_LINE_WIDTH = 4;
-const SPECIAL_FINALIZED_FILL = '#CDEEDD';
+const SPECIAL_FINALIZED_FILL_LIGHT = '#CDEEDD';
+const SPECIAL_FINALIZED_FILL_DARK = '#1E3D2B';
 
 const DARK_CANVAS: CanvasColors = {
   stageBg: '#0E0E0E',
   roomFill: '#1F1F1F',
-  specialFinalizedFill: SPECIAL_FINALIZED_FILL,
+  specialFinalizedFill: SPECIAL_FINALIZED_FILL_DARK,
   roomStroke: 'rgba(255,255,255,0.22)',
   roomStrokeSelected: '#FF5C1A',
   gridThin: 'rgba(255,255,255,0.12)',
@@ -68,7 +69,7 @@ const DARK_CANVAS: CanvasColors = {
 const LIGHT_CANVAS: CanvasColors = {
   stageBg: '#FAFAFA',
   roomFill: '#EBEBEB',
-  specialFinalizedFill: SPECIAL_FINALIZED_FILL,
+  specialFinalizedFill: SPECIAL_FINALIZED_FILL_LIGHT,
   roomStroke: 'rgba(0,0,0,0.38)',
   roomStrokeSelected: '#FF5C1A',
   gridThin: 'rgba(0,0,0,0.14)',

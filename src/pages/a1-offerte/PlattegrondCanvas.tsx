@@ -452,10 +452,20 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     }
     if (draggingHandle) {
       const roomId = draggingHandle.roomId;
+      const room = rooms.find(r => r.id === roomId);
+      if (room && onUpdateRoom) {
+        const snapped = snapToRooms(roomId, room.x, room.y, rooms);
+        if (snapped.x !== room.x || snapped.y !== room.y) {
+          onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
+        }
+      }
       endBatch?.();
       setDraggingHandleRaw(null);
       justFinishedDragRef.current = true;
       requestAnimationFrame(() => { justFinishedDragRef.current = false; });
+    }
+    if (draggingVertex) {
+      const roomId = draggingVertex.roomId;
       const room = rooms.find(r => r.id === roomId);
       if (room && onUpdateRoom) {
         const snapped = snapToRooms(roomId, room.x, room.y, rooms);
@@ -463,20 +473,10 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
           onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
         }
       }
-    }
-    if (draggingVertex) {
-      const roomId = draggingVertex.roomId;
       endBatch?.();
       setDraggingVertex(null);
       justFinishedDragRef.current = true;
       requestAnimationFrame(() => { justFinishedDragRef.current = false; });
-      const room = rooms.find(r => r.id === roomId);
-      if (room && onUpdateRoom) {
-        const snapped = snapToRooms(roomId, room.x, room.y, rooms);
-        if (snapped.x !== room.x || snapped.y !== room.y) {
-          onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
-        }
-      }
     }
   }, [marquee, draggingHandle, draggingVertex, endBatch, rooms, onUpdateRoom, onSelectRoom, stopAutoPan]);
 
@@ -735,6 +735,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               onSetDraggingHandle={setDraggingHandle}
               onSnapHighlight={setSnapHighlight}
               onDragStartWalls={(roomId, walls) => {
+                beginBatch?.();
                 setDragFromWalls({ roomId, walls });
                 setWizardGaps([]);
                 setWizardPreview(null);
@@ -747,6 +748,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
                 });
               }}
               onDragEndRoom={() => {
+                endBatch?.();
                 setDragFromWalls(null);
                 draggedRoomIdsRef.current = null;
               }}

@@ -168,7 +168,7 @@ export default function CanvasRoom({
           onRoomDragMovePosition(pointer.x, pointer.y, worldX, worldY);
         }
       }}
-      onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
+        onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
         const newX = e.target.x() - cx;
         const newY = e.target.y() - cy;
         // Special rooms: always snap both X and Y so they can attach to any wall
@@ -176,8 +176,9 @@ export default function CanvasRoom({
         const snapped = snapPosition(room.id, newX, newY, rooms, snapWalls);
         e.target.x(snapped.x + cx);
         e.target.y(snapped.y + cy);
-        onDragEndRoom();
+        // Apply final position before endBatch so one Ctrl+Z undoes the whole drag (incl. auto-pan moves).
         onMoveRoom(room.id, snapped.x, snapped.y);
+        onDragEndRoom();
         if (snapped.snappedToId && snapped.snappedWall && room.roomType !== 'normal') {
           onSnapHighlight({ roomId: snapped.snappedToId, wall: snapped.snappedWall });
           if (snapHighlightTimer.current) clearTimeout(snapHighlightTimer.current);

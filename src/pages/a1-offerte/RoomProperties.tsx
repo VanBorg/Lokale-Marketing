@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Room, calcTotalWalls, polygonArea, positionSpecialOnWall, getDependentRoomsForFinalization } from './types';
+import { getSpecialRoomConfig } from './specialRooms';
 import RoomWalls from './RoomWalls';
 
 interface RoomPropertiesProps {
@@ -105,6 +106,7 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
   const insideSubtraction = insideChildren.reduce((sum, c) => sum + (c.vertices && c.vertices.length >= 3 ? polygonArea(c.vertices) : c.length * c.width), 0);
   const netFloor = floor - insideSubtraction;
   const parentRoom = room.parentRoomId ? rooms.find(r => r.id === room.parentRoomId) : null;
+  const specialConfig = room.roomType !== 'normal' ? getSpecialRoomConfig(room.roomType) : null;
 
   let ceiling = floor;
   if (room.ridgeCeiling && room.ridgeHeight > room.height) {
@@ -137,6 +139,73 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
             className={`${inputCls} px-3 ${room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
         </div>
+
+        {specialConfig && (
+          <div className="rounded-lg bg-dark-card border border-dark-border p-3 space-y-2">
+            <p className="text-[10px] text-light/40">{specialConfig.description}</p>
+
+            <div>
+              <label className="block text-xs text-light/50 mb-1">Plaatsing</label>
+              <div className="flex gap-1">
+                {specialConfig.placementModes.map(mode => {
+                  const labels: Record<string, string> = {
+                    'against-wall': 'Tegen muur',
+                    'inside-room': 'In kamer',
+                    'freestanding': 'Los',
+                  };
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      disabled={room.isFinalized}
+                      onClick={() => onUpdate(room.id, { specialRoomPlacementMode: mode })}
+                      className={`flex-1 px-2 py-1.5 rounded text-[10px] font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                        ${(room.specialRoomPlacementMode ?? specialConfig.defaultPlacementMode) === mode
+                          ? 'bg-accent text-white'
+                          : 'bg-dark border border-dark-border text-light/50 hover:text-light'
+                        }`}
+                    >
+                      {labels[mode]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {(room.specialRoomPlacementMode ?? specialConfig.defaultPlacementMode) === 'against-wall' && (
+              <div>
+                <label className="block text-xs text-light/50 mb-1">Oriëntatie tov muur</label>
+                <div className="flex gap-1">
+                  {[
+                    { deg: 0, label: '↓ Rug' },
+                    { deg: 90, label: '← Links' },
+                    { deg: 180, label: '↑ Voor' },
+                    { deg: 270, label: '→ Rechts' },
+                  ].map(opt => (
+                    <button
+                      key={opt.deg}
+                      type="button"
+                      disabled={room.isFinalized}
+                      onClick={() => onUpdate(room.id, { wallRotationDeg: opt.deg })}
+                      className={`flex-1 px-1.5 py-1.5 rounded text-[10px] font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                        ${(room.wallRotationDeg ?? 0) === opt.deg
+                          ? 'bg-accent text-white'
+                          : 'bg-dark border border-dark-border text-light/50 hover:text-light'
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {specialConfig.canPlaceOnDiagonalWall && (
+                  <p className="text-[10px] text-light/30 mt-1">
+                    ✓ Kan geplaatst worden op schuine muren
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Position along wall for special rooms attached to a wall */}
         {parentRoom && room.attachedWall && room.attachedWall !== 'inside' && (
@@ -286,6 +355,13 @@ export default function RoomProperties({ room, rooms, onUpdate, onDelete, select
                 if (room.isSubRoom && parentRoom && !parentRoom.isFinalized) {
                   setFinalizeError(`Let op: '${room.name}' is onderdeel van '${parentRoom.name}'. Maak eerst de hoofdkamer definitief.`);
                   return;
+                }
+                if (room.roomType !== 'normal' && room.parentRoomId) {
+                  const parent = rooms.find(r => r.id === room.parentRoomId);
+                  if (parent && !parent.isFinalized) {
+                    setFinalizeError(`'${room.name}' is gekoppeld aan '${parent.name}'. Maak eerst die kamer definitief.`);
+                    return;
+                  }
                 }
                 if (allChildAndSpecialRooms.length > 0) {
                   setShowSubRoomConfirm(true);

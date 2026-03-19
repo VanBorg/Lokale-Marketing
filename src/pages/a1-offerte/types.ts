@@ -1,3 +1,5 @@
+import { SPECIAL_ROOM_CONFIGS } from './specialRooms';
+
 export type RoomElement = {
   id: string;
   type: 'deur' | 'raam' | 'schuifdeur' | 'openhaard' | 'radiator' | 'kolom' | 'badkuip' | 'toilet';
@@ -65,6 +67,8 @@ export type Room = {
   /** 0–1 position along the attached wall (when attachedWall is top/right/bottom/left). 0 = start, 1 = end. */
   wallOffset?: number;
   effectiveArea: number;
+  specialRoomPlacementMode?: 'against-wall' | 'inside-room' | 'freestanding';
+  wallRotationDeg?: number;
 };
 
 export type Floor = { id: string; name: string; rooms: Room[] };
@@ -94,20 +98,12 @@ export const ROOM_TYPE_ICONS: Record<RoomType, string> = {
   balkon: '🌤️',
 };
 
-export const SPECIAL_ROOMS: { type: RoomType; label: string; length: number; width: number }[] = [
-  { type: 'wc', label: 'WC', length: 1.2, width: 1.8 },
-  { type: 'badkamer', label: 'Badkamer', length: 2.5, width: 2.0 },
-  { type: 'doorgang', label: 'Doorgang', length: 1.0, width: 0.8 },
-  { type: 'kast', label: 'Kast', length: 1.0, width: 0.6 },
-  { type: 'berging', label: 'Berging', length: 2.0, width: 1.5 },
-  { type: 'trapgat', label: 'Trapgat', length: 2.5, width: 1.0 },
-  { type: 'erker', label: 'Erker', length: 2.0, width: 1.0 },
-  { type: 'balkon', label: 'Balkon', length: 3.0, width: 1.2 },
-  { type: 'nis', label: 'Nis', length: 0.8, width: 0.4 },
-  { type: 'schouw', label: 'Schouw', length: 1.0, width: 0.6 },
-  { type: 'plateau', label: 'Plateau', length: 2.0, width: 1.5 },
-  { type: 'logia', label: 'Logia', length: 3.0, width: 1.5 },
-];
+export const SPECIAL_ROOMS = Object.values(SPECIAL_ROOM_CONFIGS).map(c => ({
+  type: c.type as RoomType,
+  label: c.label,
+  length: c.defaultLength,
+  width: c.defaultWidth,
+}));
 
 export const SPECIAL_ROOM_TYPES = new Set<RoomType>(SPECIAL_ROOMS.map((room) => room.type));
 
