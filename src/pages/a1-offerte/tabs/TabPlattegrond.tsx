@@ -134,6 +134,9 @@ export default function TabPlattegrond({
       counter += 1;
       const dims = SHAPE_DEFAULTS[shape] ?? { length: 4, width: 3 };
       const verts = shapePointsToVertices(shape, dims.length, dims.width);
+      const spawn = canvasRef.current?.getSpawnPosition?.();
+      const x = spawn ? spawn.x - (dims.length * 40) / 2 : 50 + rooms.length * 30;
+      const y = spawn ? spawn.y - (dims.width * 40) / 2 : 50 + rooms.length * 30;
       const newRoom: Room = {
         id: crypto.randomUUID(),
         name: `Kamer${counter}`,
@@ -143,8 +146,8 @@ export default function TabPlattegrond({
         length: dims.length,
         width: dims.width,
         height: 2.6,
-        x: 50 + rooms.length * 30,
-        y: 50 + rooms.length * 30,
+        x,
+        y,
         elements: [],
         wallLengths: { top: dims.length, right: dims.width, bottom: dims.length, left: dims.width },
         vertices: verts,

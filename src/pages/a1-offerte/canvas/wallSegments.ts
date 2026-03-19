@@ -103,9 +103,10 @@ export function computeWorldWallSegments(room: Room): WallSegment[] {
     const curr = worldPts[i];
     const next = worldPts[(i + 1) % n];
     const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x);
-    // CW polygon: convex vertices have cross < 0 (right turn)
-    // CCW polygon: convex vertices have cross > 0 (left turn)
-    vertexConvex[i] = cw ? cross < 0 : cross > 0;
+    // Y-down screen space: right turn (CW turn) gives cross > 0.
+    // CW polygon on screen: convex vertices = right turns = cross > 0.
+    // CCW polygon on screen: convex vertices = left turns = cross < 0.
+    vertexConvex[i] = cw ? cross > 0 : cross < 0;
   }
 
   // 6. Build segments
@@ -176,10 +177,12 @@ export function computeWorldWallSegments(room: Room): WallSegment[] {
 }
 
 /**
- * Returns only the wall segments eligible for snapping:
- * convex (outer) walls. Diagonal walls are included because they
- * participate in vertex-snapping in canvasSnapping.ts.
+ * Returns all wall segments of a room as snap candidates.
+ * All walls (including step walls of L/T/Z/S shapes) have correctly-computed
+ * outward normals and are valid attachment points. The snapping loop in
+ * canvasSnapping.ts independently guards against false snaps via opposing-normals,
+ * overlap, and distance checks.
  */
 export function getSnapCandidateSegments(room: Room): WallSegment[] {
-  return computeWorldWallSegments(room).filter(s => s.isConvex);
+  return computeWorldWallSegments(room);
 }

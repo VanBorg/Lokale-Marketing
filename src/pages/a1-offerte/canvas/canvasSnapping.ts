@@ -64,7 +64,9 @@ export function snapPosition(
   const ddy = y - dragged.y;
   const allDragSegs = offsetSegments(computeWorldWallSegments(dragged), ddx, ddy);
 
-  let dragCandidates = allDragSegs.filter(s => s.isConvex);
+  // All walls are valid snap candidates — step walls of L/T/Z/S shapes are included.
+  // The snapping loop itself filters out diagonals and checks opposing normals + overlap.
+  let dragCandidates = [...allDragSegs];
 
   // Filter by activeWalls if provided (normals must match world space → rotate by dragged.rotation)
   const rotationDeg = dragged.rotation ?? 0;
@@ -72,9 +74,9 @@ export function snapPosition(
     dragCandidates = dragCandidates.filter(seg =>
       activeWalls.some(wall => segmentMatchesActiveWall(seg, wall, rotationDeg))
     );
-    // Hardening: if everything was filtered out (unexpected), snap using all convex walls
+    // Hardening: if everything was filtered out (unexpected), fall back to all walls
     if (dragCandidates.length === 0) {
-      dragCandidates = allDragSegs.filter(s => s.isConvex);
+      dragCandidates = [...allDragSegs];
     }
   }
 
