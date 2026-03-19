@@ -1,5 +1,5 @@
 import { Room, ensureVertices, verticesBoundingBox } from '../types';
-import { PX_PER_M } from './canvasTypes';
+import { PX_PER_M, rotateVector2DDeg } from './canvasTypes';
 
 export type ConnectZone =
   | { type: 'full' }
@@ -36,23 +36,13 @@ export function polygonIsClockwise(pts: { x: number; y: number }[]): boolean {
 }
 
 /**
- * Rotates a direction vector by `rotation` degrees (0/90/180/270 only).
- * Same convention as vertex rotation in this module (matches Konva room.rotation).
+ * Rotates a direction vector by `rotation` degrees (any angle; matches Konva room.rotation).
  */
 export function rotateVector2D(vx: number, vy: number, rotation: number): { x: number; y: number } {
-  switch (rotation) {
-    case 90:
-      return { x: -vy, y: vx };
-    case 180:
-      return { x: -vx, y: -vy };
-    case 270:
-      return { x: vy, y: -vx };
-    default:
-      return { x: vx, y: vy };
-  }
+  return rotateVector2DDeg(vx, vy, rotation);
 }
 
-// Rotates (vx, vy) around (cx, cy) by `rotation` degrees (0/90/180/270 only).
+// Rotates (vx, vy) around (cx, cy) by `rotation` degrees.
 function rotatePoint(
   vx: number,
   vy: number,

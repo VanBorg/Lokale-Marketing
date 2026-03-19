@@ -1,5 +1,5 @@
 import { SPECIAL_ROOM_CONFIGS } from './specialRooms';
-import { PX_PER_M } from './canvas/canvasTypes';
+import { PX_PER_M, rotateVector2DDeg } from './canvas/canvasTypes';
 
 export type RoomElement = {
   id: string;
@@ -114,6 +114,16 @@ export function isSpecialRoomType(type: RoomType): boolean {
 
 export function isSpecialRoom(room: Room): boolean {
   return isSpecialRoomType(room.roomType);
+}
+
+/** Canvas rotation (degrees) when a special room is "schuin" (diagonal on the plan). */
+export const SPECIAL_ROOM_SCHUIN_ROTATION_DEG = 45;
+
+/** True when rotation is axis-aligned on the grid (0° / 90° / 180° / 270°). */
+export function isSpecialRoomRechtRotation(rotationDeg: number | undefined | null): boolean {
+  const n = (((Number(rotationDeg) || 0) % 360) + 360) % 360;
+  const nearestQuarter = ((Math.round(n / 90) % 4) + 4) % 4 * 90;
+  return Math.abs(n - nearestQuarter) < 1e-3;
 }
 
 export type RoomFillKey = 'roomFill' | 'subRoomFill' | 'specialFinalizedFill';
@@ -254,7 +264,23 @@ function roomBounds(room: Room) {
     w = room.length * PX_PER_M;
     h = room.width * PX_PER_M;
   }
-  return { left: room.x, top: room.y, right: room.x + w, bottom: room.y + h, w, h };
+  const cx = w / 2;
+  const cy = h / 2;
+  const corners: [number, number][] = [[0, 0], [w, 0], [w, h], [0, h]];
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [px, py] of corners) {
+    const { x: rx, y: ry } = rotateVector2DDeg(px - cx, py - cy, rotation);
+    const wx = room.x + cx + rx;
+    const wy = room.y + cy + ry;
+    minX = Math.min(minX, wx);
+    minY = Math.min(minY, wy);
+    maxX = Math.max(maxX, wx);
+    maxY = Math.max(maxY, wy);
+  }
+  return { left: minX, top: minY, right: maxX, bottom: maxY, w: maxX - minX, h: maxY - minY };
 }
 
 export function isOverlapping(container: Room, inner: Room): boolean {

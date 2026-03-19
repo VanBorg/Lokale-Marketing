@@ -1,6 +1,19 @@
 import type { Room, RoomElement, Vertex } from '../types';
 
 export const PX_PER_M = 40;
+
+/**
+ * Rotate a 2D vector by `rotationDeg` (degrees, same convention as Konva `Group.rotation` in this app).
+ * Supports any angle (not only quarter-turns).
+ */
+export function rotateVector2DDeg(vx: number, vy: number, rotationDeg: number): { x: number; y: number } {
+  const r = ((rotationDeg % 360) + 360) % 360;
+  if (r === 0) return { x: vx, y: vy };
+  const rad = (r * Math.PI) / 180;
+  const c = Math.cos(rad);
+  const s = Math.sin(rad);
+  return { x: vx * c - vy * s, y: vx * s + vy * c };
+}
 export const SNAP_THRESHOLD = 40;
 /** Special rooms: only snap when very close to a wall so they stay freely placeable. */
 export const SNAP_THRESHOLD_SPECIAL = 18;

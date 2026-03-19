@@ -1,6 +1,6 @@
-import { SHAPES, Room, RoomType } from './types';
+import { SHAPES, Room, RoomType, isSpecialRoom } from './types';
 import { SPECIAL_ROOM_CONFIGS } from './specialRooms';
-import { RoomRotationPicker } from './RoomEditPanel';
+import { RoomRotationPicker, SpecialRoomOrientationPicker } from './RoomEditPanel';
 import { Hammer } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -175,12 +175,21 @@ export default function RoomShapes({
 
       {/* ── Rotation selector (same control as in RoomEditPanel when a room is open) ── */}
       {selectedRoom && (
-        <RoomRotationPicker
-          room={selectedRoom}
-          onUpdateRoom={onUpdateRoom}
-          disabled={selectedRoom.isFinalized}
-          className="mt-4"
-        />
+        isSpecialRoom(selectedRoom) ? (
+          <SpecialRoomOrientationPicker
+            room={selectedRoom}
+            onUpdateRoom={onUpdateRoom}
+            disabled={selectedRoom.isFinalized}
+            className="mt-4"
+          />
+        ) : (
+          <RoomRotationPicker
+            room={selectedRoom}
+            onUpdateRoom={onUpdateRoom}
+            disabled={selectedRoom.isFinalized}
+            className="mt-4"
+          />
+        )
       )}
     </div>
   );

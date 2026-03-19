@@ -5,6 +5,9 @@ import {
   calcTotalWalls,
   polygonArea,
   getDependentRoomsForFinalization,
+  isSpecialRoom,
+  isSpecialRoomRechtRotation,
+  SPECIAL_ROOM_SCHUIN_ROTATION_DEG,
 } from './types';
 import RoomWalls from './RoomWalls';
 
@@ -25,7 +28,58 @@ function parseNum(value: string, fallback: number): number {
 
 const ROOM_ROTATIONS = [0, 90, 180, 270] as const;
 
-/** 0° / 90° / 180° / 270° — shared with RoomShapes (overview) and RoomEditPanel (room selected). */
+/**
+ * Speciale kamers: alleen rechthoekig op het rooster (recht) of diagonaal (schuin).
+ * Geen losse 0°/90°/180°/270° knoppen.
+ */
+export function SpecialRoomOrientationPicker({
+  room,
+  onUpdateRoom,
+  disabled,
+  className = '',
+}: {
+  room: Room;
+  onUpdateRoom: (id: string, updates: Partial<Room>) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const recht = isSpecialRoomRechtRotation(room.rotation);
+  const btn = (active: boolean) => `
+    px-2 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer
+    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+    ${active
+      ? 'bg-accent text-white'
+      : 'bg-dark-card border border-dark-border text-light/60 hover:border-light/30 hover:text-light'
+    }
+  `;
+  return (
+    <div className={className}>
+      <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
+        Oriëntatie
+      </h3>
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onUpdateRoom(room.id, { rotation: 0 })}
+          className={btn(recht)}
+        >
+          Recht
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onUpdateRoom(room.id, { rotation: SPECIAL_ROOM_SCHUIN_ROTATION_DEG })}
+          className={btn(!recht)}
+        >
+          Schuin
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 0° / 90° / 180° / 270° — normale kamers; shared with RoomShapes (overview) and RoomEditPanel. */
 export function RoomRotationPicker({
   room,
   onUpdateRoom,
@@ -226,11 +280,19 @@ export default function RoomEditPanel({
           {icon && <span className="text-lg leading-none">{icon}</span>}
         </div>
 
-        <RoomRotationPicker
-          room={room}
-          onUpdateRoom={onUpdate}
-          disabled={room.isFinalized}
-        />
+        {isSpecialRoom(room) ? (
+          <SpecialRoomOrientationPicker
+            room={room}
+            onUpdateRoom={onUpdate}
+            disabled={room.isFinalized}
+          />
+        ) : (
+          <RoomRotationPicker
+            room={room}
+            onUpdateRoom={onUpdate}
+            disabled={room.isFinalized}
+          />
+        )}
 
         <RoomDimensionInputs room={room} onUpdate={onUpdate} disabled={room.isFinalized} />
       </div>
