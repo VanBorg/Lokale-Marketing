@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, computeWallOffset, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea, PX_PER_M } from '../types';
+import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, isOverlapping, isAdjacent, detectAttachedWall, computeWallOffset, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea } from '../types';
+import { PX_PER_M } from '../canvas/canvasTypes';
 import { getSpecialRoomConfig } from '../specialRooms';
 import RoomShapes, { SpecialRoomsSection } from '../RoomShapes';
-import RoomProperties, { RoomDimensionInputs } from '../RoomProperties';
+import RoomEditPanel from '../RoomEditPanel';
 import FreeFormBuilder from '../FreeFormBuilder';
 import PlattegrondCanvas, { PlattegrondCanvasHandle } from '../PlattegrondCanvas';
 import EtageTabBar from '../components/EtageTabBar';
@@ -11,34 +12,26 @@ let counter = 0;
 
 function detectSubRooms(rooms: Room[]): Room[] {
   const normalRooms = rooms.filter(r => r.roomType === 'normal');
-  const specialRooms = rooms.filter(r => r.roomType !== 'normal');
   let updated = rooms.map(r => {
     if (r.roomType === 'normal') return r;
 
     if (r.specialRoomPlacementMode === 'freestanding') {
-      return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null };
+      return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null, wallOffset: undefined };
     }
 
     const parentCandidates = normalRooms;
-    const placementMode = r.specialRoomPlacementMode;
 
-    // inside-room or no mode → try overlap (snaps inside)
-    if (placementMode !== 'against-wall') {
-      for (const parent of parentCandidates) {
-        if (isOverlapping(parent, r)) {
-          return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: 'inside' as const };
-        }
+    for (const parent of parentCandidates) {
+      if (isOverlapping(parent, r)) {
+        return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: 'inside' as const, wallOffset: undefined };
       }
     }
 
-    // against-wall or no mode → try adjacency (snaps outside)
-    if (placementMode !== 'inside-room') {
-      for (const parent of parentCandidates) {
-        if (isAdjacent(r, parent)) {
-          const wall = detectAttachedWall(r, parent);
-          const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
-          return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
-        }
+    for (const parent of parentCandidates) {
+      if (isAdjacent(r, parent)) {
+        const wall = detectAttachedWall(r, parent);
+        const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
+        return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
       }
     }
 
@@ -102,6 +95,7 @@ export default function TabPlattegrond({
   const [deleteRoomId, setDeleteRoomId] = useState<string | null>(null);
   const [deleteMultipleRoomIds, setDeleteMultipleRoomIds] = useState<Set<string> | null>(null);
   const [showFreeFormBuilder, setShowFreeFormBuilder] = useState(false);
+  const [sidebarView, setSidebarView] = useState<'overview' | 'edit'>('overview');
 
   const canvasRef = useRef<PlattegrondCanvasHandle | null>(null);
   const sidebarRef = useRef<HTMLDivElement | null>(null);
@@ -512,6 +506,10 @@ export default function TabPlattegrond({
   }, [selectedRoomId]);
 
   useEffect(() => {
+    setSidebarView(selectedRoomId ? 'edit' : 'overview');
+  }, [selectedRoomId]);
+
+  useEffect(() => {
     // Must not use setFloors here: each push clears redo; this is derived state only.
     patchActiveFloorRoomsSilent(prev => {
       const anyChanged = prev.some(r => {
@@ -625,54 +623,51 @@ export default function TabPlattegrond({
               />
             ) : (
               <>
-                <RoomShapes
-                  selectedShape={lastShape}
-                  onSelect={addRoom}
-                  onSelectFreeForm={() => setShowFreeFormBuilder(true)}
-                  selectedRoom={selectedRoom}
-                  onUpdateRoom={updateRoom}
-                />
+                {sidebarView === 'overview' && (
+                  <>
+                    <RoomShapes
+                      selectedShape={lastShape}
+                      onSelect={addRoom}
+                      onSelectFreeForm={() => setShowFreeFormBuilder(true)}
+                      selectedRoom={selectedRoom}
+                      onUpdateRoom={updateRoom}
+                    />
+                    <div className="border-b border-dark-border" />
+                    <SpecialRoomsSection onAddSpecialRoom={addSpecialRoom} />
+                  </>
+                )}
 
-                {selectedRoom && (
-                  <RoomProperties
+                {sidebarView === 'edit' && selectedRoom && (
+                  <RoomEditPanel
                     room={selectedRoom}
                     rooms={rooms}
                     onUpdate={updateRoom}
                     onDelete={deleteRoom}
                     selectedWallIndices={selectedWallIndices}
                     onToggleWallIndex={toggleWallIndex}
+                    onBack={() => {
+                      setSidebarView('overview');
+                      setSelectedRoomId(null);
+                    }}
                   />
-                )}
-
-                <SpecialRoomsSection onAddSpecialRoom={addSpecialRoom} />
-
-                {selectedRoom && (
-                  <div className="p-4 border-b border-dark-border">
-                    <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-3">
-                      Afmetingen
-                    </h3>
-                    <RoomDimensionInputs
-                      room={selectedRoom}
-                      onUpdate={updateRoom}
-                      disabled={selectedRoom.isFinalized}
-                    />
-                  </div>
                 )}
               </>
             )}
           </div>
 
-          <div className="p-4 border-t border-dark-border">
-            <button
-              onClick={() => setActiveTab(2)}
-              className="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors cursor-pointer"
-            >
-              Elementen toevoegen →
-            </button>
-            <p className="text-xs text-light/40 text-center mt-2">
-              {totalRooms} kamer{totalRooms !== 1 ? 's' : ''} toegevoegd
-            </p>
-          </div>
+          {sidebarView === 'overview' && !showFreeFormBuilder && (
+            <div className="p-4 border-t border-dark-border sticky bottom-0 bg-dark">
+              <button
+                onClick={() => setActiveTab(2)}
+                className="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors cursor-pointer"
+              >
+                Elementen toevoegen →
+              </button>
+              <p className="text-xs text-light/40 text-center mt-2">
+                {totalRooms} kamer{totalRooms !== 1 ? 's' : ''} toegevoegd
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

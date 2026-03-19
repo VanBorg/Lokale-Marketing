@@ -1,93 +1,16 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Stage as KonvaStage, Layer, Line, Rect, Arc, Text, Group } from 'react-konva';
+import { Stage as KonvaStage, Layer, Line, Rect, Text, Group } from 'react-konva';
 import Konva from 'konva';
 import { Trash2 } from 'lucide-react';
-import { Floor, Room, RoomElement, ELEMENT_DEFAULTS, getShapePoints, computeQuadCorners, ROOM_TYPE_ICONS, ensureVertices, verticesToPoints, verticesBoundingBox, getRoomFillKey } from '../types';
+import { Floor, RoomElement, ELEMENT_DEFAULTS, getShapePoints, ROOM_TYPE_ICONS, getRoomFillKey } from '../types';
+import { WallId, PX_PER_M } from '../canvas/canvasTypes';
+import { clamp, boundingSize } from '../canvas/canvasUtils';
+import { miniPoints } from '../canvas/canvasGeometry';
+import { renderElementContent } from '../canvas/renderElementContent';
 import { useTheme } from '../../../hooks/useTheme';
 import KamerSelector from '../components/KamerSelector';
 
 const Stage = KonvaStage as unknown as React.ComponentType<any>;
-
-const PX_PER_M = 40;
-
-type WallId = 'top' | 'right' | 'bottom' | 'left';
-
-function clamp(v: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function renderElementContent(
-  type: RoomElement['type'],
-  wall: WallId,
-  elW: number,
-) {
-  const isDoor = type === 'deur' || type === 'schuifdeur';
-  const isWindow = type === 'raam';
-  const isHorizontal = wall === 'top' || wall === 'bottom';
-  const thickness = isDoor ? 8 : isWindow ? 6 : 8;
-
-  if (isDoor) {
-    const arcRadius = Math.min(elW, 20);
-    let arcX = 0, arcY = 0, arcAngle = 0;
-    if (wall === 'top') { arcX = elW / 2; arcY = thickness; arcAngle = -90; }
-    else if (wall === 'bottom') { arcX = elW / 2; arcY = 0; arcAngle = 90; }
-    else if (wall === 'left') { arcX = thickness; arcY = elW / 2; arcAngle = 180; }
-    else { arcX = 0; arcY = elW / 2; arcAngle = 0; }
-    return (
-      <>
-        <Rect x={0} y={0} width={isHorizontal ? elW : thickness} height={isHorizontal ? thickness : elW} fill="#FF5C1A" cornerRadius={1} />
-        <Arc x={arcX} y={arcY} innerRadius={0} outerRadius={arcRadius} angle={90} rotation={arcAngle} fill="rgba(255,92,26,0.15)" stroke="#FF5C1A" strokeWidth={0.5} />
-      </>
-    );
-  }
-
-  if (isWindow) {
-    return (
-      <>
-        <Rect x={0} y={0} width={isHorizontal ? elW : thickness} height={isHorizontal ? thickness : elW} fill="#FFFFFF" cornerRadius={1} />
-        {[1, 2, 3].map((i) => {
-          const lx = (elW / 4) * i;
-          const ly = (elW / 4) * i;
-          return isHorizontal
-            ? <Line key={i} points={[lx, 0, lx, thickness]} stroke="#999" strokeWidth={0.5} />
-            : <Line key={i} points={[0, ly, thickness, ly]} stroke="#999" strokeWidth={0.5} />;
-        })}
-      </>
-    );
-  }
-
-  const elementColors: Record<string, string> = {
-    openhaard: '#EF4444', radiator: '#A855F7', kolom: '#6B7280', badkuip: '#06B6D4', toilet: '#10B981',
-  };
-  const fill = elementColors[type] ?? '#9CA3AF';
-  return <Rect x={0} y={0} width={isHorizontal ? elW : thickness} height={isHorizontal ? thickness : elW} fill={fill} cornerRadius={2} />;
-}
-
-function miniBounds(room: Room): { w: number; h: number } {
-  if (room.vertices && room.vertices.length >= 3) {
-    const bb = verticesBoundingBox(room.vertices);
-    return { w: bb.w * PX_PER_M, h: bb.h * PX_PER_M };
-  }
-  const wl = room.wallLengths;
-  if (wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
-    const pts = computeQuadCorners(wl);
-    let mx = 0, my = 0;
-    for (let i = 0; i < pts.length; i += 2) { mx = Math.max(mx, pts[i]); my = Math.max(my, pts[i + 1]); }
-    return { w: mx, h: my };
-  }
-  return { w: room.length * PX_PER_M, h: room.width * PX_PER_M };
-}
-
-function miniPoints(room: Room, w: number, h: number): number[] {
-  if (room.vertices && room.vertices.length >= 3) {
-    return verticesToPoints(ensureVertices(room));
-  }
-  const wl = room.wallLengths;
-  if (wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
-    return computeQuadCorners(wl);
-  }
-  return getShapePoints(room.shape, w, h);
-}
 
 const elementTypes = Object.keys(ELEMENT_DEFAULTS) as RoomElement['type'][];
 
@@ -212,7 +135,7 @@ export default function TabElementen({
     if (rooms.length === 0) return null;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const r of rooms) {
-      const { w, h } = miniBounds(r);
+      const { w, h } = boundingSize(r);
       minX = Math.min(minX, r.x);
       minY = Math.min(minY, r.y);
       maxX = Math.max(maxX, r.x + w);
@@ -305,7 +228,7 @@ export default function TabElementen({
                     <Layer>
                       <Group x={miniData.oX} y={miniData.oY} scaleX={miniData.s} scaleY={miniData.s}>
                         {rooms.map(r => {
-                          const { w: rw, h: rh } = miniBounds(r);
+                          const { w: rw, h: rh } = boundingSize(r);
                           const isSel = r.id === selectedRoomId;
                           const pts = miniPoints(r, rw, rh);
                           const fill = canvasColors[getRoomFillKey(r)];

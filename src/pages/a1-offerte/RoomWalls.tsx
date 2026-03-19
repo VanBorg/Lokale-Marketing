@@ -9,8 +9,8 @@ import {
   vertexWallLengths,
   updateVertexWallLength,
   syncRoomFromVertices,
-  PX_PER_M,
 } from './types';
+import { PX_PER_M } from './canvas/canvasTypes';
 import { snapToRooms } from './canvas/canvasUtils';
 
 interface RoomWallsProps {
@@ -19,12 +19,20 @@ interface RoomWallsProps {
   onUpdate: (id: string, updates: Partial<Room>) => void;
   selectedWallIndices: number[];
   onToggleWallIndex: (i: number) => void;
+  section?: 'lengths' | 'heights' | 'both';
 }
 
 const WALL_LABELS_4 = ['Boven', 'Rechts', 'Onder', 'Links'];
 const WALL_HEIGHT_KEYS: (keyof RoomWallsType)[] = ['top', 'right', 'bottom', 'left'];
 
-export default function RoomWalls({ room, rooms, onUpdate, selectedWallIndices, onToggleWallIndex }: RoomWallsProps) {
+export default function RoomWalls({
+  room,
+  rooms,
+  onUpdate,
+  selectedWallIndices,
+  onToggleWallIndex,
+  section = 'both',
+}: RoomWallsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [wallStrings, setWallStrings] = useState<Record<string, string>>({});
   const [lengthStrings, setLengthStrings] = useState<Record<string, string>>({});
@@ -59,7 +67,7 @@ export default function RoomWalls({ room, rooms, onUpdate, selectedWallIndices, 
     const strs: Record<string, string> = {};
     wallLens.forEach((len, i) => { strs[String(i)] = len.toFixed(2); });
     setLengthStrings(strs);
-  }, [room.id]);
+  }, [room.id, wallLens]);
 
   useEffect(() => {
     const newLens = vertexWallLengths(ensureVertices(room));
@@ -71,7 +79,7 @@ export default function RoomWalls({ room, rooms, onUpdate, selectedWallIndices, 
       });
       return next;
     });
-  }, [room.vertices, room.wallLengths, room.length, room.width]);
+  }, [room]);
 
   const applyWallLength = (wallIndex: number, newLength: number) => {
     const curVerts = ensureVertices(room);
@@ -174,286 +182,293 @@ export default function RoomWalls({ room, rooms, onUpdate, selectedWallIndices, 
 
   const canUseGlobalHeight = allWallsEqual && !isExpanded;
   const baseHeaderCls = 'text-xs font-semibold text-light/50 uppercase tracking-wider';
+  const showLengths = section === 'both' || section === 'lengths';
+  const showHeights = section === 'both' || section === 'heights';
 
   return (
     <div className="p-4 border-b border-dark-border">
+      {showLengths && (
+        <>
+          <h3 className={`${baseHeaderCls} mb-2`}>Muurlengtes</h3>
 
-      {/* ── Wall lengths ── */}
-      <h3 className={`${baseHeaderCls} mb-2`}>Muurlengtes</h3>
-
-      {/* Compact chip grid – 3 columns */}
-      <div className="grid grid-cols-3 gap-1.5 mb-3">
-        {Array.from({ length: wallCount }, (_, i) => {
-          const len = wallLens[i];
-          const isLocked = locks[i] ?? false;
-          const isSel = selectedWallIndices.includes(i);
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => !room.isFinalized && onToggleWallIndex(i)}
-              disabled={room.isFinalized}
-              title={`Muur ${i + 1} — ${len.toFixed(2)} m${isLocked ? ' (vergrendeld)' : ''}`}
-              className={`rounded-lg border px-1.5 py-2 text-center transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
-                ${isSel
-                  ? 'border-accent bg-accent/10 text-accent'
-                  : 'border-dark-border bg-dark-card text-light/60 hover:border-light/30 hover:text-light'
-                }`}
-            >
-              <div className="text-[9px] leading-none mb-0.5 opacity-70">
-                M{i + 1}{isLocked ? ' 🔒' : ''}
-              </div>
-              <div className="text-[11px] font-medium leading-none">
-                {len.toFixed(2)}<span className="text-[8px] ml-0.5 opacity-60">m</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Edit area – visible when ≥1 wall is selected */}
-      {selectedWallIndices.length > 0 && (
-        <div className="rounded-lg bg-dark-card border border-dark-border p-3 mb-3 space-y-2.5">
-          {/* Header row */}
-          <div className="flex items-center justify-end mb-0.5">
-            <span className="text-[11px] font-semibold text-accent/80 uppercase tracking-wider">Geselecteerd</span>
+          {/* Compact chip grid – 3 columns */}
+          <div className="grid grid-cols-3 gap-1.5 mb-3">
+            {Array.from({ length: wallCount }, (_, i) => {
+              const len = wallLens[i];
+              const isLocked = locks[i] ?? false;
+              const isSel = selectedWallIndices.includes(i);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => !room.isFinalized && onToggleWallIndex(i)}
+                  disabled={room.isFinalized}
+                  title={`Muur ${i + 1} — ${len.toFixed(2)} m${isLocked ? ' (vergrendeld)' : ''}`}
+                  className={`rounded-lg border px-1.5 py-2 text-center transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                    ${isSel
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-dark-border bg-dark-card text-light/60 hover:border-light/30 hover:text-light'
+                    }`}
+                >
+                  <div className="text-[9px] leading-none mb-0.5 opacity-70">
+                    M{i + 1}{isLocked ? ' 🔒' : ''}
+                  </div>
+                  <div className="text-[11px] font-medium leading-none">
+                    {len.toFixed(2)}<span className="text-[8px] ml-0.5 opacity-60">m</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
-          {selectedWallIndices.map(i => {
-            const key = String(i);
-            const curLen = wallLens[i];
-            const isLocked = locks[i] ?? false;
-            const wallLabel = wallCount === 4 ? `M${i + 1} — ${WALL_LABELS_4[i]}` : `Muur ${i + 1}`;
-            const isFocused = snapFocusedKey === key;
-            return (
-              <div key={i} className="space-y-1">
-                <div className="flex items-center gap-2">
-                  {/* Lock button – next to label, larger and prominent */}
-                  <button
-                    type="button"
-                    onClick={() => toggleLock(i)}
-                    disabled={room.isFinalized}
-                    title={isLocked ? 'Muur ontgrendelen' : 'Muur vergrendelen'}
-                    className={`shrink-0 p-1 rounded transition-colors cursor-pointer disabled:opacity-40
-                      ${isLocked
-                        ? 'text-accent bg-accent/10 border border-accent/30'
-                        : 'text-light/40 hover:text-light/70 border border-transparent hover:border-dark-border'
-                      }`}
-                  >
-                    {isLocked
-                      ? <Lock size={14} strokeWidth={2.5} />
-                      : <Unlock size={14} strokeWidth={2} />
-                    }
-                  </button>
-                  <span className="text-[11px] font-medium text-light/70 shrink-0 w-20">{wallLabel}</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={lengthStrings[key] ?? curLen.toFixed(2)}
-                    onFocus={() => {
-                      focusedLengthRef.current = key;
-                      setSnapFocusedKey(key);
-                    }}
-                    onBlur={() => {
-                      focusedLengthRef.current = null;
-                      setSnapFocusedKey(null);
-                      const raw = lengthStrings[key];
-                      const n = parseFloat(raw);
-                      if (isNaN(n) || n < 0.1) {
-                        setLengthStrings(prev => ({ ...prev, [key]: curLen.toFixed(2) }));
-                      } else {
-                        applyWallLength(i, Math.max(0.1, n));
-                      }
-                    }}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      setLengthStrings(prev => ({ ...prev, [key]: raw }));
-                      const n = parseFloat(raw);
-                      if (!isNaN(n) && n >= 0.1 && !raw.endsWith('.') && raw !== '') {
-                        applyWallLength(i, Math.max(0.1, n));
-                      }
-                    }}
-                    disabled={room.isFinalized || isLocked}
-                    className={`flex-1 min-w-0 px-2 py-1.5 rounded bg-dark border text-light text-xs focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-colors
-                      ${isFocused ? 'border-accent/60' : 'border-dark-border'}
-                      ${(room.isFinalized || isLocked) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  />
-                  <span className="text-[10px] text-light/40 shrink-0">m</span>
-                </div>
-
-                {/* Magnetic snap suggestions – shown when this input is focused */}
-                {isFocused && snapSuggestions.length > 0 && (
-                  <div className="pl-8 flex flex-wrap gap-1">
-                    <span className="text-[9px] text-light/30 self-center mr-0.5">↔</span>
-                    {snapSuggestions.map(val => {
-                      const current = parseFloat(lengthStrings[key] ?? '0');
-                      const isExact = Math.abs(val - current) < 0.01;
-                      return (
-                        <button
-                          key={val}
-                          type="button"
-                          onMouseDown={(e) => {
-                            // Prevent blur before click registers
-                            e.preventDefault();
-                            setLengthStrings(prev => ({ ...prev, [key]: val.toFixed(2) }));
-                            applyWallLength(i, val);
-                          }}
-                          className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer
-                            ${isExact
-                              ? 'bg-accent/20 border-accent/60 text-accent font-semibold'
-                              : 'bg-dark border-dark-border text-light/50 hover:border-accent/40 hover:text-accent'
-                            }`}
-                        >
-                          {val.toFixed(2)}m
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+          {/* Edit area – visible when ≥1 wall is selected */}
+          {selectedWallIndices.length > 0 && (
+            <div className="rounded-lg bg-dark-card border border-dark-border p-3 mb-3 space-y-2.5">
+              {/* Header row */}
+              <div className="flex items-center justify-end mb-0.5">
+                <span className="text-[11px] font-semibold text-accent/80 uppercase tracking-wider">Geselecteerd</span>
               </div>
-            );
-          })}
 
-          <p className="text-[10px] text-light/30 pt-0.5">
-            ↗ Sleep het blauwe punt op de kaart om de positie vrij aan te passen.
-          </p>
-        </div>
-      )}
+              {selectedWallIndices.map(i => {
+                const key = String(i);
+                const curLen = wallLens[i];
+                const isLocked = locks[i] ?? false;
+                const wallLabel = wallCount === 4 ? `M${i + 1} — ${WALL_LABELS_4[i]}` : `Muur ${i + 1}`;
+                const isFocused = snapFocusedKey === key;
+                return (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      {/* Lock button – next to label, larger and prominent */}
+                      <button
+                        type="button"
+                        onClick={() => toggleLock(i)}
+                        disabled={room.isFinalized}
+                        title={isLocked ? 'Muur ontgrendelen' : 'Muur vergrendelen'}
+                        className={`shrink-0 p-1 rounded transition-colors cursor-pointer disabled:opacity-40
+                          ${isLocked
+                            ? 'text-accent bg-accent/10 border border-accent/30'
+                            : 'text-light/40 hover:text-light/70 border border-transparent hover:border-dark-border'
+                          }`}
+                      >
+                        {isLocked
+                          ? <Lock size={14} strokeWidth={2.5} />
+                          : <Unlock size={14} strokeWidth={2} />
+                        }
+                      </button>
+                      <span className="text-[11px] font-medium text-light/70 shrink-0 w-20">{wallLabel}</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={lengthStrings[key] ?? curLen.toFixed(2)}
+                        onFocus={() => {
+                          focusedLengthRef.current = key;
+                          setSnapFocusedKey(key);
+                        }}
+                        onBlur={() => {
+                          focusedLengthRef.current = null;
+                          setSnapFocusedKey(null);
+                          const raw = lengthStrings[key];
+                          const n = parseFloat(raw);
+                          if (isNaN(n) || n < 0.1) {
+                            setLengthStrings(prev => ({ ...prev, [key]: curLen.toFixed(2) }));
+                          } else {
+                            applyWallLength(i, Math.max(0.1, n));
+                          }
+                        }}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setLengthStrings(prev => ({ ...prev, [key]: raw }));
+                          const n = parseFloat(raw);
+                          if (!isNaN(n) && n >= 0.1 && !raw.endsWith('.') && raw !== '') {
+                            applyWallLength(i, Math.max(0.1, n));
+                          }
+                        }}
+                        disabled={room.isFinalized || isLocked}
+                        className={`flex-1 min-w-0 px-2 py-1.5 rounded bg-dark border text-light text-xs focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-colors
+                          ${isFocused ? 'border-accent/60' : 'border-dark-border'}
+                          ${(room.isFinalized || isLocked) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      />
+                      <span className="text-[10px] text-light/40 shrink-0">m</span>
+                    </div>
 
-      {/* ── Wall heights ── */}
-      <div className="flex items-center justify-between mb-3">
-        <h3 className={baseHeaderCls}>Muurhoogtes</h3>
-        <button
-          type="button"
-          onClick={resetAllWalls}
-          disabled={room.isFinalized}
-          className="px-2.5 py-1 rounded text-[11px] font-medium bg-dark-card border border-dark-border text-light/60 hover:text-light hover:border-light/40 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Herstel standaard
-        </button>
-      </div>
-
-      {canUseGlobalHeight && (
-        <div className="mb-3">
-          <label className="block text-xs text-light/50 mb-1">
-            Hoogte van alle muren
-          </label>
-          <p className="text-[10px] text-light/40 mb-1">
-            Standaard is elke muur even hoog aan beide zijden. Pas hier de hoogte
-            van alle muren tegelijk aan.
-          </p>
-          <input
-            type="number"
-            step={0.1}
-            min={0.1}
-            value={room.height || ''}
-            onChange={(e) => {
-              const n = parseFloat(e.target.value);
-              if (!isNaN(n)) updateAllWalls(n);
-            }}
-            disabled={room.isFinalized}
-            className={`w-full px-2 py-1.5 rounded-lg bg-dark-card border border-dark-border text-light text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 ${
-              room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          />
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setIsExpanded(prev => !prev)}
-        className="w-full mb-3 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-dark-card border border-dark-border text-light/60 hover:text-light hover:border-light/40 transition-colors cursor-pointer"
-      >
-        {isExpanded
-          ? '▲ Ongelijke hoogte verbergen'
-          : '▼ Muren hebben ongelijke hoogte'}
-      </button>
-
-      {isExpanded && (
-        <div className="space-y-2">
-          {WALL_HEIGHT_KEYS.map((side, i) => {
-            const wall = room.walls[side];
-            const wallWidth = wallLens[i] ?? room.length;
-            const area = calcWallArea(wall, wallWidth);
-            const hLeft = wall.heightLeft;
-            const hRight = wall.heightRight;
-            const isSloped = hLeft !== hRight;
-            const label = wallCount === 4 ? `Muur ${i + 1} — ${WALL_LABELS_4[i]}` : `Muur ${i + 1}`;
-
-            return (
-              <div
-                key={side}
-                className="rounded-lg bg-dark-card border border-dark-border p-2.5 space-y-1.5"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-light/70">{label}</span>
-                  <span className="text-[10px] text-light/40">{area.toFixed(1)} m²</span>
-                </div>
-
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="flex-1">
-                    <label className="text-[10px] text-light/40">Hoogte linkerkant</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={getDisplayValue(side, 'heightLeft')}
-                      onChange={(e) => handleWallChange(side, 'heightLeft', e.target.value)}
-                      onBlur={() => handleWallBlur(side, 'heightLeft')}
-                      disabled={room.isFinalized}
-                      className={`w-full px-2 py-1 rounded bg-dark border border-dark-border text-light text-xs focus:outline-none focus:border-accent ${
-                        room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
-                  <div className="text-[10px] text-light/30 mt-4">╱</div>
-                  <div className="flex-1">
-                    <label className="text-[10px] text-light/40">Hoogte rechterkant</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={getDisplayValue(side, 'heightRight')}
-                      onChange={(e) => handleWallChange(side, 'heightRight', e.target.value)}
-                      onBlur={() => handleWallBlur(side, 'heightRight')}
-                      disabled={room.isFinalized}
-                      className={`w-full px-2 py-1 rounded bg-dark border border-dark-border text-light text-xs focus:outline-none focus:border-accent ${
-                        room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-[10px] text-light/40">
-                    L: {hLeft.toFixed(1)}m ╱ R: {hRight.toFixed(1)}m
-                    {isSloped && (
-                      <span className="text-accent ml-2">&#x26A0; Schuin</span>
+                    {/* Magnetic snap suggestions – shown when this input is focused */}
+                    {isFocused && snapSuggestions.length > 0 && (
+                      <div className="pl-8 flex flex-wrap gap-1">
+                        <span className="text-[9px] text-light/30 self-center mr-0.5">↔</span>
+                        {snapSuggestions.map(val => {
+                          const current = parseFloat(lengthStrings[key] ?? '0');
+                          const isExact = Math.abs(val - current) < 0.01;
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onMouseDown={(e) => {
+                                // Prevent blur before click registers
+                                e.preventDefault();
+                                setLengthStrings(prev => ({ ...prev, [key]: val.toFixed(2) }));
+                                applyWallLength(i, val);
+                              }}
+                              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer
+                                ${isExact
+                                  ? 'bg-accent/20 border-accent/60 text-accent font-semibold'
+                                  : 'bg-dark border-dark-border text-light/50 hover:border-accent/40 hover:text-accent'
+                                }`}
+                            >
+                              {val.toFixed(2)}m
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const base = room.height || 2.6;
-                      const wc = room.wallsCustomized ?? { top: false, right: false, bottom: false, left: false };
-                      onUpdate(room.id, {
-                        walls: { ...room.walls, [side]: { heightLeft: base, heightRight: base } },
-                        wallsCustomized: { ...wc, [side]: false },
-                      });
-                      setWallStrings(prev => ({
-                        ...prev,
-                        [`${side}_heightLeft`]: String(base),
-                        [`${side}_heightRight`]: String(base),
-                      }));
-                    }}
-                    disabled={room.isFinalized}
-                    className="text-[10px] text-light/50 hover:text-light/80 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  </div>
+                );
+              })}
+
+              <p className="text-[10px] text-light/30 pt-0.5">
+                ↗ Sleep het blauwe punt op de kaart om de positie vrij aan te passen.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+
+      {showHeights && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className={baseHeaderCls}>Muurhoogtes</h3>
+            <button
+              type="button"
+              onClick={resetAllWalls}
+              disabled={room.isFinalized}
+              className="px-2.5 py-1 rounded text-[11px] font-medium bg-dark-card border border-dark-border text-light/60 hover:text-light hover:border-light/40 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Herstel standaard
+            </button>
+          </div>
+
+          {canUseGlobalHeight && (
+            <div className="mb-3">
+              <label className="block text-xs text-light/50 mb-1">
+                Hoogte van alle muren
+              </label>
+              <p className="text-[10px] text-light/40 mb-1">
+                Standaard is elke muur even hoog aan beide zijden. Pas hier de hoogte
+                van alle muren tegelijk aan.
+              </p>
+              <input
+                type="number"
+                step={0.1}
+                min={0.1}
+                value={room.height || ''}
+                onChange={(e) => {
+                  const n = parseFloat(e.target.value);
+                  if (!isNaN(n)) updateAllWalls(n);
+                }}
+                disabled={room.isFinalized}
+                className={`w-full px-2 py-1.5 rounded-lg bg-dark-card border border-dark-border text-light text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 ${
+                  room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              />
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsExpanded(prev => !prev)}
+            className="w-full mb-3 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-dark-card border border-dark-border text-light/60 hover:text-light hover:border-light/40 transition-colors cursor-pointer"
+          >
+            {isExpanded
+              ? '▲ Ongelijke hoogte verbergen'
+              : '▼ Muren hebben ongelijke hoogte'}
+          </button>
+
+          {isExpanded && (
+            <div className="space-y-2">
+              {WALL_HEIGHT_KEYS.map((side, i) => {
+                const wall = room.walls[side];
+                const wallWidth = wallLens[i] ?? room.length;
+                const area = calcWallArea(wall, wallWidth);
+                const hLeft = wall.heightLeft;
+                const hRight = wall.heightRight;
+                const isSloped = hLeft !== hRight;
+                const label = wallCount === 4 ? `Muur ${i + 1} — ${WALL_LABELS_4[i]}` : `Muur ${i + 1}`;
+
+                return (
+                  <div
+                    key={side}
+                    className="rounded-lg bg-dark-card border border-dark-border p-2.5 space-y-1.5"
                   >
-                    Herstel muur
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-light/70">{label}</span>
+                      <span className="text-[10px] text-light/40">{area.toFixed(1)} m²</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-1">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-light/40">Hoogte linkerkant</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={getDisplayValue(side, 'heightLeft')}
+                          onChange={(e) => handleWallChange(side, 'heightLeft', e.target.value)}
+                          onBlur={() => handleWallBlur(side, 'heightLeft')}
+                          disabled={room.isFinalized}
+                          className={`w-full px-2 py-1 rounded bg-dark border border-dark-border text-light text-xs focus:outline-none focus:border-accent ${
+                            room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        />
+                      </div>
+                      <div className="text-[10px] text-light/30 mt-4">╱</div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-light/40">Hoogte rechterkant</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={getDisplayValue(side, 'heightRight')}
+                          onChange={(e) => handleWallChange(side, 'heightRight', e.target.value)}
+                          onBlur={() => handleWallBlur(side, 'heightRight')}
+                          disabled={room.isFinalized}
+                          className={`w-full px-2 py-1 rounded bg-dark border border-dark-border text-light text-xs focus:outline-none focus:border-accent ${
+                            room.isFinalized ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px] text-light/40">
+                        L: {hLeft.toFixed(1)}m ╱ R: {hRight.toFixed(1)}m
+                        {isSloped && (
+                          <span className="text-accent ml-2">&#x26A0; Schuin</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const base = room.height || 2.6;
+                          const wc = room.wallsCustomized ?? { top: false, right: false, bottom: false, left: false };
+                          onUpdate(room.id, {
+                            walls: { ...room.walls, [side]: { heightLeft: base, heightRight: base } },
+                            wallsCustomized: { ...wc, [side]: false },
+                          });
+                          setWallStrings(prev => ({
+                            ...prev,
+                            [`${side}_heightLeft`]: String(base),
+                            [`${side}_heightRight`]: String(base),
+                          }));
+                        }}
+                        disabled={room.isFinalized}
+                        className="text-[10px] text-light/50 hover:text-light/80 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Herstel muur
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

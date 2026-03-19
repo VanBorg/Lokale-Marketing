@@ -1,4 +1,4 @@
-import { Room, computeQuadCorners, ensureVertices, verticesBoundingBox } from '../types';
+import { Room, computeQuadCorners, ensureVertices, getShapePoints, verticesBoundingBox } from '../types';
 import { WallId, PX_PER_M } from './canvasTypes';
 
 export function clamp(v: number, min: number, max: number) {
@@ -68,6 +68,17 @@ export function boundingSize(room: Room): { w: number; h: number } {
     w: (rotated ? room.width : room.length) * PX_PER_M,
     h: (rotated ? room.length : room.width) * PX_PER_M,
   };
+}
+
+export function miniPoints(room: Room, w: number, h: number): number[] {
+  if (room.vertices && room.vertices.length >= 3) {
+    return ensureVertices(room).flatMap(v => [v.x * PX_PER_M, v.y * PX_PER_M]);
+  }
+  const wl = room.wallLengths;
+  if (wl && (wl.top !== wl.bottom || wl.left !== wl.right)) {
+    return computeQuadCorners(wl);
+  }
+  return getShapePoints(room.shape, w, h);
 }
 
 export type GridLines = { thin: { points: number[] }[]; thick: { points: number[] }[] };

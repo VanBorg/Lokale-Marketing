@@ -1,6 +1,7 @@
 import { Room } from '../types';
 import { WallId, SnapResult } from './canvasTypes';
 import { computeWorldWallSegments, getSnapCandidateSegments, rotateVector2D, WallSegment } from './wallSegments';
+import { boundingSize } from './canvasGeometry';
 
 const SNAP_THRESHOLD = 40;
 const SNAP_THRESHOLD_SPECIAL = 50;
@@ -177,7 +178,55 @@ export function snapPosition(
     }
   }
 
-  return bestSnap ?? { x, y };
+  const baseSnap = bestSnap ?? { x, y };
+
+  if (dragged.roomType !== 'normal') {
+    const { w: dw, h: dh } = boundingSize(dragged);
+    // Use the RAW drag position to determine if the center is inside a parent room,
+    // NOT baseSnap – outer wall snap must not prevent inside placement.
+    const rawCenterX = x + dw / 2;
+    const rawCenterY = y + dh / 2;
+
+    let bestInside: SnapResult | null = null;
+    let bestInsideDist = Number.POSITIVE_INFINITY;
+    const innerSnapThreshold = 20;
+
+    for (const other of rooms) {
+      if (other.id === draggedId || other.roomType !== 'normal') continue;
+      const { w: ow, h: oh } = boundingSize(other);
+      const left = other.x;
+      const top = other.y;
+      const right = other.x + ow;
+      const bottom = other.y + oh;
+
+      const isRawCenterInside = rawCenterX > left && rawCenterX < right && rawCenterY > top && rawCenterY < bottom;
+      if (!isRawCenterInside) continue;
+
+      let sx = x;
+      let sy = y;
+
+      // Snap to inner walls if close enough
+      if (Math.abs(sx - left) < innerSnapThreshold) sx = left;
+      else if (Math.abs((sx + dw) - right) < innerSnapThreshold) sx = right - dw;
+
+      if (Math.abs(sy - top) < innerSnapThreshold) sy = top;
+      else if (Math.abs((sy + dh) - bottom) < innerSnapThreshold) sy = bottom - dh;
+
+      // Clamp fully inside parent bounds
+      sx = Math.max(left, Math.min(right - dw, sx));
+      sy = Math.max(top, Math.min(bottom - dh, sy));
+
+      const d = Math.hypot(sx - x, sy - y);
+      if (d < bestInsideDist) {
+        bestInsideDist = d;
+        bestInside = { x: sx, y: sy, snappedToId: other.id };
+      }
+    }
+
+    if (bestInside) return bestInside;
+  }
+
+  return baseSnap;
 }
 
 /**

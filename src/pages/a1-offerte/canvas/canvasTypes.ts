@@ -1,4 +1,4 @@
-import { Room, RoomElement, Vertex } from '../types';
+import type { Room, RoomElement, Vertex } from '../types';
 
 export const PX_PER_M = 40;
 export const SNAP_THRESHOLD = 40;

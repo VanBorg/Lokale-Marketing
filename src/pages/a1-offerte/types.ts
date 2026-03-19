@@ -1,4 +1,5 @@
 import { SPECIAL_ROOM_CONFIGS } from './specialRooms';
+import { PX_PER_M } from './canvas/canvasTypes';
 
 export type RoomElement = {
   id: string;
@@ -242,8 +243,6 @@ export const ELEMENT_DEFAULTS: Record<
   toilet: { label: 'Toilet', width: 0.4, height: 0.7 },
 };
 
-export const PX_PER_M = 40;
-
 function roomBounds(room: Room) {
   const rotation = room.rotation || 0;
   let w: number;
@@ -261,7 +260,9 @@ function roomBounds(room: Room) {
 export function isOverlapping(container: Room, inner: Room): boolean {
   const c = roomBounds(container);
   const i = roomBounds(inner);
-  return i.left >= c.left && i.top >= c.top && i.right <= c.right && i.bottom <= c.bottom;
+  const centerX = (i.left + i.right) / 2;
+  const centerY = (i.top + i.bottom) / 2;
+  return centerX > c.left && centerX < c.right && centerY > c.top && centerY < c.bottom;
 }
 
 /** Use a slightly larger threshold when a special room is next to a normal room (small rooms). */
