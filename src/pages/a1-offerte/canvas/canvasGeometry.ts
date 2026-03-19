@@ -1,5 +1,71 @@
-import { Room, computeQuadCorners, ensureVertices, getShapePoints, verticesBoundingBox } from '../types';
+import { Room, Vertex, computeQuadCorners, ensureVertices, getShapePoints, verticesBoundingBox } from '../types';
 import { WallId, PX_PER_M } from './canvasTypes';
+
+/** Unit normal perpendicular to wall in vertex (metre) space (left of edge direction). */
+export function wallNormal(v1: Vertex, v2: Vertex): { nx: number; ny: number } {
+  const dx = v2.x - v1.x;
+  const dy = v2.y - v1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) return { nx: 0, ny: -1 };
+  return { nx: -dy / len, ny: dx / len };
+}
+
+/** Project world-space pointer delta (px) onto wall normal in metres; matches room Group rotation. */
+export function projectWorldDeltaToNormalMetres(
+  dWorldPx: { x: number; y: number },
+  rotationDeg: number,
+  nx: number,
+  ny: number,
+): number {
+  const rot = (rotationDeg * Math.PI) / 180;
+  const cosA = Math.cos(-rot);
+  const sinA = Math.sin(-rot);
+  const dlx = dWorldPx.x * cosA - dWorldPx.y * sinA;
+  const dly = dWorldPx.x * sinA + dWorldPx.y * cosA;
+  const mx = dlx / PX_PER_M;
+  const my = dly / PX_PER_M;
+  return mx * nx + my * ny;
+}
+
+const AXIS_EPS = 1e-6;
+
+/** Cursor for mid-wall drag: horizontal edge → ns, vertical → ew, else move. */
+export function wallMidDragCursor(v1: Vertex, v2: Vertex): string {
+  if (Math.abs(v2.y - v1.y) < AXIS_EPS) return 'ns-resize';
+  if (Math.abs(v2.x - v1.x) < AXIS_EPS) return 'ew-resize';
+  return 'move';
+}
+
+/**
+ * Resize cursors from {@link HANDLE_CURSORS} / {@link wallMidDragCursor} are defined in room-local
+ * axes. The room {@link Group} applies `rotation`, but CSS cursors stay screen-axis-aligned.
+ * Quarter-turn steps (0/90/180/270, same convention as Konva room rotation) map local → screen.
+ */
+export function rotatedResizeCursor(base: string, rotationDeg: number): string {
+  if (
+    base === 'move'
+    || base === 'pointer'
+    || base === 'grab'
+    || base === 'crosshair'
+    || base === 'default'
+    || base === ''
+  ) {
+    return base;
+  }
+  const quarter = ((Math.round(rotationDeg / 90) % 4) + 4) % 4;
+  const odd = quarter % 2 === 1;
+
+  if (base === 'ns-resize' || base === 'ew-resize') {
+    const isNs = base === 'ns-resize';
+    // Odd quarter-turns swap screen-axis meaning: local ns ↔ ew
+    return (isNs === odd) ? 'ew-resize' : 'ns-resize';
+  }
+  if (base === 'nwse-resize' || base === 'nesw-resize') {
+    const isNwse = base === 'nwse-resize';
+    return (isNwse === odd) ? 'nesw-resize' : 'nwse-resize';
+  }
+  return base;
+}
 
 export function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));

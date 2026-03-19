@@ -96,6 +96,7 @@ export default function TabPlattegrond({
   const [deleteMultipleRoomIds, setDeleteMultipleRoomIds] = useState<Set<string> | null>(null);
   const [showFreeFormBuilder, setShowFreeFormBuilder] = useState(false);
   const [sidebarView, setSidebarView] = useState<'overview' | 'edit'>('overview');
+  const [wallEditExitConfirmOpen, setWallEditExitConfirmOpen] = useState(false);
 
   const canvasRef = useRef<PlattegrondCanvasHandle | null>(null);
   const sidebarRef = useRef<HTMLDivElement | null>(null);
@@ -384,6 +385,36 @@ export default function TabPlattegrond({
             if (cx > pl && cx < pr && cy > pt && cy < pb) {
               finalX = Math.max(pl, Math.min(pr - rw, x));
               finalY = Math.max(pt, Math.min(pb - rh, y));
+              // #region agent log
+              if (prot === 90 || prot === 270) {
+                fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f23194' },
+                  body: JSON.stringify({
+                    sessionId: 'f23194',
+                    location: 'TabPlattegrond.tsx:moveRoom',
+                    message: 'inside-room clamp vs rotated parent',
+                    data: {
+                      prot,
+                      pl,
+                      pt,
+                      pr,
+                      pb,
+                      pw,
+                      ph,
+                      cx,
+                      cy,
+                      rw,
+                      rh,
+                      finalX,
+                      finalY,
+                    },
+                    timestamp: Date.now(),
+                    hypothesisId: 'H3',
+                  }),
+                }).catch(() => {});
+              }
+              // #endregion
               break;
             }
           }
@@ -568,6 +599,36 @@ export default function TabPlattegrond({
     setSelectedRoomId(id);
   }, []);
 
+  const shouldConfirmClearRoomSelection = useCallback(() => {
+    return selectedRoomId !== null && selectedWallIndices.length > 0;
+  }, [selectedRoomId, selectedWallIndices]);
+
+  const onRequestClearRoomSelectionConfirm = useCallback(() => {
+    setWallEditExitConfirmOpen(true);
+  }, []);
+
+  const confirmExitWallEditToOverview = useCallback(() => {
+    setWallEditExitConfirmOpen(false);
+    setSelectedWallIndices([]);
+    setSelectedRoomId(null);
+  }, []);
+
+  const cancelExitWallEdit = useCallback(() => {
+    setWallEditExitConfirmOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!wallEditExitConfirmOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelExitWallEdit();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [wallEditExitConfirmOpen, cancelExitWallEdit]);
+
   const deleteFloorObj = deleteFloorId ? floors.find(f => f.id === deleteFloorId) : null;
   const deleteRoomObj = deleteRoomId ? rooms.find(r => r.id === deleteRoomId) : null;
   const deleteMultipleRoomsCount = deleteMultipleRoomIds ? deleteMultipleRoomIds.size : 0;
@@ -608,6 +669,8 @@ export default function TabPlattegrond({
           beginBatch={beginBatch}
           endBatch={endBatch}
           selectedWallIndices={selectedWallIndices}
+          shouldConfirmClearRoomSelection={shouldConfirmClearRoomSelection}
+          onRequestClearRoomSelectionConfirm={onRequestClearRoomSelectionConfirm}
           canUndo={canUndo}
           canRedo={canRedo}
           onUndo={onUndo}
@@ -670,6 +733,44 @@ export default function TabPlattegrond({
           )}
         </div>
       </div>
+
+      {wallEditExitConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={cancelExitWallEdit}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wall-edit-exit-title"
+        >
+          <div
+            className="rounded-xl bg-dark-card border border-dark-border p-6 shadow-xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="wall-edit-exit-title" className="text-base font-semibold text-light mb-2">
+              Klaar met bewerken?
+            </h3>
+            <p className="text-sm text-light/70 mb-6 leading-relaxed">
+              Je verliest de huidige muurselectie op de plattegrond. Wil je terug naar het overzicht of doorbouwen?
+            </p>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+              <button
+                type="button"
+                onClick={cancelExitWallEdit}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-dark-hover text-light/80 border border-dark-border hover:text-light hover:border-light/25 transition-colors cursor-pointer"
+              >
+                Nee, blijven bouwen
+              </button>
+              <button
+                type="button"
+                onClick={confirmExitWallEditToOverview}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-semibold bg-accent text-white border border-accent/80 hover:bg-accent/90 shadow-sm transition-colors cursor-pointer"
+              >
+                Ja, naar de plattegrond
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteRoomObj && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setDeleteRoomId(null)}>

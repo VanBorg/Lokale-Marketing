@@ -200,6 +200,46 @@ export function snapPosition(
       const bottom = other.y + oh;
 
       const isRawCenterInside = rawCenterX > left && rawCenterX < right && rawCenterY > top && rawCenterY < bottom;
+      // #region agent log
+      if (
+        (other.rotation === 90 || other.rotation === 270) &&
+        other.roomType === 'normal' &&
+        !(other.vertices && other.vertices.length >= 3)
+      ) {
+        const ow2 = ow;
+        const oh2 = oh;
+        const cx = other.x + ow2 / 2;
+        const cy = other.y + oh2 / 2;
+        const fixedLeft = cx - oh2 / 2;
+        const fixedTop = cy - ow2 / 2;
+        const fixedRight = cx + oh2 / 2;
+        const fixedBottom = cy + ow2 / 2;
+        const insideFixed =
+          rawCenterX > fixedLeft &&
+          rawCenterX < fixedRight &&
+          rawCenterY > fixedTop &&
+          rawCenterY < fixedBottom;
+        fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f23194' },
+          body: JSON.stringify({
+            sessionId: 'f23194',
+            location: 'canvasSnapping.ts:snapPosition',
+            message: 'special inside-parent check',
+            data: {
+              otherRot: other.rotation,
+              rawCenter: { rawCenterX, rawCenterY },
+              naiveBox: { left, top, right, bottom },
+              fixedBox: { fixedLeft, fixedTop, fixedRight, fixedBottom },
+              isRawCenterInside,
+              insideFixed,
+            },
+            timestamp: Date.now(),
+            hypothesisId: 'H2',
+          }),
+        }).catch(() => {});
+      }
+      // #endregion
       if (!isRawCenterInside) continue;
 
       let sx = x;

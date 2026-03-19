@@ -1,11 +1,12 @@
 import React, { useRef } from 'react';
 import { flushSync } from 'react-dom';
-import { Line, Circle, Group, Rect } from 'react-konva';
+import { Line, Circle, Group, Rect, Text } from 'react-konva';
 import Konva from 'konva';
 import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints, isSpecialRoom, getRoomFillKey } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
 import { WallId, DraggingHandle, PX_PER_M } from './canvasTypes';
 import { isNonRect, quadBounds, boundingSize, snapPosition } from './canvasUtils';
+import { wallMidDragCursor, rotatedResizeCursor } from './canvasGeometry';
 import RoomShape from './RoomShape';
 import RoomDimensionLines from './RoomDimensionLines';
 import RoomLabels from './RoomLabels';
@@ -56,6 +57,7 @@ interface CanvasRoomProps {
   ghostPos: { wall: WallId; position: number } | null;
   draggingHandle: DraggingHandle;
   isDraggingVertex?: boolean;
+  isDraggingWall?: boolean;
   cutRoomId?: string | null;
   canvasColors: CanvasColors;
   theme: string;
@@ -72,6 +74,7 @@ interface CanvasRoomProps {
   onDragStartWalls: (roomId: string, walls: WallId[]) => void;
   onDragEndRoom: () => void;
   onVertexHandleMouseDown?: (vertexIndex: number, worldX: number, worldY: number) => void;
+  onWallHandleMouseDown?: (wallIndex: number, worldX: number, worldY: number) => void;
   isMultiSelected?: boolean;
   multiDragOffset?: { dx: number; dy: number } | null;
   selectionModifierHeld?: boolean;
@@ -90,6 +93,7 @@ export default function CanvasRoom({
   ghostPos,
   draggingHandle,
   isDraggingVertex,
+  isDraggingWall,
   cutRoomId,
   canvasColors,
   theme,
@@ -106,6 +110,7 @@ export default function CanvasRoom({
   onDragStartWalls,
   onDragEndRoom,
   onVertexHandleMouseDown,
+  onWallHandleMouseDown,
   isMultiSelected,
   multiDragOffset,
   selectionModifierHeld,
@@ -147,7 +152,7 @@ export default function CanvasRoom({
       offsetY={cy}
       rotation={rot}
       opacity={room.id === cutRoomId ? 0.4 : 1}
-      draggable={!placingElement && !draggingHandle && !isDraggingVertex && !room.isFinalized && !selectionModifierHeld}
+      draggable={!placingElement && !draggingHandle && !isDraggingVertex && !isDraggingWall && !room.isFinalized && !selectionModifierHeld}
       onDragStart={(e: Konva.KonvaEventObject<DragEvent>) => {
         const pos = e.target.getRelativePointerPosition();
         if (pos) {
@@ -380,6 +385,58 @@ export default function CanvasRoom({
                 );
               })
             }
+            {!room.isFinalized && !placingElement && onWallHandleMouseDown &&
+              selectedWallIndices.map(wi => {
+                if (wi >= n) return null;
+                const v1 = verts[wi];
+                const v2 = verts[(wi + 1) % n];
+                const mx = ((v1.x + v2.x) / 2) * PX_PER_M;
+                const my = ((v1.y + v2.y) / 2) * PX_PER_M;
+                const baseCursor = wallMidDragCursor(v1, v2);
+                const cursor = rotatedResizeCursor(baseCursor, rot);
+                const icon =
+                  cursor === 'ns-resize' ? '⇅' : cursor === 'ew-resize' ? '⇄' : '↔';
+                return (
+                  <Group key={`whandle-${wi}`} x={mx} y={my}>
+                    <Circle
+                      radius={8}
+                      fill="#3B82F6"
+                      stroke="white"
+                      strokeWidth={2}
+                      listening={true}
+                      onMouseEnter={(e: Konva.KonvaEventObject<MouseEvent>) => {
+                        const container = e.target.getStage()?.container();
+                        if (container) container.style.cursor = cursor;
+                        e.target.to({ radius: 10, duration: 0.1 });
+                      }}
+                      onMouseLeave={(e: Konva.KonvaEventObject<MouseEvent>) => {
+                        const container = e.target.getStage()?.container();
+                        if (container) container.style.cursor = '';
+                        e.target.to({ radius: 8, duration: 0.1 });
+                      }}
+                      onMouseDown={(e: Konva.KonvaEventObject<MouseEvent>) => {
+                        e.cancelBubble = true;
+                        const stage = e.target.getStage();
+                        if (!stage) return;
+                        const pointer = stage.getPointerPosition();
+                        if (!pointer) return;
+                        const worldX = (pointer.x - stage.x()) / stage.scaleX();
+                        const worldY = (pointer.y - stage.y()) / stage.scaleY();
+                        onWallHandleMouseDown(wi, worldX, worldY);
+                      }}
+                    />
+                    <Text
+                      text={icon}
+                      fontSize={10}
+                      fill="white"
+                      fontStyle="bold"
+                      x={-5}
+                      y={-5}
+                      listening={false}
+                    />
+                  </Group>
+                );
+              })}
           </Group>
         );
       })()}

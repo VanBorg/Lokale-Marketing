@@ -4,7 +4,8 @@ import { Stage as KonvaStage, Layer, Rect, Line } from 'react-konva';
 import Konva from 'konva';
 import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getDependentRoomsForFinalization } from './types';
 import { useTheme } from '../../hooks/useTheme';
-import { WallId, DraggingHandle, DraggingVertex, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
+import { WallId, DraggingHandle, DraggingVertex, DraggingWall, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
+import { wallNormal, projectWorldDeltaToNormalMetres, rotatedResizeCursor } from './canvas/canvasGeometry';
 import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
 import CanvasGrid from './canvas/CanvasGrid';
@@ -28,6 +29,8 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   onMoveRooms,
   beginBatch, endBatch,
   selectedWallIndices,
+  shouldConfirmClearRoomSelection,
+  onRequestClearRoomSelectionConfirm,
   canUndo, canRedo, onUndo, onRedo,
 }, ref) {
   const { theme, canvasColors } = useTheme();
@@ -119,6 +122,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [draggingHandle, setDraggingHandleRaw] = useState<DraggingHandle>(null);
   const [draggingVertex, setDraggingVertex] = useState<DraggingVertex>(null);
+  const [draggingWall, setDraggingWall] = useState<DraggingWall>(null);
   const [snapHighlight, setSnapHighlight] = useState<{ roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null>(null);
   const [dragFromWalls, setDragFromWalls] = useState<{ roomId: string; walls: WallId[] } | null>(null);
 
@@ -230,9 +234,15 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       if (isInSet) {
         const next = new Set(selectedRoomIdsValue);
         next.delete(roomId);
+        const remaining = Array.from(next);
+        if (selectedRoomId === roomId && remaining.length === 0) {
+          if (shouldConfirmClearRoomSelection?.()) {
+            onRequestClearRoomSelectionConfirm?.();
+            return;
+          }
+        }
         setSelectedRoomIds(next);
         if (selectedRoomId === roomId) {
-          const remaining = Array.from(next);
           internalSelectRef.current = true;
           onSelectRoom(remaining.length > 0 ? remaining[0] : null);
         }
@@ -267,7 +277,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     }
 
     selectRoom(roomId);
-  }, [selectedRoomIdsValue, selectedRoomId, rooms, onSelectRoom, selectRoom]);
+  }, [selectedRoomIdsValue, selectedRoomId, rooms, onSelectRoom, selectRoom, shouldConfirmClearRoomSelection, onRequestClearRoomSelectionConfirm]);
 
   const handleRoomDragMove = useCallback((roomId: string, dx: number, dy: number) => {
     multiDragOriginIdRef.current = roomId;
@@ -406,6 +416,56 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     });
   }, [draggingVertex, onUpdateRoom]);
 
+  const handleWallMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (!draggingWall || !onUpdateRoom) return;
+    const stage = e.target.getStage();
+    if (!stage) return;
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+
+    const worldX = (pos.x - stage.x()) / stage.scaleX();
+    const worldY = (pos.y - stage.y()) / stage.scaleY();
+
+    const dwx = worldX - draggingWall.startWorldPos.x;
+    const dwy = worldY - draggingWall.startWorldPos.y;
+    const along = projectWorldDeltaToNormalMetres(
+      { x: dwx, y: dwy },
+      draggingWall.startRotation,
+      draggingWall.normalX,
+      draggingWall.normalY,
+    );
+    const snapM = 0.05;
+    const delta = Math.round(along / snapM) * snapM;
+
+    const sv = draggingWall.startVertices;
+    const n = sv.length;
+    const wi = draggingWall.wallIndex;
+    const j = (wi + 1) % n;
+    const nx = draggingWall.normalX;
+    const ny = draggingWall.normalY;
+
+    const newVerts = sv.map((v, i) =>
+      i === wi || i === j ? { x: v.x + nx * delta, y: v.y + ny * delta } : { ...v },
+    );
+
+    const minX = Math.min(...newVerts.map(v => v.x));
+    const minY = Math.min(...newVerts.map(v => v.y));
+    const normalizedVerts = newVerts.map(v => ({ x: v.x - minX, y: v.y - minY }));
+
+    const newRoomX = draggingWall.startRoomPos.x + minX * PX_PER_M;
+    const newRoomY = draggingWall.startRoomPos.y + minY * PX_PER_M;
+
+    const synced = syncRoomFromVertices(normalizedVerts);
+    onUpdateRoom(draggingWall.roomId, {
+      x: newRoomX,
+      y: newRoomY,
+      vertices: normalizedVerts,
+      length: synced.length,
+      width: synced.width,
+      wallLengths: synced.wallLengths,
+    });
+  }, [draggingWall, onUpdateRoom]);
+
   const stopAutoPan = useCallback(() => {
     if (autoPanFrameRef.current !== null) {
       cancelAnimationFrame(autoPanFrameRef.current);
@@ -437,14 +497,19 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         }
       }
 
-      setSelectedRoomIds(newSelection);
       if (newSelection.size > 0) {
+        setSelectedRoomIds(newSelection);
         const firstId = Array.from(newSelection)[0];
         internalSelectRef.current = true;
         onSelectRoom(firstId);
       } else {
-        internalSelectRef.current = true;
-        onSelectRoom(null);
+        if (shouldConfirmClearRoomSelection?.()) {
+          onRequestClearRoomSelectionConfirm?.();
+        } else {
+          setSelectedRoomIds(newSelection);
+          internalSelectRef.current = true;
+          onSelectRoom(null);
+        }
       }
       justFinishedDragRef.current = true;
       requestAnimationFrame(() => { justFinishedDragRef.current = false; });
@@ -483,7 +548,23 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       justFinishedDragRef.current = true;
       requestAnimationFrame(() => { justFinishedDragRef.current = false; });
     }
-  }, [marquee, draggingHandle, draggingVertex, endBatch, rooms, onUpdateRoom, onSelectRoom, stopAutoPan]);
+    if (draggingWall) {
+      const roomId = draggingWall.roomId;
+      const room = rooms.find(r => r.id === roomId);
+      if (room && onUpdateRoom) {
+        const snapped = snapToRooms(roomId, room.x, room.y, rooms);
+        if (snapped.x !== room.x || snapped.y !== room.y) {
+          flushSync(() => {
+            onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
+          });
+        }
+      }
+      endBatch?.();
+      setDraggingWall(null);
+      justFinishedDragRef.current = true;
+      requestAnimationFrame(() => { justFinishedDragRef.current = false; });
+    }
+  }, [marquee, draggingHandle, draggingVertex, draggingWall, endBatch, rooms, onUpdateRoom, onSelectRoom, stopAutoPan, selectedRoomIdsValue, setSelectedRoomIds, shouldConfirmClearRoomSelection, onRequestClearRoomSelectionConfirm]);
 
   const handleVertexHandleMouseDown = useCallback((roomId: string, vertexIndex: number, worldX: number, worldY: number) => {
     beginBatch?.();
@@ -493,6 +574,28 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     setDraggingVertex({
       roomId,
       vertexIndex,
+      startWorldPos: { x: worldX, y: worldY },
+      startVertices,
+      startRoomPos: { x: room.x, y: room.y },
+      startRotation: room.rotation || 0,
+    });
+  }, [rooms, beginBatch]);
+
+  const handleWallHandleMouseDown = useCallback((roomId: string, wallIndex: number, worldX: number, worldY: number) => {
+    beginBatch?.();
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+    const startVertices = ensureVertices(room).map(v => ({ ...v }));
+    const n = startVertices.length;
+    if (wallIndex < 0 || wallIndex >= n) return;
+    const v1 = startVertices[wallIndex];
+    const v2 = startVertices[(wallIndex + 1) % n];
+    const { nx, ny } = wallNormal(v1, v2);
+    setDraggingWall({
+      roomId,
+      wallIndex,
+      normalX: nx,
+      normalY: ny,
       startWorldPos: { x: worldX, y: worldY },
       startVertices,
       startRoomPos: { x: room.x, y: room.y },
@@ -648,6 +751,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       return;
     }
     if (draggingHandle) { handleHandleMouseMove(e); return; }
+    if (draggingWall) { handleWallMouseMove(e); return; }
     if (draggingVertex) { handleVertexMouseMove(e); return; }
 
     const stage = e.target.getStage();
@@ -674,8 +778,10 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   }, [
     marquee,
     draggingHandle,
+    draggingWall,
     draggingVertex,
     handleHandleMouseMove,
+    handleWallMouseMove,
     handleVertexMouseMove,
     handleMouseMove,
     EDGE_THRESHOLD,
@@ -686,6 +792,18 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   ]);
 
   const isDraggingVertex = draggingVertex !== null;
+  const isDraggingWall = draggingWall !== null;
+
+  const wallDragCursor: string | undefined = draggingWall
+    ? rotatedResizeCursor(
+        Math.abs(draggingWall.normalX) < 1e-6
+          ? 'ns-resize'
+          : Math.abs(draggingWall.normalY) < 1e-6
+            ? 'ew-resize'
+            : 'move',
+        draggingWall.startRotation,
+      )
+    : undefined;
 
   return (
     <div ref={containerRef} className="flex-1 flex flex-col min-h-0 relative">
@@ -693,15 +811,20 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         ref={stageRef}
         width={size.width} height={size.height} scaleX={scale} scaleY={scale}
         x={stagePos.x} y={stagePos.y}
-        draggable={!placingElement && !draggingHandle && !isDraggingVertex && !marquee}
+        draggable={!placingElement && !draggingHandle && !isDraggingVertex && !isDraggingWall && !marquee}
         onDragEnd={handleStageDragEnd} onWheel={handleWheel}
         onMouseDown={handleStageMouseDown}
         onClick={handleStageClick} onMouseMove={combinedMouseMove} onMouseUp={handleMouseUp}
         style={{
           background: canvasColors.stageBg,
           cursor: draggingHandle
-            ? HANDLE_CURSORS[draggingHandle.handle]
-            : isDraggingVertex
+            ? rotatedResizeCursor(
+                HANDLE_CURSORS[draggingHandle.handle],
+                draggingHandle.startRoom.rotation ?? 0,
+              )
+            : wallDragCursor
+              ? wallDragCursor
+              : isDraggingVertex
               ? 'crosshair'
               : placingElement
                 ? 'crosshair'
@@ -721,6 +844,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               placingElement={placingElement ?? null} ghostPos={ghostPos}
               draggingHandle={draggingHandle}
               isDraggingVertex={isDraggingVertex}
+              isDraggingWall={isDraggingWall}
               cutRoomId={cutRoomId}
               canvasColors={canvasColors} theme={theme}
               activeDragWalls={dragFromWalls?.roomId === room.id ? dragFromWalls.walls : null}
@@ -760,6 +884,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
                 draggedRoomIdsRef.current = null;
               }}
               onVertexHandleMouseDown={(vi, wx, wy) => handleVertexHandleMouseDown(room.id, vi, wx, wy)}
+              onWallHandleMouseDown={(wi, wx, wy) => handleWallHandleMouseDown(room.id, wi, wx, wy)}
             />
           ))}
           {snapHighlight && (() => {
@@ -793,7 +918,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
           )}
         </Layer>
       </Stage>
-      {wizardGaps.length > 0 && !draggingHandle && !isDraggingVertex && !marquee && (
+      {wizardGaps.length > 0 && !draggingHandle && !isDraggingVertex && !isDraggingWall && !marquee && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ height: size.height }}>
           {wizardGaps.map((gap, i) => (
             <WizardWand

@@ -254,7 +254,36 @@ function roomBounds(room: Room) {
     w = room.length * PX_PER_M;
     h = room.width * PX_PER_M;
   }
-  return { left: room.x, top: room.y, right: room.x + w, bottom: room.y + h, w, h };
+  const naive = { left: room.x, top: room.y, right: room.x + w, bottom: room.y + h, w, h };
+  // #region agent log
+  if (
+    (rotation === 90 || rotation === 270) &&
+    room.roomType === 'normal' &&
+    !(room.vertices && room.vertices.length >= 3)
+  ) {
+    const cx = room.x + w / 2;
+    const cy = room.y + h / 2;
+    const fixed = {
+      left: cx - h / 2,
+      top: cy - w / 2,
+      right: cx + h / 2,
+      bottom: cy + w / 2,
+    };
+    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f23194' },
+      body: JSON.stringify({
+        sessionId: 'f23194',
+        location: 'types.ts:roomBounds',
+        message: 'naive vs center-pivot AABB (90/270)',
+        data: { rot: rotation, roomId: room.id, naive, fixed, center: { cx, cy }, lenM: room.length, widM: room.width },
+        timestamp: Date.now(),
+        hypothesisId: 'H1',
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+  return naive;
 }
 
 export function isOverlapping(container: Room, inner: Room): boolean {

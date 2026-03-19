@@ -23,6 +23,50 @@ function parseNum(value: string, fallback: number): number {
   return isNaN(n) ? fallback : n;
 }
 
+const ROOM_ROTATIONS = [0, 90, 180, 270] as const;
+
+/** 0° / 90° / 180° / 270° — shared with RoomShapes (overview) and RoomEditPanel (room selected). */
+export function RoomRotationPicker({
+  room,
+  onUpdateRoom,
+  disabled,
+  className = '',
+}: {
+  room: Room;
+  onUpdateRoom: (id: string, updates: Partial<Room>) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const current = ((room.rotation ?? 0) % 360 + 360) % 360;
+  return (
+    <div className={className}>
+      <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
+        Roteer kamer
+      </h3>
+      <div className="grid grid-cols-4 gap-1.5">
+        {ROOM_ROTATIONS.map(deg => (
+          <button
+            key={deg}
+            type="button"
+            disabled={disabled}
+            onClick={() => onUpdateRoom(room.id, { rotation: deg })}
+            className={`
+              px-2 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer
+              ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+              ${current === deg
+                ? 'bg-accent text-white'
+                : 'bg-dark-card border border-dark-border text-light/60 hover:border-light/30 hover:text-light'
+              }
+            `}
+          >
+            {deg}°
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CollapsibleSection({
   title,
   isOpen,
@@ -181,6 +225,12 @@ export default function RoomEditPanel({
           />
           {icon && <span className="text-lg leading-none">{icon}</span>}
         </div>
+
+        <RoomRotationPicker
+          room={room}
+          onUpdateRoom={onUpdate}
+          disabled={room.isFinalized}
+        />
 
         <RoomDimensionInputs room={room} onUpdate={onUpdate} disabled={room.isFinalized} />
       </div>

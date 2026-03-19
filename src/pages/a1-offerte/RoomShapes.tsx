@@ -1,5 +1,6 @@
 import { SHAPES, Room, RoomType } from './types';
 import { SPECIAL_ROOM_CONFIGS } from './specialRooms';
+import { RoomRotationPicker } from './RoomEditPanel';
 import { Hammer } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -82,10 +83,6 @@ const shapeIcons: Record<string, React.ReactNode> = {
     </svg>
   ),
 };
-
-/* ── Rotations ────────────────────────────────────────────────── */
-
-const ROTATIONS = [0, 90, 180, 270] as const;
 
 /* ── RoomShapes (main) ────────────────────────────────────────── */
 
@@ -176,30 +173,14 @@ export default function RoomShapes({
         })}
       </div>
 
-      {/* ── Rotation selector ── */}
+      {/* ── Rotation selector (same control as in RoomEditPanel when a room is open) ── */}
       {selectedRoom && (
-        <div className="mt-4">
-          <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
-            Roteer kamer
-          </h3>
-          <div className="grid grid-cols-4 gap-1.5">
-            {ROTATIONS.map(deg => (
-              <button
-                key={deg}
-                onClick={() => onUpdateRoom(selectedRoom.id, { rotation: deg })}
-                className={`
-                  px-2 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer
-                  ${selectedRoom.rotation === deg
-                    ? 'bg-accent text-white'
-                    : 'bg-dark-card border border-dark-border text-light/60 hover:border-light/30 hover:text-light'
-                  }
-                `}
-              >
-                {deg}°
-              </button>
-            ))}
-          </div>
-        </div>
+        <RoomRotationPicker
+          room={selectedRoom}
+          onUpdateRoom={onUpdateRoom}
+          disabled={selectedRoom.isFinalized}
+          className="mt-4"
+        />
       )}
     </div>
   );

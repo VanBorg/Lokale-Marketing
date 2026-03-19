@@ -42,6 +42,19 @@ export type DraggingVertex = {
   startRotation: number;
 } | null;
 
+/** Mid-wall drag: both endpoints move along unit normal in vertex (metre) space. */
+export type DraggingWall = {
+  roomId: string;
+  wallIndex: number;
+  /** Unit normal in vertex space (perpendicular to wall, metres). */
+  normalX: number;
+  normalY: number;
+  startWorldPos: { x: number; y: number };
+  startVertices: Vertex[];
+  startRoomPos: { x: number; y: number };
+  startRotation: number;
+} | null;
+
 export type FacingEdgePair = {
   targetEdgeIdx: number;
   refEdgeIdx: number;
@@ -86,6 +99,9 @@ export interface PlattegrondCanvasProps {
   beginBatch?: () => void;
   endBatch?: () => void;
   selectedWallIndices?: number[];
+  /** If true when the user would clear the selected room (canvas), canvas skips clearing and calls this so the parent can show a confirm dialog. */
+  shouldConfirmClearRoomSelection?: () => boolean;
+  onRequestClearRoomSelectionConfirm?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
   onUndo?: () => void;

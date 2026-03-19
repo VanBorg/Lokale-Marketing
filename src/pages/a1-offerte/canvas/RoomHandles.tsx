@@ -4,6 +4,7 @@ import Konva from 'konva';
 import { Room } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
 import { HandleType, HANDLE_CURSORS, DraggingHandle } from './canvasTypes';
+import { rotatedResizeCursor } from './canvasGeometry';
 
 interface RoomHandlesProps {
   room: Room;
@@ -26,6 +27,7 @@ export default function RoomHandles({
   canvasColors,
   onSetDraggingHandle,
 }: RoomHandlesProps) {
+  const rotationDeg = room.rotation ?? 0;
   const handleSize = 5;
   const handles: { type: HandleType; x: number; y: number }[] = [
     { type: 'nw', x: 0, y: 0 },
@@ -69,7 +71,8 @@ export default function RoomHandles({
             const stage = e.target.getStage();
             if (stage) {
               const container = stage.container();
-              container.style.cursor = HANDLE_CURSORS[hp.type];
+              const base = HANDLE_CURSORS[hp.type];
+              container.style.cursor = rotatedResizeCursor(base, rotationDeg);
             }
           }}
           onMouseLeave={(e: Konva.KonvaEventObject<MouseEvent>) => {
