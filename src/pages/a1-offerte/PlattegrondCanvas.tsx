@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { Stage as KonvaStage, Layer, Rect, Line } from 'react-konva';
 import Konva from 'konva';
 import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getDependentRoomsForFinalization } from './types';
@@ -456,7 +457,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       if (room && onUpdateRoom) {
         const snapped = snapToRooms(roomId, room.x, room.y, rooms);
         if (snapped.x !== room.x || snapped.y !== room.y) {
-          onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
+          flushSync(() => {
+            onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
+          });
         }
       }
       endBatch?.();
@@ -470,7 +473,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
       if (room && onUpdateRoom) {
         const snapped = snapToRooms(roomId, room.x, room.y, rooms);
         if (snapped.x !== room.x || snapped.y !== room.y) {
-          onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
+          flushSync(() => {
+            onUpdateRoom(roomId, { x: snapped.x, y: snapped.y });
+          });
         }
       }
       endBatch?.();
@@ -501,13 +506,15 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     if (!target) return;
     beginBatch?.();
     const fill = computeWizardFill(target, gap);
-    onUpdateRoom(gap.roomId, {
-      vertices: fill.vertices,
-      x: fill.x,
-      y: fill.y,
-      length: fill.length,
-      width: fill.width,
-      wallLengths: fill.wallLengths,
+    flushSync(() => {
+      onUpdateRoom(gap.roomId, {
+        vertices: fill.vertices,
+        x: fill.x,
+        y: fill.y,
+        length: fill.length,
+        width: fill.width,
+        wallLengths: fill.wallLengths,
+      });
     });
     endBatch?.();
     setWizardGaps([]);

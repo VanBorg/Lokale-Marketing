@@ -1,11 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Fragment } from 'react';
 import { ZoomIn, ZoomOut, Undo2, Redo2, Copy, Scissors, ClipboardPaste, CopyPlus, Keyboard } from 'lucide-react';
 import { Room } from '../types';
 
-const SHORTCUTS = [
+type ShortcutRow =
+  | { description: string; keys: string[] }
+  | { description: string; keyVariants: string[][] };
+
+const SHORTCUTS: ShortcutRow[] = [
   { keys: ['Ctrl', 'Z'], description: 'Ongedaan maken' },
-  { keys: ['Ctrl', 'Shift', 'Z'], description: 'Opnieuw' },
-  { keys: ['Ctrl', 'Y'], description: 'Opnieuw' },
+  { description: 'Opnieuw (herhalen)', keyVariants: [['Ctrl', 'Shift', 'Z'], ['Ctrl', 'Y']] },
   { keys: ['S'], description: 'Centreer canvas' },
   { keys: ['Esc'], description: 'Plaatsing annuleren' },
   { keys: ['Delete'], description: 'Kamer verwijderen' },
@@ -66,17 +69,35 @@ function ShortcutsButton() {
           <p className="text-xs font-semibold text-light mb-2">Sneltoetsen</p>
           <div className="flex flex-col gap-1.5">
             {SHORTCUTS.map((s, i) => (
-              <div key={i} className="flex items-center justify-between text-[11px]">
-                <span className="text-light/50">{s.description}</span>
-                <span className="flex items-center gap-0.5">
-                  {s.keys.map((k, j) => (
-                    <kbd
-                      key={j}
-                      className="min-w-[22px] px-1.5 py-0.5 rounded bg-dark-hover border border-dark-border text-light/70 text-center text-[10px] font-mono leading-tight"
-                    >
-                      {k}
-                    </kbd>
-                  ))}
+              <div key={i} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-light/50 shrink-0">{s.description}</span>
+                <span className="flex items-center gap-1 flex-wrap justify-end">
+                  {'keys' in s ? (
+                    s.keys.map((k, j) => (
+                      <kbd
+                        key={j}
+                        className="min-w-[22px] px-1.5 py-0.5 rounded bg-dark-hover border border-dark-border text-light/70 text-center text-[10px] font-mono leading-tight"
+                      >
+                        {k}
+                      </kbd>
+                    ))
+                  ) : (
+                    s.keyVariants.map((variant, vi) => (
+                      <Fragment key={vi}>
+                        {vi > 0 && <span className="text-light/35 px-0.5 select-none">·</span>}
+                        <span className="flex items-center gap-0.5">
+                          {variant.map((k, j) => (
+                            <kbd
+                              key={j}
+                              className="min-w-[22px] px-1.5 py-0.5 rounded bg-dark-hover border border-dark-border text-light/70 text-center text-[10px] font-mono leading-tight"
+                            >
+                              {k}
+                            </kbd>
+                          ))}
+                        </span>
+                      </Fragment>
+                    ))
+                  )}
                 </span>
               </div>
             ))}
@@ -179,7 +200,7 @@ export default function CanvasToolbar({
               type="button"
               onClick={onRedo}
               disabled={!canRedo}
-              title="Opnieuw (Ctrl+Y)"
+              title="Opnieuw (Ctrl+Shift+Z of Ctrl+Y)"
               className="p-1.5 rounded font-semibold text-light/90 hover:text-light hover:bg-dark-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer disabled:font-normal"
             >
               <Redo2 size={15} strokeWidth={2.5} />

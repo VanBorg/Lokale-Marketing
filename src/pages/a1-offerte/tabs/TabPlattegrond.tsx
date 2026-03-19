@@ -62,6 +62,8 @@ type PlacingElement = { type: RoomElement['type']; width: number; height: number
 interface TabPlattegrondProps {
   floors: Floor[];
   setFloors: React.Dispatch<React.SetStateAction<Floor[]>>;
+  /** Applies room list changes without recording undo history (derived sync only). */
+  patchActiveFloorRoomsSilent: (updater: (rooms: Room[]) => Room[]) => void;
   activeFloorId: string;
   setActiveFloorId: React.Dispatch<React.SetStateAction<string>>;
   setActiveTab: (tab: 1 | 2 | 3 | 4) => void;
@@ -76,6 +78,7 @@ interface TabPlattegrondProps {
 export default function TabPlattegrond({
   floors,
   setFloors,
+  patchActiveFloorRoomsSilent,
   activeFloorId,
   setActiveFloorId,
   setActiveTab,
@@ -363,9 +366,37 @@ export default function TabPlattegrond({
 
   const moveRoom = useCallback(
     (id: string, x: number, y: number) => {
-      updateActiveFloorRooms(prev =>
-        detectSubRooms(prev.map(r => (r.id === id ? { ...r, x, y } : r))),
-      );
+      updateActiveFloorRooms(prev => {
+        const room = prev.find(r => r.id === id);
+        let finalX = x;
+        let finalY = y;
+
+        if (room?.specialRoomPlacementMode === 'inside-room') {
+          const rot = room.rotation || 0;
+          const rw = (rot === 90 || rot === 270 ? room.width : room.length) * PX_PER_M;
+          const rh = (rot === 90 || rot === 270 ? room.length : room.width) * PX_PER_M;
+          const cx = x + rw / 2;
+          const cy = y + rh / 2;
+
+          for (const parent of prev.filter(r => r.roomType === 'normal')) {
+            const prot = parent.rotation || 0;
+            const pw = (prot === 90 || prot === 270 ? parent.width : parent.length) * PX_PER_M;
+            const ph = (prot === 90 || prot === 270 ? parent.length : parent.width) * PX_PER_M;
+            const pl = parent.x;
+            const pt = parent.y;
+            const pr = parent.x + pw;
+            const pb = parent.y + ph;
+
+            if (cx > pl && cx < pr && cy > pt && cy < pb) {
+              finalX = Math.max(pl, Math.min(pr - rw, x));
+              finalY = Math.max(pt, Math.min(pb - rh, y));
+              break;
+            }
+          }
+        }
+
+        return detectSubRooms(prev.map(r => (r.id === id ? { ...r, x: finalX, y: finalY } : r)));
+      });
     },
     [updateActiveFloorRooms],
   );
@@ -481,20 +512,23 @@ export default function TabPlattegrond({
   }, [selectedRoomId]);
 
   useEffect(() => {
-    updateActiveFloorRooms(prev => {
+    // Must not use setFloors here: each push clears redo; this is derived state only.
+    patchActiveFloorRoomsSilent(prev => {
       const anyChanged = prev.some(r => {
         if (r.roomType === 'normal' || !r.parentRoomId || !r.isFinalized) return false;
         const parent = prev.find(p => p.id === r.parentRoomId);
         return parent !== undefined && !parent.isFinalized;
       });
       if (!anyChanged) return prev;
-      return prev.map(r => {
+      const next = prev.map(r => {
         if (r.roomType === 'normal' || !r.parentRoomId || !r.isFinalized) return r;
         const parent = prev.find(p => p.id === r.parentRoomId);
         return (parent && !parent.isFinalized) ? { ...r, isFinalized: false } : r;
       });
+      if (next.length === prev.length && next.every((r, i) => r === prev[i])) return prev;
+      return next;
     });
-  }, [rooms]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rooms, patchActiveFloorRoomsSilent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

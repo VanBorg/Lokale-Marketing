@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Line, Circle, Group, Rect } from 'react-konva';
 import Konva from 'konva';
 import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints, isSpecialRoom, getRoomFillKey } from '../types';
@@ -176,8 +177,10 @@ export default function CanvasRoom({
         const snapped = snapPosition(room.id, newX, newY, rooms, snapWalls);
         e.target.x(snapped.x + cx);
         e.target.y(snapped.y + cy);
-        // Apply final position before endBatch so one Ctrl+Z undoes the whole drag (incl. auto-pan moves).
-        onMoveRoom(room.id, snapped.x, snapped.y);
+        // Flush so setFloors runs before endBatch clears batchRef (undo history stays correct).
+        flushSync(() => {
+          onMoveRoom(room.id, snapped.x, snapped.y);
+        });
         onDragEndRoom();
         if (snapped.snappedToId && snapped.snappedWall && room.roomType !== 'normal') {
           onSnapHighlight({ roomId: snapped.snappedToId, wall: snapped.snappedWall });

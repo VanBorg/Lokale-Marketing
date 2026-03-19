@@ -65,12 +65,29 @@ export default function OfferteGenerator() {
   const pastRef = useRef<HistorySnapshot[]>([]);
   const futureRef = useRef<HistorySnapshot[]>([]);
   const isUndoRedoRef = useRef(false);
+  /** Skips history for follow-up setFloors from effects right after undo/redo (e.g. TabPlattegrond parent/child sync). */
+  const suppressHistoryRef = useRef(0);
   const batchRef = useRef<HistorySnapshot | null>(null);
 
-  const pushToPast = useCallback((snapshot: HistorySnapshot) => {
+  const pushToPast = useCallback((snapshot: HistorySnapshot, source: string) => {
     pastRef.current = [...pastRef.current.slice(1 - MAX_HISTORY), snapshot];
     futureRef.current = [];
     setHistoryVersion(v => v + 1);
+    // #region agent log
+    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '677e36' },
+      body: JSON.stringify({
+        sessionId: '677e36',
+        location: 'OfferteGenerator.tsx:pushToPast',
+        message: 'history push',
+        data: { source, pastLen: pastRef.current.length },
+        timestamp: Date.now(),
+        hypothesisId: 'H_extra_push',
+        runId: 'silent_sync_fix',
+      }),
+    }).catch(() => {});
+    // #endregion
   }, []);
 
   const beginBatch = useCallback(() => {
@@ -81,25 +98,39 @@ export default function OfferteGenerator() {
 
   const endBatch = useCallback(() => {
     if (batchRef.current) {
-      pushToPast(batchRef.current);
+      pushToPast(batchRef.current, 'endBatch');
       batchRef.current = null;
     }
   }, [pushToPast]);
 
   const setFloors = useCallback(
     (update: React.SetStateAction<Floor[]>) => {
-      if (isUndoRedoRef.current || batchRef.current) {
+      if (isUndoRedoRef.current || batchRef.current || suppressHistoryRef.current > 0) {
         setFloorsRaw(update);
         return;
       }
       setFloorsRaw(prev => {
         const next = typeof update === 'function' ? (update as (prev: Floor[]) => Floor[])(prev) : update;
         if (prev === next) return prev;
-        pushToPast({ floors: prev, activeFloorId });
+        pushToPast({ floors: prev, activeFloorId }, 'setFloors');
         return next;
       });
     },
     [activeFloorId, pushToPast],
+  );
+
+  /** Derived room fixes (no extra undo step). */
+  const patchActiveFloorRoomsSilent = useCallback(
+    (updater: (rooms: Room[]) => Room[]) => {
+      setFloorsRaw(prev => {
+        const floor = prev.find(f => f.id === activeFloorId);
+        if (!floor) return prev;
+        const nextRooms = updater(floor.rooms);
+        if (nextRooms === floor.rooms) return prev;
+        return prev.map(f => (f.id === activeFloorId ? { ...f, rooms: nextRooms } : f));
+      });
+    },
+    [activeFloorId],
   );
 
   const setActiveFloorId = useCallback(
@@ -111,7 +142,7 @@ export default function OfferteGenerator() {
       setActiveFloorIdRaw(prev => {
         const next = typeof update === 'function' ? (update as (prev: string) => string)(prev) : update;
         if (prev === next) return prev;
-        pushToPast({ floors, activeFloorId: prev });
+        pushToPast({ floors, activeFloorId: prev }, 'setActiveFloorId');
         return next;
       });
     },
@@ -123,6 +154,7 @@ export default function OfferteGenerator() {
 
   const undo = useCallback(() => {
     if (pastRef.current.length === 0) return;
+    suppressHistoryRef.current += 1;
     const snapshot = pastRef.current[pastRef.current.length - 1];
     pastRef.current = pastRef.current.slice(0, -1);
     futureRef.current = [{ floors, activeFloorId }, ...futureRef.current];
@@ -131,10 +163,14 @@ export default function OfferteGenerator() {
     setFloorsRaw(snapshot.floors);
     setActiveFloorIdRaw(snapshot.activeFloorId);
     isUndoRedoRef.current = false;
+    setTimeout(() => {
+      suppressHistoryRef.current = Math.max(0, suppressHistoryRef.current - 1);
+    }, 0);
   }, [floors, activeFloorId]);
 
   const redo = useCallback(() => {
     if (futureRef.current.length === 0) return;
+    suppressHistoryRef.current += 1;
     const snapshot = futureRef.current[0];
     futureRef.current = futureRef.current.slice(1);
     pastRef.current = [...pastRef.current.slice(1 - MAX_HISTORY), { floors, activeFloorId }];
@@ -143,6 +179,9 @@ export default function OfferteGenerator() {
     setFloorsRaw(snapshot.floors);
     setActiveFloorIdRaw(snapshot.activeFloorId);
     isUndoRedoRef.current = false;
+    setTimeout(() => {
+      suppressHistoryRef.current = Math.max(0, suppressHistoryRef.current - 1);
+    }, 0);
   }, [floors, activeFloorId]);
 
   useEffect(() => {
@@ -150,12 +189,13 @@ export default function OfferteGenerator() {
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'z') {
+        const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        if (k === 'z') {
           e.preventDefault();
           if (e.shiftKey) redo();
           else undo();
         }
-        if (e.key === 'y') {
+        if (k === 'y') {
           e.preventDefault();
           redo();
         }
@@ -188,6 +228,7 @@ export default function OfferteGenerator() {
     pastRef.current = [];
     futureRef.current = [];
     batchRef.current = null;
+    suppressHistoryRef.current = 0;
     setHistoryVersion(v => v + 1);
     isUndoRedoRef.current = true;
     setFloorsRaw(createStarterFloors());
@@ -275,6 +316,7 @@ export default function OfferteGenerator() {
             <TabPlattegrond
               floors={floors}
               setFloors={setFloors}
+              patchActiveFloorRoomsSilent={patchActiveFloorRoomsSilent}
               activeFloorId={activeFloorId}
               setActiveFloorId={setActiveFloorId}
               setActiveTab={goTo}
