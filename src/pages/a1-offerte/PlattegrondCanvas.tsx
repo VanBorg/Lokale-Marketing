@@ -6,7 +6,7 @@ import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getDependentRooms
 import { useTheme } from '../../hooks/useTheme';
 import { WallId, DraggingHandle, DraggingVertex, DraggingWall, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, WizardTarget } from './canvas/canvasTypes';
 import { wallNormal, projectWorldDeltaToNormalMetres, rotatedResizeCursor } from './canvas/canvasGeometry';
-import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectWizardTargets, applyWizardExtend, rotateVector2D } from './canvas/canvasUtils';
+import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectWizardTargets, applyWizardExtend, safeWizardDistance, rotateVector2D } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
 import CanvasGrid from './canvas/CanvasGrid';
 import CanvasRoom from './canvas/CanvasRoom';
@@ -656,8 +656,16 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     if (!onUpdateRoom) return;
     const targetRoom = rooms.find(r => r.id === targetInfo.roomId);
     if (!targetRoom) return;
+
+    const safeDist = safeWizardDistance(targetRoom, targetInfo, rooms);
+    if (safeDist <= 0) return;
+
+    const safeTarget: WizardTarget = safeDist < targetInfo.targetDistance
+      ? { ...targetInfo, targetDistance: safeDist }
+      : targetInfo;
+
     beginBatch?.();
-    const fill = applyWizardExtend(targetRoom, targetInfo);
+    const fill = applyWizardExtend(targetRoom, safeTarget);
     const updatedRoom = { ...targetRoom, ...fill };
     const updatedRooms = rooms.map(r => r.id === targetRoom.id ? updatedRoom : r);
     const snapped = snapToRooms(targetRoom.id, fill.x, fill.y, updatedRooms);
@@ -683,7 +691,12 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const handleWizardHoverStart = useCallback((targetInfo: WizardTarget) => {
     const targetRoom = rooms.find(r => r.id === targetInfo.roomId);
     if (!targetRoom) return;
-    const fill = applyWizardExtend(targetRoom, targetInfo);
+    const safeDist = safeWizardDistance(targetRoom, targetInfo, rooms);
+    if (safeDist <= 0) return;
+    const safeTarget: WizardTarget = safeDist < targetInfo.targetDistance
+      ? { ...targetInfo, targetDistance: safeDist }
+      : targetInfo;
+    const fill = applyWizardExtend(targetRoom, safeTarget);
     const pts = fill.vertices.flatMap(v => [fill.x + v.x * PX_PER_M, fill.y + v.y * PX_PER_M]);
     setWizardPreview({ vertices: pts });
   }, [rooms]);

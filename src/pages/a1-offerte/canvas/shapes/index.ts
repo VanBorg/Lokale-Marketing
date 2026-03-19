@@ -5,6 +5,7 @@ import * as boog from './boog';
 import * as tVorm from './t-vorm';
 import * as uVorm from './u-vorm';
 import * as zVorm from './z-vorm';
+import * as zVormInv from './z-vorm-inv';
 import * as iVorm from './i-vorm';
 import * as vrijVorm from './vrije-vorm';
 
@@ -24,6 +25,7 @@ const SHAPE_MAP: Record<string, ShapeConfig> = {
   't-vorm': tVorm,
   'u-vorm': uVorm,
   'z-vorm': zVorm,
+  'z-vorm-inv': zVormInv,
   'i-vorm': iVorm,
   'vrije-vorm': vrijVorm,
 };

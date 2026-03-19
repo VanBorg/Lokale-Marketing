@@ -1,78 +1,14 @@
-import { Room, Vertex, ensureVertices, isSpecialRoomType, syncRoomFromVertices } from '../types';
-import { PX_PER_M, GapInfo, FacingEdgePair, WizardTarget, rotateVector2DDeg } from './canvasTypes';
+import { Room, Vertex, ensureVertices, isSpecialRoomType, syncRoomFromVertices, verticesBoundingBox } from '../types';
+import { PX_PER_M, WizardTarget, rotateVector2DDeg } from './canvasTypes';
 import { computeWorldWallSegments } from './wallSegments';
+import { getShapeConfig } from './shapes/index';
 
 /* ── Constants ── */
-const GAP_MAX_PX = 120;
-const GAP_MIN_PX = 1;
-const OVERLAP_MIN_PX = 2;
 const WIZARD_MIN_M = 0.05;
 const WIZARD_MAX_M = 10;
 const WIZARD_OFFSET_PX = 12;
 
-/* ── Types ── */
-type WorldEdge = {
-  idx: number;
-  perpCoord: number;
-  parallelMin: number;
-  parallelMax: number;
-  isVertical: boolean;
-  facesPositive: boolean;
-};
-
 /* ── Helpers ── */
-
-function buildWorldEdges(room: Room): WorldEdge[] {
-  const segments = computeWorldWallSegments(room).filter(seg => seg.axis !== 'diagonal');
-  return segments.map(seg => ({
-    idx: seg.wallIndex,
-    perpCoord: seg.axis === 'vertical' ? seg.p1.x : seg.p1.y,
-    parallelMin: seg.axis === 'vertical'
-      ? Math.min(seg.p1.y, seg.p2.y)
-      : Math.min(seg.p1.x, seg.p2.x),
-    parallelMax: seg.axis === 'vertical'
-      ? Math.max(seg.p1.y, seg.p2.y)
-      : Math.max(seg.p1.x, seg.p2.x),
-    isVertical: seg.axis === 'vertical',
-    facesPositive: seg.axis === 'vertical'
-      ? seg.outwardNormal.x > 0
-      : seg.outwardNormal.y > 0,
-  }));
-}
-
-function segmentOverlap(
-  aMin: number, aMax: number, bMin: number, bMax: number
-): number {
-  return Math.max(0, Math.min(aMax, bMax) - Math.max(aMin, bMin));
-}
-
-function outwardNormal(verts: Vertex[], wallIndex: number): { nx: number; ny: number } {
-  const n = verts.length;
-  const v1 = verts[wallIndex];
-  const v2 = verts[(wallIndex + 1) % n];
-  const dx = v2.x - v1.x;
-  const dy = v2.y - v1.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 1e-6) return { nx: 0, ny: 0 };
-
-  let nx = -dy / len;
-  let ny = dx / len;
-
-  const cx = verts.reduce((s, v) => s + v.x, 0) / n;
-  const cy = verts.reduce((s, v) => s + v.y, 0) / n;
-  const mx = (v1.x + v2.x) / 2;
-  const my = (v1.y + v2.y) / 2;
-  const toCenterX = cx - mx;
-  const toCenterY = cy - my;
-  const dot = nx * toCenterX + ny * toCenterY;
-
-  if (dot > 0) {
-    nx = -nx;
-    ny = -ny;
-  }
-
-  return { nx, ny };
-}
 
 function raycastToWall(
   originX: number,
@@ -104,113 +40,6 @@ function raycastToWall(
   return best;
 }
 
-/* ── Gap Detection ── */
-
-export function detectRoomGaps(
-  selectedRoom: Room,
-  allRooms: Room[],
-): GapInfo[] {
-  // Wizard is available only for editable normal rooms.
-  if (selectedRoom.roomType !== 'normal') return [];
-  if (selectedRoom.isFinalized) return [];
-
-  const selEdges = buildWorldEdges(selectedRoom);
-  const gaps: GapInfo[] = [];
-
-  for (const other of allRooms) {
-    if (other.id === selectedRoom.id) continue;
-    // Normal rooms only use finalized rooms as references.
-    if (!other.isFinalized) continue;
-
-    const otherEdges = buildWorldEdges(other);
-    const foundPairs: FacingEdgePair[] = [];
-
-    for (const selEdge of selEdges) {
-      for (const othEdge of otherEdges) {
-        if (selEdge.isVertical && othEdge.isVertical) {
-          const gap = Math.abs(selEdge.perpCoord - othEdge.perpCoord);
-          if (gap < GAP_MIN_PX || gap > GAP_MAX_PX) continue;
-
-          const overlap = segmentOverlap(
-            selEdge.parallelMin, selEdge.parallelMax,
-            othEdge.parallelMin, othEdge.parallelMax,
-          );
-          if (overlap < OVERLAP_MIN_PX) continue;
-
-          foundPairs.push({
-            targetEdgeIdx: selEdge.idx,
-            refEdgeIdx: othEdge.idx,
-            gapPx: gap,
-            overlapPx: overlap,
-            axis: 'x',
-            targetPos: selEdge.perpCoord,
-            refPos: othEdge.perpCoord,
-            overlapMin: Math.max(selEdge.parallelMin, othEdge.parallelMin),
-            overlapMax: Math.min(selEdge.parallelMax, othEdge.parallelMax),
-          });
-        }
-
-        if (!selEdge.isVertical && !othEdge.isVertical) {
-          const gap = Math.abs(selEdge.perpCoord - othEdge.perpCoord);
-          if (gap < GAP_MIN_PX || gap > GAP_MAX_PX) continue;
-
-          const overlap = segmentOverlap(
-            selEdge.parallelMin, selEdge.parallelMax,
-            othEdge.parallelMin, othEdge.parallelMax,
-          );
-          if (overlap < OVERLAP_MIN_PX) continue;
-
-          foundPairs.push({
-            targetEdgeIdx: selEdge.idx,
-            refEdgeIdx: othEdge.idx,
-            gapPx: gap,
-            overlapPx: overlap,
-            axis: 'y',
-            targetPos: selEdge.perpCoord,
-            refPos: othEdge.perpCoord,
-            overlapMin: Math.max(selEdge.parallelMin, othEdge.parallelMin),
-            overlapMax: Math.min(selEdge.parallelMax, othEdge.parallelMax),
-          });
-        }
-      }
-    }
-
-    if (foundPairs.length === 0) continue;
-
-    const wallMap = new Map<number, FacingEdgePair[]>();
-    for (const pair of foundPairs) {
-      const list = wallMap.get(pair.targetEdgeIdx) ?? [];
-      list.push(pair);
-      wallMap.set(pair.targetEdgeIdx, list);
-    }
-
-    for (const [, pairs] of Array.from(wallMap.entries())) {
-      if (pairs.length === 0) continue;
-      const closest = pairs.reduce(
-        (best, p) => (p.gapPx < best.gapPx ? p : best),
-        pairs[0]
-      );
-
-      const midPerp = (closest.targetPos + closest.refPos) / 2;
-      const midPar = (closest.overlapMin + closest.overlapMax) / 2;
-      const wizX = closest.axis === 'x' ? midPerp : midPar;
-      const wizY = closest.axis === 'x' ? midPar : midPerp;
-
-      const gapM2 = (closest.gapPx / PX_PER_M) * (closest.overlapPx / PX_PER_M);
-
-      gaps.push({
-        roomId: selectedRoom.id,
-        referenceRoomId: other.id,
-        gapAreaM2: gapM2,
-        wizardWorldPos: { x: wizX, y: wizY },
-        edgePairs: pairs,
-      });
-    }
-  }
-
-  return gaps;
-}
-
 /* ── Wizard Targets: stepwise extend to collision ── */
 
 export function detectWizardTargets(
@@ -226,7 +55,13 @@ export function detectWizardTargets(
   const maxDistPx = WIZARD_MAX_M * PX_PER_M;
   const segments = computeWorldWallSegments(selectedRoom);
 
+  const config = getShapeConfig(selectedRoom.shape);
+  const innerWalls: Set<number> = new Set(
+    Array.isArray(config.INNER_WALL_INDICES) ? config.INNER_WALL_INDICES : [],
+  );
+
   for (const seg of segments) {
+    if (innerWalls.has(seg.wallIndex)) continue;
     const originX = seg.midpoint.x;
     const originY = seg.midpoint.y;
     const dirX = seg.outwardNormal.x;
@@ -271,7 +106,7 @@ export function detectWizardTargets(
   return targets;
 }
 
-/* ── Fill: move one wall to close the gap ── */
+/* ── Wall extension ── */
 
 type WizardFillResult = {
   vertices: Vertex[];
@@ -282,80 +117,26 @@ type WizardFillResult = {
   wallLengths: Room['wallLengths'];
 };
 
-function noChange(room: Room): WizardFillResult {
+/**
+ * Convert a local-space vertex to world-space pixels using the same
+ * rotate-around-bbox-centre logic as {@link computeWorldWallSegments}.
+ */
+function localVertexToWorld(
+  v: Vertex,
+  allVerts: Vertex[],
+  roomX: number,
+  roomY: number,
+  rotation: number,
+): { x: number; y: number } {
+  const bb = verticesBoundingBox(allVerts);
+  const cx = bb.minX + bb.w / 2;
+  const cy = bb.minY + bb.h / 2;
+  const dx = v.x - cx;
+  const dy = v.y - cy;
+  const r = rotateVector2DDeg(dx, dy, rotation);
   return {
-    vertices: ensureVertices(room),
-    x: room.x,
-    y: room.y,
-    length: room.length,
-    width: room.width,
-    wallLengths: { ...room.wallLengths },
-  };
-}
-
-export function computeWizardFill(
-  targetRoom: Room,
-  gap: GapInfo,
-): WizardFillResult {
-  if (gap.edgePairs.length === 0) return noChange(targetRoom);
-
-  const verts = ensureVertices(targetRoom).map(v => ({ x: v.x, y: v.y }));
-  const n = verts.length;
-
-  const wallIndices = Array.from(
-    gap.edgePairs.reduce((set, pair) => {
-      set.add(pair.targetEdgeIdx);
-      return set;
-    }, new Set<number>())
-  );
-  const movedVertices = new Set<number>();
-
-  for (const wallIdx of wallIndices) {
-    const pairs = gap.edgePairs.filter(p => p.targetEdgeIdx === wallIdx);
-    const best = pairs.reduce((a, b) => a.gapPx < b.gapPx ? a : b);
-
-    const v1Idx = wallIdx;
-    const v2Idx = (wallIdx + 1) % n;
-
-    const deltaM = (best.refPos - best.targetPos) / PX_PER_M;
-
-    if (best.axis === 'x') {
-      if (!movedVertices.has(v1Idx)) {
-        verts[v1Idx] = { x: verts[v1Idx].x + deltaM, y: verts[v1Idx].y };
-        movedVertices.add(v1Idx);
-      }
-      if (!movedVertices.has(v2Idx)) {
-        verts[v2Idx] = { x: verts[v2Idx].x + deltaM, y: verts[v2Idx].y };
-        movedVertices.add(v2Idx);
-      }
-    } else {
-      if (!movedVertices.has(v1Idx)) {
-        verts[v1Idx] = { x: verts[v1Idx].x, y: verts[v1Idx].y + deltaM };
-        movedVertices.add(v1Idx);
-      }
-      if (!movedVertices.has(v2Idx)) {
-        verts[v2Idx] = { x: verts[v2Idx].x, y: verts[v2Idx].y + deltaM };
-        movedVertices.add(v2Idx);
-      }
-    }
-  }
-
-  const minX = Math.min(...verts.map(v => v.x));
-  const minY = Math.min(...verts.map(v => v.y));
-  const normalized: Vertex[] = verts.map(v => ({
-    x: parseFloat((v.x - minX).toFixed(4)),
-    y: parseFloat((v.y - minY).toFixed(4)),
-  }));
-
-  const synced = syncRoomFromVertices(normalized);
-
-  return {
-    vertices: normalized,
-    x: targetRoom.x + minX * PX_PER_M,
-    y: targetRoom.y + minY * PX_PER_M,
-    length: synced.length,
-    width: synced.width,
-    wallLengths: synced.wallLengths,
+    x: roomX + (r.x + cx) * PX_PER_M,
+    y: roomY + (r.y + cy) * PX_PER_M,
   };
 }
 
@@ -367,9 +148,14 @@ export function applyWizardExtend(
   const n = verts.length;
   const i1 = target.wallIndex;
   const i2 = (i1 + 1) % n;
+  const rotation = room.rotation ?? 0;
+
+  // Pick an anchor vertex that will NOT be moved — used to correct for
+  // rotation-centre drift after the bounding box changes.
+  const anchorIdx = findStableAnchor(n, i1, i2);
+  const anchorBefore = localVertexToWorld(verts[anchorIdx], verts, room.x, room.y, rotation);
 
   const deltaM = target.targetDistance;
-  const rotation = room.rotation ?? 0;
   const localDir = rotation === 0
     ? { x: target.direction.nx, y: target.direction.ny }
     : rotateVector2DDeg(target.direction.nx, target.direction.ny, -rotation);
@@ -385,13 +171,106 @@ export function applyWizardExtend(
     y: parseFloat((v.y - minY).toFixed(4)),
   }));
 
+  const prelimX = room.x + minX * PX_PER_M;
+  const prelimY = room.y + minY * PX_PER_M;
+
+  // Compute where the anchor ends up with the new bbox centre, then
+  // shift room position so it stays at its original world location.
+  const anchorAfter = localVertexToWorld(normalized[anchorIdx], normalized, prelimX, prelimY, rotation);
+  const correctedX = prelimX + (anchorBefore.x - anchorAfter.x);
+  const correctedY = prelimY + (anchorBefore.y - anchorAfter.y);
+
   const synced = syncRoomFromVertices(normalized);
   return {
     vertices: normalized,
-    x: room.x + minX * PX_PER_M,
-    y: room.y + minY * PX_PER_M,
+    x: correctedX,
+    y: correctedY,
     length: synced.length,
     width: synced.width,
     wallLengths: synced.wallLengths,
   };
+}
+
+/** Pick a vertex index that is not part of the moved wall. */
+function findStableAnchor(vertexCount: number, i1: number, i2: number): number {
+  for (let i = 0; i < vertexCount; i++) {
+    if (i !== i1 && i !== i2) return i;
+  }
+  return 0;
+}
+
+/* ── Post-extension collision detection ── */
+
+type Pt = { x: number; y: number };
+
+/**
+ * Returns true if line segments (a1→a2) and (b1→b2) cross each other
+ * (proper intersection only — shared endpoints are ignored via epsilon).
+ */
+function segmentsIntersect(a1: Pt, a2: Pt, b1: Pt, b2: Pt): boolean {
+  const d1x = a2.x - a1.x, d1y = a2.y - a1.y;
+  const d2x = b2.x - b1.x, d2y = b2.y - b1.y;
+  const cross = d1x * d2y - d1y * d2x;
+  if (Math.abs(cross) < 1e-10) return false;
+  const t = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / cross;
+  const u = ((b1.x - a1.x) * d1y - (b1.y - a1.y) * d1x) / cross;
+  const EPS = 0.002;
+  return t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS;
+}
+
+/**
+ * Check whether any wall of the proposed room crosses any wall of the
+ * other rooms.  Only detects proper crossings (not shared endpoints /
+ * touching edges) so flush-snapped rooms do not trigger false positives.
+ */
+export function wizardResultCollides(
+  proposedRoom: Room,
+  otherRooms: Room[],
+): boolean {
+  const segs = computeWorldWallSegments(proposedRoom);
+  for (const other of otherRooms) {
+    if (other.id === proposedRoom.id) continue;
+    const otherSegs = computeWorldWallSegments(other);
+    for (const s of segs) {
+      for (const os of otherSegs) {
+        if (segmentsIntersect(s.p1, s.p2, os.p1, os.p2)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Find the largest safe extension distance for a wizard target by binary
+ * search.  Returns 0 if no safe distance exists.
+ */
+export function safeWizardDistance(
+  room: Room,
+  target: WizardTarget,
+  allRooms: Room[],
+): number {
+  const others = allRooms.filter(r => r.id !== room.id);
+
+  const fullResult = applyWizardExtend(room, target);
+  const fullRoom: Room = { ...room, ...fullResult };
+  if (!wizardResultCollides(fullRoom, others)) return target.targetDistance;
+
+  let lo = 0;
+  let hi = target.targetDistance;
+  const STEPS = 12;
+  const MIN_M = 0.02;
+
+  for (let i = 0; i < STEPS; i++) {
+    const mid = (lo + hi) / 2;
+    const testTarget: WizardTarget = { ...target, targetDistance: mid };
+    const result = applyWizardExtend(room, testTarget);
+    const testRoom: Room = { ...room, ...result };
+    if (wizardResultCollides(testRoom, others)) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+
+  return lo >= MIN_M ? lo : 0;
 }

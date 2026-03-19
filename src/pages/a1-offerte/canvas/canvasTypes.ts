@@ -14,9 +14,6 @@ export function rotateVector2DDeg(vx: number, vy: number, rotationDeg: number): 
   const s = Math.sin(rad);
   return { x: vx * c - vy * s, y: vx * s + vy * c };
 }
-export const SNAP_THRESHOLD = 40;
-/** Special rooms: only snap when very close to a wall so they stay freely placeable. */
-export const SNAP_THRESHOLD_SPECIAL = 18;
 export const SCALE_BY = 1.08;
 export const MIN_SCALE = 0.15;
 export const MAX_SCALE = 4;
@@ -67,26 +64,6 @@ export type DraggingWall = {
   startRoomPos: { x: number; y: number };
   startRotation: number;
 } | null;
-
-export type FacingEdgePair = {
-  targetEdgeIdx: number;
-  refEdgeIdx: number;
-  gapPx: number;
-  overlapPx: number;
-  axis: 'x' | 'y';
-  targetPos: number;
-  refPos: number;
-  overlapMin: number;
-  overlapMax: number;
-};
-
-export type GapInfo = {
-  roomId: string;
-  referenceRoomId: string;
-  gapAreaM2: number;
-  wizardWorldPos: { x: number; y: number };
-  edgePairs: FacingEdgePair[];
-};
 
 export type WizardTarget = {
   roomId: string;
