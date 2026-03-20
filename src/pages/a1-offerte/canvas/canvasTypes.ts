@@ -65,13 +65,27 @@ export type DraggingWall = {
   startRotation: number;
 } | null;
 
-export type WizardTarget = {
+/** One facing axis-aligned edge pair between two rooms (world pixel space). */
+export type FacingEdgePair = {
+  roomAId: string;
+  roomBId: string;
+  wallIndexA: number;
+  wallIndexB: number;
+  gapPx: number;
+  overlapPx: number;
+  /** Full closure translation in world px for room A’s wall (scale by t for partial fill). */
+  deltaPx: { x: number; y: number };
+};
+
+/** Wizard affordance for a gap from the selected room toward a reference room. */
+export type GapInfo = {
   roomId: string;
-  wallIndex: number;
-  direction: { nx: number; ny: number };
-  targetDistance: number;
   targetRoomId: string;
+  wallIndex: number;
+  refWallIndex: number;
+  direction: { nx: number; ny: number };
   wizardWorldPos: { x: number; y: number };
+  deltaPx: { x: number; y: number };
 };
 
 export interface PlattegrondCanvasProps {

@@ -4,9 +4,9 @@ import { Stage as KonvaStage, Layer, Rect, Line } from 'react-konva';
 import Konva from 'konva';
 import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getDependentRoomsForFinalization } from './types';
 import { useTheme } from '../../hooks/useTheme';
-import { WallId, DraggingHandle, DraggingVertex, DraggingWall, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, WizardTarget } from './canvas/canvasTypes';
+import { WallId, DraggingHandle, DraggingVertex, DraggingWall, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
 import { wallNormal, projectWorldDeltaToNormalMetres, rotatedResizeCursor } from './canvas/canvasGeometry';
-import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectWizardTargets, applyWizardExtend, safeWizardDistance, rotateVector2D } from './canvas/canvasUtils';
+import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill, safeGapFillDistance, getWorldVertices, rotateVector2D } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
 import CanvasGrid from './canvas/CanvasGrid';
 import CanvasRoom from './canvas/CanvasRoom';
@@ -84,9 +84,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
         goToCenterRef.current();
       }
       if (e.key === 'w' || e.key === 'W') {
-        if (wizardTargetsRef.current.length > 0) {
+        if (wizardGapsRef.current.length > 0) {
           e.preventDefault();
-          handleWizardFillRef.current(wizardTargetsRef.current[0]);
+          handleWizardFillRef.current(wizardGapsRef.current[0]);
         }
       }
       // D = Definitief maken
@@ -151,7 +151,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   const internalSelectRef = useRef(false);
   const justFinishedDragRef = useRef(false);
   const [modifierHeld, setModifierHeld] = useState(false);
-  const [wizardTargets, setWizardTargets] = useState<WizardTarget[]>([]);
+  const [wizardGaps, setWizardGaps] = useState<GapInfo[]>([]);
   const [wizardPreview, setWizardPreview] = useState<{ vertices: number[] } | null>(null);
 
   const setDraggingHandle = useCallback((handle: DraggingHandle) => {
@@ -193,11 +193,10 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
   }, [rooms, selectedRoomIdsValue, setSelectedRoomIds]);
 
   useEffect(() => {
-    if (!selectedRoomId) { setWizardTargets([]); return; }
+    if (!selectedRoomId) { setWizardGaps([]); return; }
     const room = rooms.find(r => r.id === selectedRoomId);
-    if (!room || room.isFinalized) { setWizardTargets([]); return; }
-    const targets = detectWizardTargets(room, rooms);
-    setWizardTargets(targets);
+    if (!room || room.isFinalized) { setWizardGaps([]); return; }
+    setWizardGaps(detectRoomGaps(room, rooms));
   }, [rooms, selectedRoomId]);
 
   const totals = rooms.reduce(
@@ -652,22 +651,29 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     });
   }, [rooms, beginBatch]);
 
-  const handleWizardFill = useCallback((targetInfo: WizardTarget) => {
+  const handleWizardFill = useCallback((gapInfo: GapInfo) => {
     if (!onUpdateRoom) return;
-    const targetRoom = rooms.find(r => r.id === targetInfo.roomId);
+    const targetRoom = rooms.find(r => r.id === gapInfo.roomId);
     if (!targetRoom) return;
 
-    const safeDist = safeWizardDistance(targetRoom, targetInfo, rooms);
-    if (safeDist <= 0) return;
+    const safeT = safeGapFillDistance(targetRoom, gapInfo, rooms);
+    if (safeT <= 0) return;
 
-    const safeTarget: WizardTarget = safeDist < targetInfo.targetDistance
-      ? { ...targetInfo, targetDistance: safeDist }
-      : targetInfo;
+    const scaledGap: GapInfo = {
+      ...gapInfo,
+      deltaPx: {
+        x: gapInfo.deltaPx.x * safeT,
+        y: gapInfo.deltaPx.y * safeT,
+      },
+    };
 
     beginBatch?.();
-    const fill = applyWizardExtend(targetRoom, safeTarget);
-    const updatedRoom = { ...targetRoom, ...fill };
-    const updatedRooms = rooms.map(r => r.id === targetRoom.id ? updatedRoom : r);
+    const fill = computeWizardFill(targetRoom, scaledGap);
+    if (!fill) {
+      endBatch?.();
+      return;
+    }
+    const updatedRooms = rooms.map(r => r.id === targetRoom.id ? fill : r);
     const snapped = snapToRooms(targetRoom.id, fill.x, fill.y, updatedRooms);
     flushSync(() => {
       onUpdateRoom(targetRoom.id, {
@@ -683,21 +689,26 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
     setWizardPreview(null);
   }, [rooms, onUpdateRoom, beginBatch, endBatch]);
 
-  const wizardTargetsRef = useRef(wizardTargets);
-  wizardTargetsRef.current = wizardTargets;
+  const wizardGapsRef = useRef(wizardGaps);
+  wizardGapsRef.current = wizardGaps;
   const handleWizardFillRef = useRef(handleWizardFill);
   handleWizardFillRef.current = handleWizardFill;
 
-  const handleWizardHoverStart = useCallback((targetInfo: WizardTarget) => {
-    const targetRoom = rooms.find(r => r.id === targetInfo.roomId);
+  const handleWizardHoverStart = useCallback((gapInfo: GapInfo) => {
+    const targetRoom = rooms.find(r => r.id === gapInfo.roomId);
     if (!targetRoom) return;
-    const safeDist = safeWizardDistance(targetRoom, targetInfo, rooms);
-    if (safeDist <= 0) return;
-    const safeTarget: WizardTarget = safeDist < targetInfo.targetDistance
-      ? { ...targetInfo, targetDistance: safeDist }
-      : targetInfo;
-    const fill = applyWizardExtend(targetRoom, safeTarget);
-    const pts = fill.vertices.flatMap(v => [fill.x + v.x * PX_PER_M, fill.y + v.y * PX_PER_M]);
+    const safeT = safeGapFillDistance(targetRoom, gapInfo, rooms);
+    if (safeT <= 0) return;
+    const scaledGap: GapInfo = {
+      ...gapInfo,
+      deltaPx: {
+        x: gapInfo.deltaPx.x * safeT,
+        y: gapInfo.deltaPx.y * safeT,
+      },
+    };
+    const fill = computeWizardFill(targetRoom, scaledGap);
+    if (!fill) return;
+    const pts = getWorldVertices(fill).flatMap(v => [v.x, v.y]);
     setWizardPreview({ vertices: pts });
   }, [rooms]);
 
@@ -932,7 +943,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
               onDragStartWalls={(roomId, walls) => {
                 beginBatch?.();
                 setDragFromWalls({ roomId, walls });
-                setWizardTargets([]);
+                setWizardGaps([]);
                 setWizardPreview(null);
                 const ids = selectedRoomIdsValue.has(roomId) ? selectedRoomIdsValue : new Set([roomId]);
                 draggedRoomIdsRef.current = ids;
@@ -982,9 +993,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasP
           )}
         </Layer>
       </Stage>
-      {wizardTargets.length > 0 && !draggingHandle && !isDraggingVertex && !isDraggingWall && !marquee && (
+      {wizardGaps.length > 0 && !draggingHandle && !isDraggingVertex && !isDraggingWall && !marquee && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ height: size.height }}>
-          {wizardTargets.map((target, i) => (
+          {wizardGaps.map((target, i) => (
             <WizardWand
               key={`${target.targetRoomId}-${target.wallIndex}-${i}`}
               target={target}

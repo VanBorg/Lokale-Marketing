@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown } from 'lucide-react';
-import { WizardTarget } from './canvasTypes';
+import type { GapInfo } from './canvasTypes';
 
 interface WizardWandProps {
-  target: WizardTarget;
+  target: GapInfo;
   scale: number;
   stagePos: { x: number; y: number };
-  onFill: (target: WizardTarget) => void;
-  onHoverStart: (target: WizardTarget) => void;
+  onFill: (target: GapInfo) => void;
+  onHoverStart: (target: GapInfo) => void;
   onHoverEnd: () => void;
 }
 
-function directionInfo(target: WizardTarget) {
+function directionInfo(target: GapInfo) {
   const { nx, ny } = target.direction;
   if (Math.abs(nx) >= Math.abs(ny)) {
     return nx >= 0
