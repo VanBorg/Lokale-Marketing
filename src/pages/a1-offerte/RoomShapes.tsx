@@ -1,6 +1,7 @@
 import { SHAPES, Room, RoomType, isSpecialRoom } from './types';
 import { SPECIAL_ROOM_CONFIGS } from './specialRooms';
 import { RoomRotationPicker, SpecialRoomOrientationPicker } from './RoomEditPanel';
+import RotationDial from './canvas/RotationDial';
 import { Hammer } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -190,6 +191,18 @@ export default function RoomShapes({
             className="mt-4"
           />
         )
+      )}
+      {selectedRoom && selectedRoom.roomType !== 'normal' && (
+        <div className="mt-3">
+          <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
+            Precieze rotatie
+          </h3>
+          <RotationDial
+            rotation={selectedRoom.rotation || 0}
+            onChange={(deg) => onUpdateRoom(selectedRoom.id, { rotation: deg })}
+            disabled={selectedRoom.isFinalized}
+          />
+        </div>
       )}
     </div>
   );

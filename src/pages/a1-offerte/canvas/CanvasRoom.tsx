@@ -183,8 +183,11 @@ export default function CanvasRoom({
             const tempRoom = { ...room, x: newX, y: newY };
             const wallSnap = snapSpecialRoomToWall(tempRoom, rooms);
             if (wallSnap) {
-              e.target.x(wallSnap.x + cx);
-              e.target.y(wallSnap.y + cy);
+              const { w: newW, h: newH } = boundingSize({ ...room, rotation: wallSnap.rotation });
+              const newCx = newW / 2;
+              const newCy = newH / 2;
+              e.target.x(wallSnap.x + newCx);
+              e.target.y(wallSnap.y + newCy);
               onDragEndRoom();
               onUpdateRoom(room.id, { x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation });
               return;

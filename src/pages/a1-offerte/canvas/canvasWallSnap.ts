@@ -140,33 +140,32 @@ export function snapSpecialRoomToWall(
   newRotation = ((newRotation % 360) + 360) % 360;
 
   // ── Bereken nieuwe positie ───────────────────────────────────────────────
-  const { w, h } = boundingSize(draggedRoom);
-  const cx = w / 2;
-  const cy = h / 2;
+  const oldSize = boundingSize(draggedRoom);
+  const newSize = boundingSize({ ...draggedRoom, rotation: newRotation });
+  const oldCx = oldSize.w / 2;
+  const oldCy = oldSize.h / 2;
+  const newCx = newSize.w / 2;
+  const newCy = newSize.h / 2;
   const newRot = newRotation * Math.PI / 180;
 
-  // Middelpunt van de snappende rand in lokale pixels
   const edgeMidLocalPx: Vec2 = {
     x: ((v1.x + v2.x) / 2) * PX_PER_M,
     y: ((v1.y + v2.y) / 2) * PX_PER_M,
   };
 
-  // Middelpunt na nieuwe rotatie (relatief aan room.x, room.y)
-  const rotatedMid = rotateAroundCenter(edgeMidLocalPx.x, edgeMidLocalPx.y, cx, cy, newRot);
+  const rotatedMid = rotateAroundCenter(edgeMidLocalPx.x, edgeMidLocalPx.y, newCx, newCy, newRot);
   const worldMidAfterRot: Vec2 = {
-    x: draggedRoom.x + rotatedMid.x,
-    y: draggedRoom.y + rotatedMid.y,
+    x: draggedRoom.x + rotatedMid.x + (oldCx - newCx),
+    y: draggedRoom.y + rotatedMid.y + (oldCy - newCy),
   };
 
-  // Doelpunt: dichtsbijzijnde punt op het hostsegment (licht geclamped)
-  const tClamped = Math.max(0.05, Math.min(0.95, bestT));
+  const tClamped = Math.max(0, Math.min(1, bestT));
   const segLen = vlen(sub(bestHostSeg.b, bestHostSeg.a));
   const snapTarget: Vec2 = {
     x: bestHostSeg.a.x + hDir.x * tClamped * segLen,
     y: bestHostSeg.a.y + hDir.y * tClamped * segLen,
   };
 
-  // Verschuiving: schuif kamer zodat rand-middelpunt op snapTarget belandt
   const deltaX = snapTarget.x - worldMidAfterRot.x;
   const deltaY = snapTarget.y - worldMidAfterRot.y;
 
