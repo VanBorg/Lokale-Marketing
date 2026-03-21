@@ -6,7 +6,7 @@ import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getDependentRooms
 import { useTheme } from '../../hooks/useTheme';
 import { WallId, DraggingHandle, DraggingVertex, DraggingWall, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
 import { wallNormal, projectWorldDeltaToNormalMetres, rotatedResizeCursor } from './canvas/canvasGeometry';
-import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill, safeGapFillDistance, getWorldVertices, rotateVector2D } from './canvas/canvasUtils';
+import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill, computeWizardCarve, safeGapFillDistance, safeGapCarveDistance, getWorldVertices, rotateVector2D } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
 import CanvasGrid from './canvas/CanvasGrid';
 import CanvasRoom from './canvas/CanvasRoom';
@@ -217,9 +217,32 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
 
   useEffect(() => {
     if (!selectedRoomId) { setWizardGaps([]); return; }
-    const room = rooms.find(r => r.id === selectedRoomId);
-    if (!room || room.isFinalized) { setWizardGaps([]); return; }
-    setWizardGaps(detectRoomGaps(room, rooms));
+    const selected = rooms.find(r => r.id === selectedRoomId);
+    if (!selected || selected.isFinalized) { setWizardGaps([]); return; }
+
+    const wizardTarget = selected.roomType === 'normal'
+      ? selected
+      : (selected.parentRoomId ? rooms.find(r => r.id === selected.parentRoomId && r.roomType === 'normal') ?? null : null);
+    if (!wizardTarget || wizardTarget.isFinalized) { setWizardGaps([]); return; }
+
+    let gaps = detectRoomGaps(wizardTarget, rooms);
+    if (selected.roomType !== 'normal') {
+      const selW = (selected.rotation === 90 || selected.rotation === 270 ? selected.width : selected.length) * PX_PER_M;
+      const selH = (selected.rotation === 90 || selected.rotation === 270 ? selected.length : selected.width) * PX_PER_M;
+      const selCx = selected.x + selW / 2;
+      const selCy = selected.y + selH / 2;
+      const nearSelected = gaps.filter(g => {
+        if (g.targetRoomId === selected.id) return true;
+        const dx = g.wizardWorldPos.x - selCx;
+        const dy = g.wizardWorldPos.y - selCy;
+        return Math.hypot(dx, dy) <= 260;
+      });
+      if (nearSelected.length > 0) gaps = nearSelected;
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run14',hypothesisId:'H-gap-visibility',location:'PlattegrondCanvas.tsx:wizardGapsEffect',message:'wizard gap detection',data:{selectedRoomId,selectedRoomType:selected.roomType,wizardTargetId:wizardTarget.id,wizardTargetType:wizardTarget.roomType,gapCount:gaps.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    setWizardGaps(gaps);
   }, [rooms, selectedRoomId]);
 
   const totals = rooms.reduce(
@@ -745,15 +768,58 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
     setWizardPreview(null);
   }, [rooms, onUpdateRoom, beginBatch, endBatch]);
 
+  const handleWizardCarve = useCallback((gapInfo: GapInfo) => {
+    if (!onUpdateRoom) return;
+    const targetRoom = rooms.find(r => r.id === gapInfo.roomId);
+    if (!targetRoom) return;
+
+    const safeT = safeGapCarveDistance(targetRoom, gapInfo);
+    if (safeT <= 0) return;
+
+    const scaledGap: GapInfo = {
+      ...gapInfo,
+      deltaPx: {
+        x: gapInfo.deltaPx.x * safeT,
+        y: gapInfo.deltaPx.y * safeT,
+      },
+    };
+
+    beginBatch?.();
+    const carved = computeWizardCarve(targetRoom, scaledGap);
+    if (!carved) {
+      endBatch?.();
+      return;
+    }
+    const updatedRooms = rooms.map(r => r.id === targetRoom.id ? carved : r);
+    const snapped = snapToRooms(targetRoom.id, carved.x, carved.y, updatedRooms);
+    // #region agent log
+    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run11',hypothesisId:'H-carve',location:'PlattegrondCanvas.tsx:handleWizardCarve',message:'apply carve',data:{roomId:targetRoom.id,safeT,newX:snapped.x,newY:snapped.y},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    flushSync(() => {
+      onUpdateRoom(targetRoom.id, {
+        vertices: carved.vertices,
+        x: snapped.x,
+        y: snapped.y,
+        length: carved.length,
+        width: carved.width,
+        wallLengths: carved.wallLengths,
+      });
+    });
+    endBatch?.();
+    setWizardPreview(null);
+  }, [rooms, onUpdateRoom, beginBatch, endBatch]);
+
   const wizardGapsRef = useRef(wizardGaps);
   wizardGapsRef.current = wizardGaps;
   const handleWizardFillRef = useRef(handleWizardFill);
   handleWizardFillRef.current = handleWizardFill;
 
-  const handleWizardHoverStart = useCallback((gapInfo: GapInfo) => {
+  const handleWizardHoverStart = useCallback((gapInfo: GapInfo, mode: 'fill' | 'carve') => {
     const targetRoom = rooms.find(r => r.id === gapInfo.roomId);
     if (!targetRoom) return;
-    const safeT = safeGapFillDistance(targetRoom, gapInfo, rooms);
+    const safeT = mode === 'fill'
+      ? safeGapFillDistance(targetRoom, gapInfo, rooms)
+      : safeGapCarveDistance(targetRoom, gapInfo);
     if (safeT <= 0) return;
     const scaledGap: GapInfo = {
       ...gapInfo,
@@ -762,7 +828,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
         y: gapInfo.deltaPx.y * safeT,
       },
     };
-    const fill = computeWizardFill(targetRoom, scaledGap);
+    const fill = mode === 'fill'
+      ? computeWizardFill(targetRoom, scaledGap)
+      : computeWizardCarve(targetRoom, scaledGap);
     if (!fill) return;
     const pts = getWorldVertices(fill).flatMap(v => [v.x, v.y]);
     setWizardPreview({ vertices: pts });
@@ -771,6 +839,36 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
   const handleWizardHoverEnd = useCallback(() => {
     setWizardPreview(null);
   }, []);
+
+  const selectedSpecialActionTarget = useMemo(() => {
+    if (!selectedRoomId || wizardGaps.length === 0) return null;
+    const selected = rooms.find(r => r.id === selectedRoomId);
+    if (!selected || selected.roomType === 'normal') return null;
+
+    const rot = selected.rotation || 0;
+    const sw = (rot === 90 || rot === 270 ? selected.width : selected.length) * PX_PER_M;
+    const sh = (rot === 90 || rot === 270 ? selected.length : selected.width) * PX_PER_M;
+    const scx = selected.x + sw / 2;
+    const scy = selected.y + sh / 2;
+
+    const byTarget = wizardGaps.filter(g => g.targetRoomId === selected.id);
+    const pool = byTarget.length > 0 ? byTarget : wizardGaps;
+    const nearest = pool.reduce((best, g) => {
+      const dx = g.wizardWorldPos.x - scx;
+      const dy = g.wizardWorldPos.y - scy;
+      const d2 = dx * dx + dy * dy;
+      if (!best || d2 < best.d2) return { gap: g, d2 };
+      return best;
+    }, null as null | { gap: GapInfo; d2: number });
+    if (!nearest) return null;
+
+    const topOffsetPx = 26;
+    const uiPos = { x: scx, y: selected.y - topOffsetPx / Math.max(scale, 0.2) };
+    // #region agent log
+    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run15',hypothesisId:'H-action-ui',location:'PlattegrondCanvas.tsx:selectedSpecialActionTarget',message:'single +/− target chosen',data:{selectedRoomId:selected.id,selectedRoomType:selected.roomType,wizardGapsCount:wizardGaps.length,usedTargetSpecific:byTarget.length>0,targetRoomId:nearest.gap.targetRoomId,uiX:uiPos.x,uiY:uiPos.y},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return { ...nearest.gap, wizardWorldPos: uiPos } as GapInfo;
+  }, [rooms, selectedRoomId, wizardGaps, scale]);
 
   const autoPanStep = useCallback(() => {
     const stage = stageRef.current;
@@ -1118,13 +1216,27 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
       )}
       {wizardGaps.length > 0 && !draggingHandle && !isDraggingVertex && !isDraggingWall && !marquee && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ height: size.height }}>
-          {wizardGaps.map((target, i) => (
+          {selectedSpecialActionTarget ? (
+            <WizardWand
+              key={`selected-special-action-${selectedSpecialActionTarget.targetRoomId}-${selectedSpecialActionTarget.wallIndex}`}
+              target={selectedSpecialActionTarget}
+              scale={scale}
+              stagePos={stagePos}
+              viewportSize={{ width: size.width, height: size.height }}
+              onFill={handleWizardFill}
+              onCarve={handleWizardCarve}
+              onHoverStart={handleWizardHoverStart}
+              onHoverEnd={handleWizardHoverEnd}
+            />
+          ) : wizardGaps.map((target, i) => (
             <WizardWand
               key={`${target.targetRoomId}-${target.wallIndex}-${i}`}
               target={target}
               scale={scale}
               stagePos={stagePos}
+              viewportSize={{ width: size.width, height: size.height }}
               onFill={handleWizardFill}
+              onCarve={handleWizardCarve}
               onHoverStart={handleWizardHoverStart}
               onHoverEnd={handleWizardHoverEnd}
             />

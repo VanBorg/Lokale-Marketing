@@ -102,7 +102,9 @@ export function detectRoomGaps(selectedRoom: Room, allRooms: Room[]): GapInfo[] 
   const gaps: GapInfo[] = [];
 
   for (const other of allRooms) {
-    if (other.id === selectedRoom.id || !other.isFinalized) continue;
+    if (other.id === selectedRoom.id) continue;
+    const includeOther = other.isFinalized || isSpecialRoomType(other.roomType);
+    if (!includeOther) continue;
     if (UNSUPPORTED.has(other.shape?.toLowerCase?.() ?? '')) continue;
 
     const rEdges = mergeCollinearEdges(buildWorldEdges(other));
@@ -138,6 +140,83 @@ export function detectRoomGaps(selectedRoom: Room, allRooms: Room[]): GapInfo[] 
       }
     }
   }
+
+  if (gaps.length === 0) {
+    // Fallback detector for diagonal/crooked walls: compare nearly-parallel wall
+    // segments in world space and derive gap vectors from midpoint-to-midpoint.
+    const tSegs = computeWorldWallSegments(selectedRoom).filter(s => s.lengthPx >= OVERLAP_MIN_PX);
+    for (const other of allRooms) {
+      if (other.id === selectedRoom.id) continue;
+      const includeOther = other.isFinalized || isSpecialRoomType(other.roomType);
+      if (!includeOther) continue;
+      if (UNSUPPORTED.has(other.shape?.toLowerCase?.() ?? '')) continue;
+      const rSegs = computeWorldWallSegments(other).filter(s => s.lengthPx >= OVERLAP_MIN_PX);
+
+      for (const te of tSegs) {
+        const tdx = te.p2.x - te.p1.x;
+        const tdy = te.p2.y - te.p1.y;
+        const tLen = Math.hypot(tdx, tdy);
+        if (tLen < 1e-6) continue;
+        const ux = tdx / tLen;
+        const uy = tdy / tLen;
+        const nx = -uy;
+        const ny = ux;
+
+        const tA = te.p1.x * ux + te.p1.y * uy;
+        const tB = te.p2.x * ux + te.p2.y * uy;
+        const tMin = Math.min(tA, tB);
+        const tMax = Math.max(tA, tB);
+
+        for (const re of rSegs) {
+          const rdx = re.p2.x - re.p1.x;
+          const rdy = re.p2.y - re.p1.y;
+          const rLen = Math.hypot(rdx, rdy);
+          if (rLen < 1e-6) continue;
+          const vx = rdx / rLen;
+          const vy = rdy / rLen;
+
+          const parallel = Math.abs(ux * vx + uy * vy);
+          if (parallel < 0.93) continue;
+          if (te.outwardNormal.x * re.outwardNormal.x + te.outwardNormal.y * re.outwardNormal.y > -0.1) continue;
+
+          const rA = re.p1.x * ux + re.p1.y * uy;
+          const rB = re.p2.x * ux + re.p2.y * uy;
+          const rMin = Math.min(rA, rB);
+          const rMax = Math.max(rA, rB);
+          const oMin = Math.max(tMin, rMin);
+          const oMax = Math.min(tMax, rMax);
+          if (oMax - oMin < OVERLAP_MIN_PX) continue;
+
+          const dx = re.midpoint.x - te.midpoint.x;
+          const dy = re.midpoint.y - te.midpoint.y;
+          const distSigned = dx * nx + dy * ny;
+          const gap = Math.abs(distSigned);
+          if (gap < GAP_MIN_PX || gap > GAP_MAX_PX) continue;
+
+          const deltaPx = { x: nx * distSigned, y: ny * distSigned };
+          const len = Math.hypot(deltaPx.x, deltaPx.y);
+          if (len < 1e-6) continue;
+
+          gaps.push({
+            roomId: selectedRoom.id,
+            targetRoomId: other.id,
+            wallIndex: te.wallIndex,
+            refWallIndex: re.wallIndex,
+            direction: { nx: deltaPx.x / len, ny: deltaPx.y / len },
+            wizardWorldPos: {
+              x: (te.midpoint.x + re.midpoint.x) / 2,
+              y: (te.midpoint.y + re.midpoint.y) / 2,
+            },
+            deltaPx,
+          });
+        }
+      }
+    }
+  }
+
+  // #region agent log
+  fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run13',hypothesisId:'H-gap-detector',location:'canvasWizard.ts:detectRoomGaps',message:'detected gaps',data:{roomId:selectedRoom.id,gapCount:gaps.length},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   return gaps;
 }
@@ -188,6 +267,13 @@ export function computeWizardFill(targetRoom: Room, gap: GapInfo): Room | null {
   };
 }
 
+export function computeWizardCarve(targetRoom: Room, gap: GapInfo): Room | null {
+  return computeWizardFill(targetRoom, {
+    ...gap,
+    deltaPx: { x: -gap.deltaPx.x, y: -gap.deltaPx.y },
+  });
+}
+
 function wizardResultCollides(filledRoom: Room, allRooms: Room[]): boolean {
   const segs = computeWorldWallSegments(filledRoom);
   for (const other of allRooms) {
@@ -218,6 +304,25 @@ export function safeGapFillDistance(targetRoom: Room, gap: GapInfo, allRooms: Ro
     const testGap: GapInfo = { ...gap, deltaPx: { x: gap.deltaPx.x * mid, y: gap.deltaPx.y * mid } };
     const testRoom = computeWizardFill(targetRoom, testGap);
     if (!testRoom || wizardResultCollides(testRoom, others)) hi = mid;
+    else lo = mid;
+  }
+  return lo < 1e-4 ? 0 : lo;
+}
+
+export function safeGapCarveDistance(targetRoom: Room, gap: GapInfo): number {
+  const fullRoom = computeWizardCarve(targetRoom, gap);
+  if (!fullRoom) return 0;
+  const fullVerts = ensureVertices(fullRoom);
+  const fullBb = verticesBoundingBox(fullVerts);
+  if (fullBb.w >= 0.2 && fullBb.h >= 0.2) return 1;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 8; i++) {
+    const mid = (lo + hi) / 2;
+    const testGap: GapInfo = { ...gap, deltaPx: { x: gap.deltaPx.x * mid, y: gap.deltaPx.y * mid } };
+    const testRoom = computeWizardCarve(targetRoom, testGap);
+    if (!testRoom) { hi = mid; continue; }
+    const bb = verticesBoundingBox(ensureVertices(testRoom));
+    if (bb.w < 0.2 || bb.h < 0.2) hi = mid;
     else lo = mid;
   }
   return lo < 1e-4 ? 0 : lo;

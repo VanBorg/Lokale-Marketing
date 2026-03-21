@@ -21,8 +21,43 @@ function detectSubRooms(rooms: Room[]): Room[] {
 
     const parentCandidates = normalRooms;
 
+    const preferWallAttach = r.specialRoomPlacementMode === 'against-wall';
+
+    if (preferWallAttach) {
+      // For against-wall rooms, always prefer explicit wall attachment:
+      // 1) adjacent rooms attach to the touched wall
+      // 2) overlapping rooms attach to the nearest wall (never "inside")
+      for (const parent of parentCandidates) {
+        if (isAdjacent(r, parent)) {
+          const wall = detectAttachedWall(r, parent);
+          const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
+          if (wall && wall !== 'inside') {
+            // #region agent log
+            fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run8',hypothesisId:'H-classify',location:'TabPlattegrond.tsx:detectSubRooms',message:'against-wall classified as wall-attached via adjacency',data:{roomId:r.id,parentRoomId:parent.id,attachedWall:wall,specialRoomPlacementMode:r.specialRoomPlacementMode??null},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
+          }
+        }
+      }
+      for (const parent of parentCandidates) {
+        if (isOverlapping(parent, r)) {
+          const wall = detectAttachedWall(r, parent);
+          const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
+          if (wall && wall !== 'inside') {
+            // #region agent log
+            fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run8',hypothesisId:'H-classify',location:'TabPlattegrond.tsx:detectSubRooms',message:'against-wall classified as wall-attached via overlap-nearest-wall',data:{roomId:r.id,parentRoomId:parent.id,attachedWall:wall,specialRoomPlacementMode:r.specialRoomPlacementMode??null},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
+          }
+        }
+      }
+    }
+
     for (const parent of parentCandidates) {
       if (isOverlapping(parent, r)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run8',hypothesisId:'H-classify',location:'TabPlattegrond.tsx:detectSubRooms',message:'classified as inside via overlap',data:{roomId:r.id,parentRoomId:parent.id,specialRoomPlacementMode:r.specialRoomPlacementMode??null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: 'inside' as const, wallOffset: undefined };
       }
     }
@@ -360,8 +395,8 @@ export default function TabPlattegrond({
 
   const updateRoom = useCallback(
     (id: string, updates: Partial<Room>) => {
-      updateActiveFloorRooms(prev =>
-        detectSubRooms(prev.map(r => {
+      updateActiveFloorRooms(prev => {
+        const mapped = prev.map(r => {
           if (r.id !== id) return r;
           const merged = { ...r, ...updates };
 
@@ -402,8 +437,16 @@ export default function TabPlattegrond({
           }
 
           return merged;
-        })),
-      );
+        });
+        const next = detectSubRooms(mapped);
+        const changed = next.find(r => r.id === id);
+        if (changed && changed.roomType !== 'normal' && updates.x !== undefined && updates.y !== undefined && updates.rotation !== undefined) {
+          // #region agent log
+          fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run5',hypothesisId:'H-update',location:'TabPlattegrond.tsx:updateRoom',message:'post-detectSubRooms state',data:{roomId:changed.id,roomType:changed.roomType,x:changed.x,y:changed.y,rotation:changed.rotation,isSubRoom:changed.isSubRoom,parentRoomId:changed.parentRoomId,attachedWall:changed.attachedWall,specialRoomPlacementMode:changed.specialRoomPlacementMode??null},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+        }
+        return next;
+      });
     },
     [updateActiveFloorRooms],
   );
@@ -486,6 +529,39 @@ export default function TabPlattegrond({
               finalX = Math.max(pl, Math.min(pr - rw, x));
               finalY = Math.max(pt, Math.min(pb - rh, y));
               break;
+            }
+          }
+        }
+
+        if (room && room.specialRoomPlacementMode === 'against-wall' && room.parentRoomId) {
+          const parent = prev.find(r => r.id === room.parentRoomId);
+          if (parent && parent.roomType === 'normal') {
+            const rot = room.rotation || 0;
+            const rw = (rot === 90 || rot === 270 ? room.width : room.length) * PX_PER_M;
+            const rh = (rot === 90 || rot === 270 ? room.length : room.width) * PX_PER_M;
+            const bleed = 8; // soft margin: allow near-wall drag but prevent deep penetration
+            const minX = parent.x - bleed;
+            const minY = parent.y - bleed;
+            const maxX = parent.x + (parent.length * PX_PER_M) + bleed - rw;
+            const maxY = parent.y + (parent.width * PX_PER_M) + bleed - rh;
+            const outsideDist = Math.max(
+              minX - finalX,
+              finalX - maxX,
+              minY - finalY,
+              finalY - maxY,
+              0,
+            );
+            const releaseDist = 64;
+            if (outsideDist <= releaseDist) {
+              finalX = Math.max(minX, Math.min(maxX, finalX));
+              finalY = Math.max(minY, Math.min(maxY, finalY));
+              // #region agent log
+              fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-corner-clamp',location:'TabPlattegrond.tsx:moveRoom',message:'against-wall soft clamp applied',data:{roomId:id,parentRoomId:room.parentRoomId,requestedX:x,requestedY:y,finalX,finalY,outsideDist,releaseDist},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
+            } else {
+              // #region agent log
+              fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-corner-clamp',location:'TabPlattegrond.tsx:moveRoom',message:'against-wall soft clamp released',data:{roomId:id,parentRoomId:room.parentRoomId,requestedX:x,requestedY:y,finalX,finalY,outsideDist,releaseDist},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
             }
           }
         }

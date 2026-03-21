@@ -2,7 +2,9 @@ import { Room, ensureVertices } from '../types';
 import { boundingSize } from './canvasGeometry';
 import { PX_PER_M } from './canvasTypes';
 
-const DEFAULT_THRESHOLD = 60; // pixels
+const DEFAULT_THRESHOLD = 80; // px (≈ 2 m)
+const CORNER_THRESHOLD = 72; // px
+const CORNER_WEIGHT = 0.6; // lower = prefer corners sooner
 
 type Vec2 = { x: number; y: number };
 
@@ -15,23 +17,20 @@ function rot90(v: Vec2): Vec2 { return { x: -v.y, y: v.x }; }
 function rotateAroundCenter(
   px: number, py: number,
   cx: number, cy: number,
-  rot: number,
+  rad: number,
 ): Vec2 {
-  const lx = px - cx;
-  const ly = py - cy;
-  const c = Math.cos(rot);
-  const s = Math.sin(rot);
+  const lx = px - cx; const ly = py - cy;
+  const c = Math.cos(rad); const s = Math.sin(rad);
   return { x: cx + lx * c - ly * s, y: cy + lx * s + ly * c };
 }
 
 function getWorldVertices(room: Room): Vec2[] {
   const verts = ensureVertices(room);
   const { w, h } = boundingSize(room);
-  const cx = w / 2;
-  const cy = h / 2;
-  const rot = (room.rotation || 0) * Math.PI / 180;
+  const cx = w / 2; const cy = h / 2;
+  const rad = (room.rotation || 0) * Math.PI / 180;
   return verts.map(v => {
-    const wp = rotateAroundCenter(v.x * PX_PER_M, v.y * PX_PER_M, cx, cy, rot);
+    const wp = rotateAroundCenter(v.x * PX_PER_M, v.y * PX_PER_M, cx, cy, rad);
     return { x: room.x + wp.x, y: room.y + wp.y };
   });
 }
@@ -43,8 +42,7 @@ function getWorldSegments(room: Room): WorldSegment[] {
   const n = wv.length;
   const segs: WorldSegment[] = [];
   for (let i = 0; i < n; i++) {
-    const a = wv[i];
-    const b = wv[(i + 1) % n];
+    const a = wv[i]; const b = wv[(i + 1) % n];
     if (vlen(sub(b, a)) < 1) continue;
     segs.push({ a, b, roomId: room.id, edgeIdx: i });
   }
@@ -57,8 +55,7 @@ function perpDistToLine(p: Vec2, a: Vec2, b: Vec2): number {
 }
 
 function projT(p: Vec2, a: Vec2, b: Vec2): number {
-  const ab = sub(b, a);
-  const segLen = vlen(ab);
+  const ab = sub(b, a); const segLen = vlen(ab);
   if (segLen < 0.001) return 0;
   return dot(sub(p, a), normalize(ab)) / segLen;
 }
@@ -66,11 +63,14 @@ function projT(p: Vec2, a: Vec2, b: Vec2): number {
 export type WallSnapResult = { x: number; y: number; rotation: number };
 
 /**
- * Snap een speciale kamer (roomType !== 'normal') flush tegen het dichtstbijzijnde
- * wandsegment van een definitief gemaakte kamer. Retourneert nieuwe x, y, rotation
- * of null als er niets binnen de drempel valt.
+ * Snap a special room flush against the nearest wall of any finalized room.
  *
- * draggedRoom moet al de nieuwe x, y hebben vanuit de drag.
+ * Tries all 4 canonical orientations (0°/90°/180°/270°) with the room centre
+ * held fixed, so the room automatically rotates to match the nearest wall —
+ * including snapping portrait against a vertical wall or landscape against a
+ * horizontal one.
+ *
+ * The returned x/y is the NEW bounding-box top-left (room.x / room.y).
  */
 export function snapSpecialRoomToWall(
   draggedRoom: Room,
@@ -79,99 +79,201 @@ export function snapSpecialRoomToWall(
 ): WallSnapResult | null {
   if (draggedRoom.roomType === 'normal') return null;
 
-  // Verzamel wandsegmenten van alle definitieve kamers
+  // Collect host wall segments.
+  // Primary mode: finalized rooms (original behaviour).
+  // Fallback mode: if none are finalized yet, use normal rooms so snapping still
+  // works while users are still sketching.
+  const finalizedHosts = allRooms.filter(r => r.id !== draggedRoom.id && r.isFinalized);
+  const hostRooms = finalizedHosts.length > 0
+    ? finalizedHosts
+    : allRooms.filter(r => r.id !== draggedRoom.id && r.roomType === 'normal');
   const hostSegments: WorldSegment[] = [];
-  for (const room of allRooms) {
-    if (room.id === draggedRoom.id || !room.isFinalized) continue;
-    hostSegments.push(...getWorldSegments(room));
-  }
+  for (const room of hostRooms) hostSegments.push(...getWorldSegments(room));
+
+  // #region agent log
+  fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run4',hypothesisId:'H-host',location:'canvasWallSnap.ts:snapSpecialRoomToWall',message:'host segments collected',data:{draggedRoomId:draggedRoom.id,draggedRoomType:draggedRoom.roomType,hostSegmentsCount:hostSegments.length,hostRoomsCount:hostRooms.length,hostMode:finalizedHosts.length>0?'finalized':'normal-fallback',allRoomsCount:allRooms.length,finalizedRoomsCount:allRooms.filter(r=>r.isFinalized).length,threshold},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+
   if (hostSegments.length === 0) return null;
 
-  const dragSegs = getWorldSegments(draggedRoom);
-  if (dragSegs.length === 0) return null;
+  const oldSize = boundingSize(draggedRoom);
+  const oldCx = oldSize.w / 2;
+  const oldCy = oldSize.h / 2;
 
-  // Zoek beste kandidaat: (rand van speciale kamer, hostsegment) met kleinste |loodrechte afstand|
+  // Try all 4 canonical orientations; keep the room's centre fixed between trials
+  const ROTATIONS = [0, 90, 180, 270] as const;
+
   let bestAbsPerp = threshold;
-  let bestDragEdgeIdx = -1;
+  let bestRotation: number | null = null;
+  let bestEdgeIdx = -1;
   let bestHostSeg: WorldSegment | null = null;
   let bestT = 0.5;
+  let bestUseCorner = false;
+  let bestCornerPoint: Vec2 | null = null;
+  let bestCornerDist = Infinity;
+  let bestEndpointProximity = Infinity;
+  let pairCount = 0;
+  let rejectedParallel = 0;
+  let rejectedDistance = 0;
+  let rejectedProjection = 0;
+  let maxParallelSeen = -1;
+  let minAngleDiffDeg = 180;
 
-  for (let di = 0; di < dragSegs.length; di++) {
-    const ds = dragSegs[di];
-    const dMid: Vec2 = { x: (ds.a.x + ds.b.x) / 2, y: (ds.a.y + ds.b.y) / 2 };
-    const dDir = normalize(sub(ds.b, ds.a));
+  for (const tryRot of ROTATIONS) {
+    const { w, h } = boundingSize({ ...draggedRoom, rotation: tryRot });
+    const tryCx = w / 2; const tryCy = h / 2;
 
-    for (const hs of hostSegments) {
-      const hsDir = normalize(sub(hs.b, hs.a));
+    // Shift room position so its centre stays at the same world point
+    const tryRoom: Room = {
+      ...draggedRoom,
+      rotation: tryRot,
+      x: draggedRoom.x + (oldCx - tryCx),
+      y: draggedRoom.y + (oldCy - tryCy),
+    };
 
-      // Alleen parallelle wanden (niet haaks op elkaar)
-      const parallelism = Math.abs(dot(dDir, hsDir));
-      if (parallelism < 0.6) continue;
+    const dragSegs = getWorldSegments(tryRoom);
 
-      const perp = perpDistToLine(dMid, hs.a, hs.b);
-      const absPerp = Math.abs(perp);
-      if (absPerp >= bestAbsPerp) continue;
+    for (let di = 0; di < dragSegs.length; di++) {
+      const ds = dragSegs[di];
+      const dMid: Vec2 = { x: (ds.a.x + ds.b.x) / 2, y: (ds.a.y + ds.b.y) / 2 };
+      const dDir = normalize(sub(ds.b, ds.a));
 
-      const t = projT(dMid, hs.a, hs.b);
-      // Kleine marge voorbij segment-eindpunten toegestaan
-      if (t < -0.3 || t > 1.3) continue;
+      for (const hs of hostSegments) {
+        pairCount++;
+        const hsDir = normalize(sub(hs.b, hs.a));
+        const parallel = Math.abs(dot(dDir, hsDir));
+        if (parallel > maxParallelSeen) maxParallelSeen = parallel;
+        const angleDiffDeg = Math.acos(Math.max(-1, Math.min(1, parallel))) * 180 / Math.PI;
+        if (angleDiffDeg < minAngleDiffDeg) minAngleDiffDeg = angleDiffDeg;
+        if (parallel < 0.6) { rejectedParallel++; continue; } // must be roughly parallel
 
-      bestAbsPerp = absPerp;
-      bestDragEdgeIdx = di;
-      bestHostSeg = hs;
-      bestT = t;
+        const absPerp = Math.abs(perpDistToLine(dMid, hs.a, hs.b));
+        const t = projT(dMid, hs.a, hs.b);
+        const lineEligible = t >= -0.3 && t <= 1.3;
+        const endpointProximity = Math.min(Math.abs(t), Math.abs(1 - t)); // 0 near endpoint
+
+        const dCornerA = vlen(sub(dMid, hs.a));
+        const dCornerB = vlen(sub(dMid, hs.b));
+        const nearestCornerDist = Math.min(dCornerA, dCornerB);
+        const cornerEligible = nearestCornerDist <= CORNER_THRESHOLD || (endpointProximity < 0.26 && absPerp < threshold);
+
+        let candidateDist = Infinity;
+        let candidateUseCorner = false;
+        let candidateCorner: Vec2 | null = null;
+        let candidateT = t;
+        if (lineEligible) candidateDist = absPerp;
+        if (cornerEligible) {
+          // Keep corner preference strong, but never so strong that far corners
+          // beat nearby non-corner candidates.
+          const endpointBonus = Math.max(0, 1 - endpointProximity * 2); // 1 near endpoint, 0 at centre
+          let cornerScore = nearestCornerDist * 0.42 + absPerp * 0.35;
+          if (endpointProximity < 0.18) cornerScore -= 6 * endpointBonus;
+          cornerScore = Math.max(0, cornerScore);
+          if (cornerScore < candidateDist) {
+            candidateDist = cornerScore;
+            candidateUseCorner = true;
+            candidateCorner = dCornerA <= dCornerB ? hs.a : hs.b;
+            candidateT = dCornerA <= dCornerB ? 0 : 1;
+          }
+        }
+        if (candidateDist === Infinity) { rejectedProjection++; continue; }
+        if (candidateDist >= bestAbsPerp) { rejectedDistance++; continue; }
+
+        bestAbsPerp = candidateDist;
+        bestRotation = tryRot;
+        bestEdgeIdx = di;
+        bestHostSeg = hs;
+        bestT = candidateT;
+        bestUseCorner = candidateUseCorner;
+        bestCornerPoint = candidateCorner;
+        bestCornerDist = nearestCornerDist;
+        bestEndpointProximity = endpointProximity;
+      }
     }
   }
 
-  if (!bestHostSeg || bestDragEdgeIdx === -1) return null;
+  // #region agent log
+  fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-candidate-corner-bias',location:'canvasWallSnap.ts:candidate',message:'candidate scan result',data:{pairCount,rejectedParallel,rejectedDistance,rejectedProjection,maxParallelSeen,minAngleDiffDeg,bestAbsPerp,bestRotation,bestEdgeIdx,bestT,bestUseCorner,bestCornerDist,bestEndpointProximity,hasBestHostSeg:bestHostSeg!==null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
-  // ── Bereken nieuwe rotatie ────────────────────────────────────────────────
+  if (bestHostSeg === null || bestEdgeIdx === -1 || bestRotation === null) return null;
+
+  // ── Exact rotation: align chosen local edge with the host wall direction ──
   const hDir = normalize(sub(bestHostSeg.b, bestHostSeg.a));
   const hostAngleDeg = Math.atan2(hDir.y, hDir.x) * 180 / Math.PI;
 
   const verts = ensureVertices(draggedRoom);
-  const n = verts.length;
-  const v1 = verts[bestDragEdgeIdx];
-  const v2 = verts[(bestDragEdgeIdx + 1) % n];
+  const v1 = verts[bestEdgeIdx];
+  const v2 = verts[(bestEdgeIdx + 1) % verts.length];
   const localDir = normalize({ x: v2.x - v1.x, y: v2.y - v1.y });
   const localEdgeAngleDeg = Math.atan2(localDir.y, localDir.x) * 180 / Math.PI;
+  const baseRotation = ((hostAngleDeg - localEdgeAngleDeg) % 360 + 360) % 360;
 
-  let newRotation = hostAngleDeg - localEdgeAngleDeg;
-  newRotation = ((newRotation % 360) + 360) % 360;
+  // Snap target: projection of the edge midpoint onto the host wall segment
+  const tClamped = Math.max(0, Math.min(1, bestT));
+  const segLen = vlen(sub(bestHostSeg.b, bestHostSeg.a));
+  const snapTargetX = bestUseCorner && bestCornerPoint
+    ? bestCornerPoint.x
+    : bestHostSeg.a.x + hDir.x * tClamped * segLen;
+  const snapTargetY = bestUseCorner && bestCornerPoint
+    ? bestCornerPoint.y
+    : bestHostSeg.a.y + hDir.y * tClamped * segLen;
 
-  // ── Bereken nieuwe positie ───────────────────────────────────────────────
-  const oldSize = boundingSize(draggedRoom);
-  const newSize = boundingSize({ ...draggedRoom, rotation: newRotation });
-  const oldCx = oldSize.w / 2;
-  const oldCy = oldSize.h / 2;
-  const newCx = newSize.w / 2;
-  const newCy = newSize.h / 2;
-  const newRot = newRotation * Math.PI / 180;
-
+  // Edge midpoint in unrotated local pixel coordinates
   const edgeMidLocalPx: Vec2 = {
     x: ((v1.x + v2.x) / 2) * PX_PER_M,
     y: ((v1.y + v2.y) / 2) * PX_PER_M,
   };
 
-  const rotatedMid = rotateAroundCenter(edgeMidLocalPx.x, edgeMidLocalPx.y, newCx, newCy, newRot);
-  const worldMidAfterRot: Vec2 = {
-    x: draggedRoom.x + rotatedMid.x + (oldCx - newCx),
-    y: draggedRoom.y + rotatedMid.y + (oldCy - newCy),
+  const computeSnapForRotation = (rotationDeg: number) => {
+    const { w, h } = boundingSize({ ...draggedRoom, rotation: rotationDeg });
+    const cx = w / 2; const cy = h / 2;
+    const rad = rotationDeg * Math.PI / 180;
+    const rotatedMid = rotateAroundCenter(edgeMidLocalPx.x, edgeMidLocalPx.y, cx, cy, rad);
+    const topLeftX = draggedRoom.x + (oldCx - cx);
+    const topLeftY = draggedRoom.y + (oldCy - cy);
+    const worldMidX = topLeftX + rotatedMid.x;
+    const worldMidY = topLeftY + rotatedMid.y;
+    const x = topLeftX + (snapTargetX - worldMidX);
+    const y = topLeftY + (snapTargetY - worldMidY);
+    const center = { x: x + cx, y: y + cy };
+    const signedCenterDist = perpDistToLine(center, bestHostSeg!.a, bestHostSeg!.b);
+    return { x, y, rotation: rotationDeg, signedCenterDist };
   };
 
-  const tClamped = Math.max(0, Math.min(1, bestT));
-  const segLen = vlen(sub(bestHostSeg.b, bestHostSeg.a));
-  const snapTarget: Vec2 = {
-    x: bestHostSeg.a.x + hDir.x * tClamped * segLen,
-    y: bestHostSeg.a.y + hDir.y * tClamped * segLen,
-  };
+  // Two valid orientations can align the same edge to a wall: 0/180 apart.
+  // Pick the one that keeps the room on the same wall side as where the user
+  // dragged it before snapping (this enables intentional inside/outside placement).
+  const candA = computeSnapForRotation(baseRotation);
+  const candB = computeSnapForRotation((baseRotation + 180) % 360);
+  const draggedCenter = { x: draggedRoom.x + oldCx, y: draggedRoom.y + oldCy };
+  const draggedSideDist = perpDistToLine(draggedCenter, bestHostSeg.a, bestHostSeg.b);
+  const preferSign = Math.sign(draggedSideDist);
+  const signA = Math.sign(candA.signedCenterDist);
+  const signB = Math.sign(candB.signedCenterDist);
 
-  const deltaX = snapTarget.x - worldMidAfterRot.x;
-  const deltaY = snapTarget.y - worldMidAfterRot.y;
+  let chosen = candA;
+  if (preferSign !== 0) {
+    const aMatches = signA === preferSign;
+    const bMatches = signB === preferSign;
+    if (!aMatches && bMatches) chosen = candB;
+    else if (aMatches && bMatches) {
+      const da = Math.abs(candA.signedCenterDist - draggedSideDist);
+      const db = Math.abs(candB.signedCenterDist - draggedSideDist);
+      if (db < da) chosen = candB;
+    }
+  } else if (Math.abs(candB.signedCenterDist) > Math.abs(candA.signedCenterDist)) {
+    // If dragged exactly on wall line, pick the candidate with a clearer side.
+    chosen = candB;
+  }
+
+  // #region agent log
+  fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run13',hypothesisId:'H-corner-choice',location:'canvasWallSnap.ts:return',message:'snap side diagnostics',data:{draggedRoomId:draggedRoom.id,specialRoomPlacementMode:draggedRoom.specialRoomPlacementMode??null,bestHostRoomId:bestHostSeg.roomId,bestEdgeIdx,bestRotation,baseRotation,chosenRotation:chosen.rotation,draggedSideDist,candASideDist:candA.signedCenterDist,candBSideDist:candB.signedCenterDist,bestT,bestUseCorner,snapTargetX,snapTargetY},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   return {
-    x: draggedRoom.x + deltaX,
-    y: draggedRoom.y + deltaY,
-    rotation: newRotation,
+    x: chosen.x,
+    y: chosen.y,
+    rotation: chosen.rotation,
   };
 }

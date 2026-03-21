@@ -163,6 +163,82 @@ export default function CanvasRoom({
         }
       }}
       onDragMove={(e: Konva.KonvaEventObject<DragEvent>) => {
+        if (room.roomType !== 'normal' && room.specialRoomPlacementMode === 'against-wall' && room.parentRoomId) {
+          const parent = rooms.find(r => r.id === room.parentRoomId && r.roomType === 'normal');
+          if (parent) {
+            const rot = room.rotation || 0;
+            const rw = (rot === 90 || rot === 270 ? room.width : room.length) * PX_PER_M;
+            const rh = (rot === 90 || rot === 270 ? room.length : room.width) * PX_PER_M;
+            const bleed = 8;
+            const worldX = e.target.x() - cx;
+            const worldY = e.target.y() - cy;
+            const minX = parent.x - bleed;
+            const minY = parent.y - bleed;
+            const maxX = parent.x + parent.length * PX_PER_M + bleed - rw;
+            const maxY = parent.y + parent.width * PX_PER_M + bleed - rh;
+            const outsideDist = Math.max(
+              minX - worldX,
+              worldX - maxX,
+              minY - worldY,
+              worldY - maxY,
+              0,
+            );
+            const releaseDist = 64;
+            const shouldClamp = outsideDist <= releaseDist;
+            if (shouldClamp) {
+              let targetX = Math.max(minX, Math.min(maxX, worldX));
+              let targetY = Math.max(minY, Math.min(maxY, worldY));
+              const parentCorners = [
+                { x: minX, y: minY },
+                { x: maxX + rw, y: minY },
+                { x: minX, y: maxY + rh },
+                { x: maxX + rw, y: maxY + rh },
+              ];
+              const dragCornerCandidates = [
+                { dx: 0, dy: 0, tx: (corner: { x: number; y: number }) => ({ x: corner.x, y: corner.y }) },
+                { dx: rw, dy: 0, tx: (corner: { x: number; y: number }) => ({ x: corner.x - rw, y: corner.y }) },
+                { dx: 0, dy: rh, tx: (corner: { x: number; y: number }) => ({ x: corner.x, y: corner.y - rh }) },
+                { dx: rw, dy: rh, tx: (corner: { x: number; y: number }) => ({ x: corner.x - rw, y: corner.y - rh }) },
+              ];
+              let bestCornerDist = Infinity;
+              let cornerSnapX = targetX;
+              let cornerSnapY = targetY;
+              for (const pc of parentCorners) {
+                for (const dc of dragCornerCandidates) {
+                  const cx0 = targetX + dc.dx;
+                  const cy0 = targetY + dc.dy;
+                  const d = Math.hypot(pc.x - cx0, pc.y - cy0);
+                  if (d < bestCornerDist) {
+                    bestCornerDist = d;
+                    const snapped = dc.tx(pc);
+                    cornerSnapX = snapped.x;
+                    cornerSnapY = snapped.y;
+                  }
+                }
+              }
+              const cornerMagnetDist = 34;
+              const useCornerMagnet = bestCornerDist <= cornerMagnetDist;
+              if (useCornerMagnet) {
+                targetX = Math.max(minX, Math.min(maxX, cornerSnapX));
+                targetY = Math.max(minY, Math.min(maxY, cornerSnapY));
+                // #region agent log
+                fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-corner-magnet-drag',location:'CanvasRoom.tsx:onDragMove',message:'corner magnet applied',data:{roomId:room.id,parentRoomId:room.parentRoomId,worldX,worldY,targetX,targetY,bestCornerDist,cornerMagnetDist},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+              }
+              if (targetX !== worldX || targetY !== worldY) {
+                e.target.x(targetX + cx);
+                e.target.y(targetY + cy);
+                // #region agent log
+                fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-corner-clamp',location:'CanvasRoom.tsx:onDragMove',message:'soft clamp applied while dragging',data:{roomId:room.id,parentRoomId:room.parentRoomId,worldX,worldY,targetX,targetY,outsideDist,releaseDist,useCornerMagnet,bestCornerDist},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+              }
+            } else {
+              // #region agent log
+              fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-corner-clamp',location:'CanvasRoom.tsx:onDragMove',message:'soft clamp released for deliberate outside drag',data:{roomId:room.id,parentRoomId:room.parentRoomId,worldX,worldY,outsideDist,releaseDist},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
+            }
+          }
+        }
         if (isMultiSelected && onRoomDragMove) {
           onRoomDragMove(room.id, e.target.x() - cx - room.x, e.target.y() - cy - room.y);
         }
@@ -178,20 +254,37 @@ export default function CanvasRoom({
           const newX = e.target.x() - cx;
           const newY = e.target.y() - cy;
 
+          // #region agent log
+          fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run4',hypothesisId:'H-guard',location:'CanvasRoom.tsx:onDragEnd',message:'drag-end context',data:{roomId:room.id,roomType:room.roomType,isFinalized:room.isFinalized,isMultiSelected,hasOnUpdateRoom:!!onUpdateRoom,roomsCount:rooms.length,finalizedRooms:rooms.filter(r=>r.isFinalized).length,newX,newY},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+
           // Speciale kamers: probeer wandsegment-snap (rotatie + flush)
           if (room.roomType !== 'normal' && !isMultiSelected && onUpdateRoom && !room.isFinalized) {
             const tempRoom = { ...room, x: newX, y: newY };
             const wallSnap = snapSpecialRoomToWall(tempRoom, rooms);
+            // #region agent log
+            fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-corner-end-snap',location:'CanvasRoom.tsx:onDragEnd',message:'special room drag-end snap evaluation',data:{roomId:room.id,roomType:room.roomType,specialRoomPlacementMode:room.specialRoomPlacementMode??null,parentRoomId:room.parentRoomId??null,attachedWall:room.attachedWall??null,newX,newY,hasWallSnap:!!wallSnap,snappedX:wallSnap?.x??null,snappedY:wallSnap?.y??null,snappedRotation:wallSnap?.rotation??null},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            // #region agent log
+            fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run4',hypothesisId:'H-result',location:'CanvasRoom.tsx:wallSnap',message:'snap result',data:{roomId:room.id,wallSnap},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             if (wallSnap) {
               const { w: newW, h: newH } = boundingSize({ ...room, rotation: wallSnap.rotation });
               const newCx = newW / 2;
               const newCy = newH / 2;
               e.target.x(wallSnap.x + newCx);
               e.target.y(wallSnap.y + newCy);
+              // #region agent log
+              fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run5',hypothesisId:'H-update',location:'CanvasRoom.tsx:onDragEnd',message:'apply wallSnap updateRoom',data:{roomId:room.id,roomType:room.roomType,specialRoomPlacementMode:room.specialRoomPlacementMode??null,wallSnap},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
               onDragEndRoom();
               onUpdateRoom(room.id, { x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation });
               return;
             }
+          } else {
+            // #region agent log
+            fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run4',hypothesisId:'H-guard',location:'CanvasRoom.tsx:onDragEnd',message:'wall-snap guard blocked',data:{roomId:room.id,roomType:room.roomType,isMultiSelected,hasOnUpdateRoom:!!onUpdateRoom,isFinalized:room.isFinalized},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
           }
 
           // Normale kamers of geen wandsnap gevonden: bounding-box snap
