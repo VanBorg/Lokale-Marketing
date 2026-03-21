@@ -1,11 +1,10 @@
 import React, { useRef } from 'react';
-import { flushSync } from 'react-dom';
 import { Line, Circle, Group, Rect, Text } from 'react-konva';
 import Konva from 'konva';
 import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints, isSpecialRoom, getRoomFillKey } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
 import { WallId, DraggingHandle, PX_PER_M } from './canvasTypes';
-import { isNonRect, quadBounds, boundingSize, snapPosition } from './canvasUtils';
+import { isNonRect, quadBounds, boundingSize, snapPosition, snapSpecialRoomToWall } from './canvasUtils';
 import { wallMidDragCursor, rotatedResizeCursor, getRoomLabelCentreLocalPx } from './canvasGeometry';
 import RoomShape from './RoomShape';
 import RoomDimensionLines from './RoomDimensionLines';
@@ -176,24 +175,34 @@ export default function CanvasRoom({
         }
       }}
         onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
-        const newX = e.target.x() - cx;
-        const newY = e.target.y() - cy;
-        // Special rooms: always snap both X and Y so they can attach to any wall
-        const snapWalls = room.roomType !== 'normal' ? null : activeDragWalls;
-        const snapped = snapPosition(room.id, newX, newY, rooms, snapWalls);
-        e.target.x(snapped.x + cx);
-        e.target.y(snapped.y + cy);
-        // Flush so setFloors runs before endBatch clears batchRef (undo history stays correct).
-        flushSync(() => {
+          const newX = e.target.x() - cx;
+          const newY = e.target.y() - cy;
+
+          // Speciale kamers: probeer eerst wandsegment-snap (roteren + flush positioneren)
+          if (room.roomType !== 'normal' && !isMultiSelected && onUpdateRoom && !room.isFinalized) {
+            const tempRoom = { ...room, x: newX, y: newY };
+            const wallSnap = snapSpecialRoomToWall(tempRoom, rooms);
+            if (wallSnap) {
+              e.target.x(wallSnap.x + cx);
+              e.target.y(wallSnap.y + cy);
+              onDragEndRoom();
+              onUpdateRoom(room.id, { x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation });
+              return;
+            }
+          }
+
+          // Normale kamers (of geen wandsnap gevonden): bestaande bounding-box snap
+          const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
+          e.target.x(snapped.x + cx);
+          e.target.y(snapped.y + cy);
+          onDragEndRoom();
           onMoveRoom(room.id, snapped.x, snapped.y);
-        });
-        onDragEndRoom();
-        if (snapped.snappedToId && snapped.snappedWall && room.roomType !== 'normal') {
-          onSnapHighlight({ roomId: snapped.snappedToId, wall: snapped.snappedWall });
-          if (snapHighlightTimer.current) clearTimeout(snapHighlightTimer.current);
-          snapHighlightTimer.current = setTimeout(() => onSnapHighlight(null), 1000);
-        }
-      }}
+          if (snapped.snappedToId && snapped.snappedWall && room.roomType !== 'normal') {
+            onSnapHighlight({ roomId: snapped.snappedToId, wall: snapped.snappedWall });
+            if (snapHighlightTimer.current) clearTimeout(snapHighlightTimer.current);
+            snapHighlightTimer.current = setTimeout(() => onSnapHighlight(null), 1000);
+          }
+        }}
       onClick={(e: Konva.KonvaEventObject<MouseEvent>) => {
         if (placingElement && ghostPos) {
           e.cancelBubble = true;

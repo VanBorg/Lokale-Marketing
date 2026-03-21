@@ -33,3 +33,6 @@ export type { WallSegment, ConnectZone } from './wallSegments';
 
 export { getShapeConfig } from './shapes/index';
 export type { ShapeConfig } from './shapes/index';
+
+export { snapSpecialRoomToWall } from './canvasWallSnap';
+export type { WallSnapResult } from './canvasWallSnap';
