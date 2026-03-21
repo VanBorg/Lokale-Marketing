@@ -6,8 +6,10 @@ import { calcTotalWalls, ensureVertices, syncRoomFromVertices, getDependentRooms
 import { useTheme } from '../../hooks/useTheme';
 import { WallId, DraggingHandle, DraggingVertex, DraggingWall, SCALE_BY, HANDLE_CURSORS, PX_PER_M, PlattegrondCanvasProps, GapInfo } from './canvas/canvasTypes';
 import { wallNormal, projectWorldDeltaToNormalMetres, rotatedResizeCursor } from './canvas/canvasGeometry';
-import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, computeWizardFill, computeWizardCarve, safeGapFillDistance, safeGapCarveDistance, getWorldVertices, rotateVector2D } from './canvas/canvasUtils';
+import { computeGridLines, computeHandleDrag, computeGhostPos, computeSnapHighlightRect, snapToRooms, boundingSize, detectRoomGaps, rotateVector2D } from './canvas/canvasUtils';
 import { useCanvasStage } from './canvas/useCanvasStage';
+import { usePlattegrondAutoPan } from './canvas/usePlattegrondAutoPan';
+import { usePlattegrondWizardHandlers } from './canvas/usePlattegrondWizardHandlers';
 import CanvasGrid from './canvas/CanvasGrid';
 import CanvasRoom from './canvas/CanvasRoom';
 import CanvasToolbar from './canvas/CanvasToolbar';
@@ -67,18 +69,8 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
   const goToCenterRef = useRef(goToCenter);
   goToCenterRef.current = goToCenter;
 
-  const autoPanFrameRef = useRef<number | null>(null);
-  const autoPanActiveRef = useRef(false);
-  const stagePosRef = useRef(stagePos);
   const draggedRoomIdsRef = useRef<Set<string> | null>(null);
   const draggedRoomPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
-
-  useEffect(() => {
-    stagePosRef.current = stagePos;
-  }, [stagePos]);
-
-  const EDGE_THRESHOLD = 60;
-  const SCROLL_SPEED = 2.5;
 
   const getSpawnPosition = useCallback(() => ({
     x: (size.width / 2 - stagePos.x) / scale,
@@ -90,54 +82,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
   useEffect(() => {
     goToCenter();
   }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onCancelPlacing?.();
-        onCancelPendingSpecial?.();
-        return;
-      }
-      const tag = (document.activeElement as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (e.key === 's' || e.key === 'S') {
-        e.preventDefault();
-        goToCenterRef.current();
-      }
-      if (e.key === 'w' || e.key === 'W') {
-        if (wizardGapsRef.current.length > 0) {
-          e.preventDefault();
-          handleWizardFillRef.current(wizardGapsRef.current[0]);
-        }
-      }
-      // D = Definitief maken
-      if ((e.key === 'd' || e.key === 'D') && selectedRoomId && onUpdateRoom) {
-        const room = rooms.find(r => r.id === selectedRoomId);
-        if (!room || room.isFinalized) return;
-        e.preventDefault();
-
-        const dependents = getDependentRoomsForFinalization(room, rooms);
-        onUpdateRoom(room.id, { isFinalized: true });
-        dependents.forEach((dependent) => {
-          if (!dependent.isFinalized) onUpdateRoom(dependent.id, { isFinalized: true });
-        });
-      }
-      // B = Bewerken (als een kamer geselecteerd is en definitief is) — hoofdkamer + speciale kamers terug op bewerken
-      if ((e.key === 'b' || e.key === 'B') && selectedRoomId && onUpdateRoom) {
-        const room = rooms.find(r => r.id === selectedRoomId);
-        if (room?.isFinalized) {
-          e.preventDefault();
-          onUpdateRoom(selectedRoomId, { isFinalized: false });
-          const dependents = getDependentRoomsForFinalization(room, rooms);
-          dependents.forEach((dependent) => {
-            if (dependent.isFinalized) onUpdateRoom(dependent.id, { isFinalized: false });
-          });
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onCancelPlacing, onCancelPendingSpecial, selectedRoomId, rooms, onUpdateRoom]);
 
   const [ghostPos, setGhostPos] = useState<{ wall: WallId; position: number } | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -176,6 +120,89 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
   const [wizardPreview, setWizardPreview] = useState<{ vertices: number[] } | null>(null);
   const [hoveredTargetRoomId, setHoveredTargetRoomId] = useState<string | null>(null);
   const lastTargetPickRef = useRef<{ id: string; t: number } | null>(null);
+
+  const {
+    handleWizardFill,
+    handleWizardCarve,
+    handleWizardHoverStart,
+    handleWizardHoverEnd,
+    wizardGapsRef,
+    handleWizardFillRef,
+    selectedSpecialActionTarget,
+  } = usePlattegrondWizardHandlers({
+    rooms,
+    onUpdateRoom,
+    beginBatch,
+    endBatch,
+    wizardGaps,
+    setWizardPreview,
+    selectedRoomId,
+    scale,
+  });
+
+  const {
+    EDGE_THRESHOLD,
+    stopAutoPan,
+    ensureAutoPan,
+    handleRoomDragMovePosition,
+  } = usePlattegrondAutoPan({
+    stageRef,
+    size,
+    scale,
+    stagePos,
+    setStagePos,
+    onMoveRoom,
+    onMoveRooms,
+    draggedRoomIdsRef,
+    draggedRoomPositionsRef,
+    dragFromWalls,
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancelPlacing?.();
+        onCancelPendingSpecial?.();
+        return;
+      }
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        goToCenterRef.current();
+      }
+      if (e.key === 'w' || e.key === 'W') {
+        if (wizardGapsRef.current.length > 0) {
+          e.preventDefault();
+          handleWizardFillRef.current(wizardGapsRef.current[0]);
+        }
+      }
+      if ((e.key === 'd' || e.key === 'D') && selectedRoomId && onUpdateRoom) {
+        const room = rooms.find(r => r.id === selectedRoomId);
+        if (!room || room.isFinalized) return;
+        e.preventDefault();
+
+        const dependents = getDependentRoomsForFinalization(room, rooms);
+        onUpdateRoom(room.id, { isFinalized: true });
+        dependents.forEach((dependent) => {
+          if (!dependent.isFinalized) onUpdateRoom(dependent.id, { isFinalized: true });
+        });
+      }
+      if ((e.key === 'b' || e.key === 'B') && selectedRoomId && onUpdateRoom) {
+        const room = rooms.find(r => r.id === selectedRoomId);
+        if (room?.isFinalized) {
+          e.preventDefault();
+          onUpdateRoom(selectedRoomId, { isFinalized: false });
+          const dependents = getDependentRoomsForFinalization(room, rooms);
+          dependents.forEach((dependent) => {
+            if (dependent.isFinalized) onUpdateRoom(dependent.id, { isFinalized: false });
+          });
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancelPlacing, onCancelPendingSpecial, selectedRoomId, rooms, onUpdateRoom]);
 
   const setDraggingHandle = useCallback((handle: DraggingHandle) => {
     if (handle && !draggingHandle) beginBatch?.();
@@ -227,17 +254,13 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
 
     let gaps = detectRoomGaps(wizardTarget, rooms);
     if (selected.roomType !== 'normal') {
-      const selW = (selected.rotation === 90 || selected.rotation === 270 ? selected.width : selected.length) * PX_PER_M;
-      const selH = (selected.rotation === 90 || selected.rotation === 270 ? selected.length : selected.width) * PX_PER_M;
-      const selCx = selected.x + selW / 2;
-      const selCy = selected.y + selH / 2;
-      const nearSelected = gaps.filter(g => {
-        if (g.targetRoomId === selected.id) return true;
-        const dx = g.wizardWorldPos.x - selCx;
-        const dy = g.wizardWorldPos.y - selCy;
-        return Math.hypot(dx, dy) <= 260;
-      });
-      if (nearSelected.length > 0) gaps = nearSelected;
+      // Special rooms can be dragged to fill straight walls — the wall-segment
+      // snap engine handles axis-aligned placement automatically.
+      // Only show the wizard (+/-) for non-straight (diagonal/skewed) walls where
+      // manual drag placement is difficult.
+      gaps = gaps.filter(g =>
+        Math.abs(g.direction.nx) > 0.01 && Math.abs(g.direction.ny) > 0.01,
+      );
     }
     setWizardGaps(gaps);
   }, [rooms, selectedRoomId]);
@@ -590,14 +613,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
     });
   }, [draggingWall, onUpdateRoom]);
 
-  const stopAutoPan = useCallback(() => {
-    if (autoPanFrameRef.current !== null) {
-      cancelAnimationFrame(autoPanFrameRef.current);
-      autoPanFrameRef.current = null;
-    }
-    autoPanActiveRef.current = false;
-  }, []);
-
   const handleMouseUp = useCallback(() => {
     stopAutoPan();
     if (marquee) {
@@ -726,236 +741,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
       startRotation: room.rotation || 0,
     });
   }, [rooms, beginBatch]);
-
-  const handleWizardFill = useCallback((gapInfo: GapInfo) => {
-    if (!onUpdateRoom) return;
-    const targetRoom = rooms.find(r => r.id === gapInfo.roomId);
-    if (!targetRoom) return;
-
-    const safeT = safeGapFillDistance(targetRoom, gapInfo, rooms);
-    if (safeT <= 0) return;
-
-    const scaledGap: GapInfo = {
-      ...gapInfo,
-      deltaPx: {
-        x: gapInfo.deltaPx.x * safeT,
-        y: gapInfo.deltaPx.y * safeT,
-      },
-    };
-
-    beginBatch?.();
-    const fill = computeWizardFill(targetRoom, scaledGap);
-    if (!fill) {
-      endBatch?.();
-      return;
-    }
-    const updatedRooms = rooms.map(r => r.id === targetRoom.id ? fill : r);
-    const snapped = snapToRooms(targetRoom.id, fill.x, fill.y, updatedRooms);
-    flushSync(() => {
-      onUpdateRoom(targetRoom.id, {
-        vertices: fill.vertices,
-        x: snapped.x,
-        y: snapped.y,
-        length: fill.length,
-        width: fill.width,
-        wallLengths: fill.wallLengths,
-      });
-    });
-    endBatch?.();
-    setWizardPreview(null);
-  }, [rooms, onUpdateRoom, beginBatch, endBatch]);
-
-  const handleWizardCarve = useCallback((gapInfo: GapInfo) => {
-    if (!onUpdateRoom) return;
-    const targetRoom = rooms.find(r => r.id === gapInfo.roomId);
-    if (!targetRoom) return;
-
-    const safeT = safeGapCarveDistance(targetRoom, gapInfo);
-    if (safeT <= 0) return;
-
-    const scaledGap: GapInfo = {
-      ...gapInfo,
-      deltaPx: {
-        x: gapInfo.deltaPx.x * safeT,
-        y: gapInfo.deltaPx.y * safeT,
-      },
-    };
-
-    beginBatch?.();
-    const carved = computeWizardCarve(targetRoom, scaledGap);
-    if (!carved) {
-      endBatch?.();
-      return;
-    }
-    const updatedRooms = rooms.map(r => r.id === targetRoom.id ? carved : r);
-    const snapped = snapToRooms(targetRoom.id, carved.x, carved.y, updatedRooms);
-    flushSync(() => {
-      onUpdateRoom(targetRoom.id, {
-        vertices: carved.vertices,
-        x: snapped.x,
-        y: snapped.y,
-        length: carved.length,
-        width: carved.width,
-        wallLengths: carved.wallLengths,
-      });
-    });
-    endBatch?.();
-    setWizardPreview(null);
-  }, [rooms, onUpdateRoom, beginBatch, endBatch]);
-
-  const wizardGapsRef = useRef(wizardGaps);
-  wizardGapsRef.current = wizardGaps;
-  const handleWizardFillRef = useRef(handleWizardFill);
-  handleWizardFillRef.current = handleWizardFill;
-
-  const handleWizardHoverStart = useCallback((gapInfo: GapInfo, mode: 'fill' | 'carve') => {
-    const targetRoom = rooms.find(r => r.id === gapInfo.roomId);
-    if (!targetRoom) return;
-    const safeT = mode === 'fill'
-      ? safeGapFillDistance(targetRoom, gapInfo, rooms)
-      : safeGapCarveDistance(targetRoom, gapInfo);
-    if (safeT <= 0) return;
-    const scaledGap: GapInfo = {
-      ...gapInfo,
-      deltaPx: {
-        x: gapInfo.deltaPx.x * safeT,
-        y: gapInfo.deltaPx.y * safeT,
-      },
-    };
-    const fill = mode === 'fill'
-      ? computeWizardFill(targetRoom, scaledGap)
-      : computeWizardCarve(targetRoom, scaledGap);
-    if (!fill) return;
-    const pts = getWorldVertices(fill).flatMap(v => [v.x, v.y]);
-    setWizardPreview({ vertices: pts });
-  }, [rooms]);
-
-  const handleWizardHoverEnd = useCallback(() => {
-    setWizardPreview(null);
-  }, []);
-
-  const selectedSpecialActionTarget = useMemo(() => {
-    if (!selectedRoomId || wizardGaps.length === 0) return null;
-    const selected = rooms.find(r => r.id === selectedRoomId);
-    if (!selected || selected.roomType === 'normal') return null;
-
-    const rot = selected.rotation || 0;
-    const sw = (rot === 90 || rot === 270 ? selected.width : selected.length) * PX_PER_M;
-    const sh = (rot === 90 || rot === 270 ? selected.length : selected.width) * PX_PER_M;
-    const scx = selected.x + sw / 2;
-    const scy = selected.y + sh / 2;
-
-    const byTarget = wizardGaps.filter(g => g.targetRoomId === selected.id);
-    const pool = byTarget.length > 0 ? byTarget : wizardGaps;
-    const nearest = pool.reduce((best, g) => {
-      const dx = g.wizardWorldPos.x - scx;
-      const dy = g.wizardWorldPos.y - scy;
-      const d2 = dx * dx + dy * dy;
-      if (!best || d2 < best.d2) return { gap: g, d2 };
-      return best;
-    }, null as null | { gap: GapInfo; d2: number });
-    if (!nearest) return null;
-
-    const topOffsetPx = 26;
-    const uiPos = { x: scx, y: selected.y - topOffsetPx / Math.max(scale, 0.2) };
-    return { ...nearest.gap, wizardWorldPos: uiPos } as GapInfo;
-  }, [rooms, selectedRoomId, wizardGaps, scale]);
-
-  const autoPanStep = useCallback(() => {
-    const stage = stageRef.current;
-    if (!stage) {
-      stopAutoPan();
-      return;
-    }
-    const pointer = stage.getPointerPosition();
-    if (!pointer) {
-      stopAutoPan();
-      return;
-    }
-
-    const { width, height } = size;
-    let dx = 0;
-    let dy = 0;
-
-    if (pointer.x < EDGE_THRESHOLD) {
-      dx = 1 - pointer.x / EDGE_THRESHOLD;
-    } else if (pointer.x > width - EDGE_THRESHOLD) {
-      dx = -1 + (width - pointer.x) / EDGE_THRESHOLD;
-    }
-
-    if (pointer.y < EDGE_THRESHOLD) {
-      dy = 1 - pointer.y / EDGE_THRESHOLD;
-    } else if (pointer.y > height - EDGE_THRESHOLD) {
-      dy = -1 + (height - pointer.y) / EDGE_THRESHOLD;
-    }
-
-    let intensity = Math.max(Math.abs(dx), Math.abs(dy));
-    if (!intensity) {
-      stopAutoPan();
-      return;
-    }
-    intensity = Math.pow(intensity, 1.2);
-
-    const speed = (SCROLL_SPEED * intensity) / scale;
-    const stageDx = dx * speed;
-    const stageDy = dy * speed;
-
-    const prevStage = stagePosRef.current;
-    const newStageX = prevStage.x + stageDx;
-    const newStageY = prevStage.y + stageDy;
-    stagePosRef.current = { x: newStageX, y: newStageY };
-    setStagePos({ x: newStageX, y: newStageY });
-
-    // When auto-panning during a room drag, move the room(s) in world coords so they stay
-    // under the cursor. Stage moved right => content shifted right on screen => subtract
-    // world delta from room position to keep it under the same screen point.
-    const draggedIds = draggedRoomIdsRef.current;
-    if (draggedIds && (onMoveRoom || onMoveRooms)) {
-      const worldDx = stageDx / scale;
-      const worldDy = stageDy / scale;
-      const moves: { id: string; x: number; y: number }[] = [];
-      const ids = Array.from(draggedIds);
-      for (let i = 0; i < ids.length; i++) {
-        const id = ids[i];
-        const pos = draggedRoomPositionsRef.current[id];
-        if (pos) {
-          const newX = pos.x - worldDx;
-          const newY = pos.y - worldDy;
-          draggedRoomPositionsRef.current[id] = { x: newX, y: newY };
-          moves.push({ id, x: newX, y: newY });
-        }
-      }
-      if (moves.length > 0) {
-        if (moves.length === 1) {
-          onMoveRoom?.(moves[0].id, moves[0].x, moves[0].y);
-        } else {
-          onMoveRooms?.(moves);
-        }
-      }
-    }
-
-    autoPanFrameRef.current = requestAnimationFrame(autoPanStep);
-  }, [EDGE_THRESHOLD, SCROLL_SPEED, size, scale, setStagePos, stageRef, stopAutoPan, onMoveRoom, onMoveRooms]);
-
-  const ensureAutoPan = useCallback(() => {
-    if (autoPanActiveRef.current) return;
-    autoPanActiveRef.current = true;
-    autoPanStep();
-  }, [autoPanStep]);
-
-  /** Edge-based pan during room drag: driven from room onDragMove. Uses current Konva room position so the room stays under the cursor. */
-  const handleRoomDragMovePosition = useCallback((pointerX: number, pointerY: number, roomWorldX: number, roomWorldY: number) => {
-    if (dragFromWalls) {
-      draggedRoomPositionsRef.current[dragFromWalls.roomId] = { x: roomWorldX, y: roomWorldY };
-    }
-    const nearH = pointerX < EDGE_THRESHOLD || pointerX > size.width - EDGE_THRESHOLD;
-    const nearV = pointerY < EDGE_THRESHOLD || pointerY > size.height - EDGE_THRESHOLD;
-    if (nearH || nearV) {
-      ensureAutoPan();
-    } else {
-      stopAutoPan();
-    }
-  }, [EDGE_THRESHOLD, size.width, size.height, ensureAutoPan, stopAutoPan, dragFromWalls]);
 
   const combinedMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (marquee) {

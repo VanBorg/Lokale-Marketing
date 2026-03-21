@@ -156,9 +156,11 @@ export default function CanvasRoom({
       onDragStart={(e: Konva.KonvaEventObject<DragEvent>) => {
         const pos = e.target.getRelativePointerPosition();
         if (pos) {
-          const walls = room.roomType === 'normal'
-            ? getDragFromWalls(pos.x, pos.y, w, h)
-            : getNearestWall(pos.x, pos.y, w, h);
+          // Special rooms must always snap on ALL axes simultaneously so the
+          // Wall A / Wall B corner snap works regardless of drag direction.
+          const walls: WallId[] = room.roomType !== 'normal'
+            ? ['left', 'right', 'top', 'bottom']
+            : getDragFromWalls(pos.x, pos.y, w, h);
           onDragStartWalls(room.id, walls);
         }
       }}

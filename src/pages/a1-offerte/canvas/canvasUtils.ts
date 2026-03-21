@@ -3,7 +3,7 @@
  *
  * The actual logic now lives in focused modules:
  *   canvasGeometry.ts  – clamp, boundingSize, grid, ghost, snap-highlight
- *   canvasSnapping.ts  – snapPosition, snapToRooms
+ *   canvasSnapping.ts  – snapPosition, snapToRooms (special rooms handled inside snapPosition)
  *   canvasResize.ts    – computeHandleDrag, computeVertexDrag
  *   canvasWizard.ts    – detectRoomGaps, computeWizardFill, safeGapFillDistance, getWorldVertices
  *   wallSegments.ts    – computeWorldWallSegments, getSnapCandidateSegments
@@ -23,6 +23,8 @@ export type { GridLines } from './canvasGeometry';
 export { computeGridLines, computeGhostPos, computeSnapHighlightRect } from './canvasGeometry';
 
 export { snapPosition, snapToRooms } from './canvasSnapping';
+export type { SnapResultWithInfo, SpecialRoomSnapInfo, CornerGapInfo } from './canvasTypes';
+export { extractWallSegments, snapSpecialRoomToWallSegment } from './canvasGeometry';
 
 export { computeHandleDrag, computeVertexDrag } from './canvasResize';
 
