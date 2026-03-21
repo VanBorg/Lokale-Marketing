@@ -32,12 +32,6 @@ export default function WizardWand({
   const margin = 10;
   const clampedScreenX = Math.max(btnSize / 2 + margin, Math.min(viewportSize.width - btnSize / 2 - margin, screenX));
   const clampedScreenY = Math.max(btnSize / 2 + margin, Math.min(viewportSize.height - btnSize / 2 - margin, screenY));
-  const wasClamped = Math.abs(clampedScreenX - screenX) > 0.1 || Math.abs(clampedScreenY - screenY) > 0.1;
-  if (wasClamped) {
-    // #region agent log
-    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run16',hypothesisId:'H-ui-offscreen',location:'WizardWand.tsx:position',message:'wizard controls clamped to viewport',data:{targetRoomId:target.targetRoomId,screenX,screenY,clampedScreenX,clampedScreenY,viewportW:viewportSize.width,viewportH:viewportSize.height,btnSize},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }
 
   return (
     <div

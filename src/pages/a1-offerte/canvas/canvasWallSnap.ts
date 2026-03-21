@@ -90,10 +90,6 @@ export function snapSpecialRoomToWall(
   const hostSegments: WorldSegment[] = [];
   for (const room of hostRooms) hostSegments.push(...getWorldSegments(room));
 
-  // #region agent log
-  fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run4',hypothesisId:'H-host',location:'canvasWallSnap.ts:snapSpecialRoomToWall',message:'host segments collected',data:{draggedRoomId:draggedRoom.id,draggedRoomType:draggedRoom.roomType,hostSegmentsCount:hostSegments.length,hostRoomsCount:hostRooms.length,hostMode:finalizedHosts.length>0?'finalized':'normal-fallback',allRoomsCount:allRooms.length,finalizedRoomsCount:allRooms.filter(r=>r.isFinalized).length,threshold},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
   if (hostSegments.length === 0) return null;
 
   const oldSize = boundingSize(draggedRoom);
@@ -192,10 +188,6 @@ export function snapSpecialRoomToWall(
     }
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-candidate-corner-bias',location:'canvasWallSnap.ts:candidate',message:'candidate scan result',data:{pairCount,rejectedParallel,rejectedDistance,rejectedProjection,maxParallelSeen,minAngleDiffDeg,bestAbsPerp,bestRotation,bestEdgeIdx,bestT,bestUseCorner,bestCornerDist,bestEndpointProximity,hasBestHostSeg:bestHostSeg!==null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
   if (bestHostSeg === null || bestEdgeIdx === -1 || bestRotation === null) return null;
 
   // ── Exact rotation: align chosen local edge with the host wall direction ──
@@ -266,10 +258,6 @@ export function snapSpecialRoomToWall(
     // If dragged exactly on wall line, pick the candidate with a clearer side.
     chosen = candB;
   }
-
-  // #region agent log
-  fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run13',hypothesisId:'H-corner-choice',location:'canvasWallSnap.ts:return',message:'snap side diagnostics',data:{draggedRoomId:draggedRoom.id,specialRoomPlacementMode:draggedRoom.specialRoomPlacementMode??null,bestHostRoomId:bestHostSeg.roomId,bestEdgeIdx,bestRotation,baseRotation,chosenRotation:chosen.rotation,draggedSideDist,candASideDist:candA.signedCenterDist,candBSideDist:candB.signedCenterDist,bestT,bestUseCorner,snapTargetX,snapTargetY},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   return {
     x: chosen.x,

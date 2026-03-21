@@ -239,9 +239,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
       });
       if (nearSelected.length > 0) gaps = nearSelected;
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run14',hypothesisId:'H-gap-visibility',location:'PlattegrondCanvas.tsx:wizardGapsEffect',message:'wizard gap detection',data:{selectedRoomId,selectedRoomType:selected.roomType,wizardTargetId:wizardTarget.id,wizardTargetType:wizardTarget.roomType,gapCount:gaps.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setWizardGaps(gaps);
   }, [rooms, selectedRoomId]);
 
@@ -792,9 +789,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
     }
     const updatedRooms = rooms.map(r => r.id === targetRoom.id ? carved : r);
     const snapped = snapToRooms(targetRoom.id, carved.x, carved.y, updatedRooms);
-    // #region agent log
-    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run11',hypothesisId:'H-carve',location:'PlattegrondCanvas.tsx:handleWizardCarve',message:'apply carve',data:{roomId:targetRoom.id,safeT,newX:snapped.x,newY:snapped.y},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     flushSync(() => {
       onUpdateRoom(targetRoom.id, {
         vertices: carved.vertices,
@@ -864,9 +858,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
 
     const topOffsetPx = 26;
     const uiPos = { x: scx, y: selected.y - topOffsetPx / Math.max(scale, 0.2) };
-    // #region agent log
-    fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run15',hypothesisId:'H-action-ui',location:'PlattegrondCanvas.tsx:selectedSpecialActionTarget',message:'single +/− target chosen',data:{selectedRoomId:selected.id,selectedRoomType:selected.roomType,wizardGapsCount:wizardGaps.length,usedTargetSpecific:byTarget.length>0,targetRoomId:nearest.gap.targetRoomId,uiX:uiPos.x,uiY:uiPos.y},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return { ...nearest.gap, wizardWorldPos: uiPos } as GapInfo;
   }, [rooms, selectedRoomId, wizardGaps, scale]);
 

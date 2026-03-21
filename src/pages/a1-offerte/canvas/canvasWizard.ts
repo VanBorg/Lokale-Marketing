@@ -214,10 +214,6 @@ export function detectRoomGaps(selectedRoom: Room, allRooms: Room[]): GapInfo[] 
     }
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run13',hypothesisId:'H-gap-detector',location:'canvasWizard.ts:detectRoomGaps',message:'detected gaps',data:{roomId:selectedRoom.id,gapCount:gaps.length},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
   return gaps;
 }
 

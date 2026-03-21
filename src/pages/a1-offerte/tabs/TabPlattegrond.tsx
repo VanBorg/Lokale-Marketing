@@ -32,9 +32,6 @@ function detectSubRooms(rooms: Room[]): Room[] {
           const wall = detectAttachedWall(r, parent);
           const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
           if (wall && wall !== 'inside') {
-            // #region agent log
-            fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run8',hypothesisId:'H-classify',location:'TabPlattegrond.tsx:detectSubRooms',message:'against-wall classified as wall-attached via adjacency',data:{roomId:r.id,parentRoomId:parent.id,attachedWall:wall,specialRoomPlacementMode:r.specialRoomPlacementMode??null},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
           }
         }
@@ -44,9 +41,6 @@ function detectSubRooms(rooms: Room[]): Room[] {
           const wall = detectAttachedWall(r, parent);
           const wallOffset = (wall && wall !== 'inside') ? computeWallOffset(r, parent, wall) : undefined;
           if (wall && wall !== 'inside') {
-            // #region agent log
-            fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run8',hypothesisId:'H-classify',location:'TabPlattegrond.tsx:detectSubRooms',message:'against-wall classified as wall-attached via overlap-nearest-wall',data:{roomId:r.id,parentRoomId:parent.id,attachedWall:wall,specialRoomPlacementMode:r.specialRoomPlacementMode??null},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: wall, wallOffset };
           }
         }
@@ -55,9 +49,6 @@ function detectSubRooms(rooms: Room[]): Room[] {
 
     for (const parent of parentCandidates) {
       if (isOverlapping(parent, r)) {
-        // #region agent log
-        fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run8',hypothesisId:'H-classify',location:'TabPlattegrond.tsx:detectSubRooms',message:'classified as inside via overlap',data:{roomId:r.id,parentRoomId:parent.id,specialRoomPlacementMode:r.specialRoomPlacementMode??null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return { ...r, parentRoomId: parent.id, isSubRoom: true, attachedWall: 'inside' as const, wallOffset: undefined };
       }
     }
@@ -440,11 +431,6 @@ export default function TabPlattegrond({
         });
         const next = detectSubRooms(mapped);
         const changed = next.find(r => r.id === id);
-        if (changed && changed.roomType !== 'normal' && updates.x !== undefined && updates.y !== undefined && updates.rotation !== undefined) {
-          // #region agent log
-          fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run5',hypothesisId:'H-update',location:'TabPlattegrond.tsx:updateRoom',message:'post-detectSubRooms state',data:{roomId:changed.id,roomType:changed.roomType,x:changed.x,y:changed.y,rotation:changed.rotation,isSubRoom:changed.isSubRoom,parentRoomId:changed.parentRoomId,attachedWall:changed.attachedWall,specialRoomPlacementMode:changed.specialRoomPlacementMode??null},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-        }
         return next;
       });
     },
@@ -555,13 +541,6 @@ export default function TabPlattegrond({
             if (outsideDist <= releaseDist) {
               finalX = Math.max(minX, Math.min(maxX, finalX));
               finalY = Math.max(minY, Math.min(maxY, finalY));
-              // #region agent log
-              fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-corner-clamp',location:'TabPlattegrond.tsx:moveRoom',message:'against-wall soft clamp applied',data:{roomId:id,parentRoomId:room.parentRoomId,requestedX:x,requestedY:y,finalX,finalY,outsideDist,releaseDist},timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
-            } else {
-              // #region agent log
-              fetch('http://127.0.0.1:7644/ingest/073d4520-a64b-4ad6-8bfd-6e2322419c20',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'068efa'},body:JSON.stringify({sessionId:'068efa',runId:'run17',hypothesisId:'H-corner-clamp',location:'TabPlattegrond.tsx:moveRoom',message:'against-wall soft clamp released',data:{roomId:id,parentRoomId:room.parentRoomId,requestedX:x,requestedY:y,finalX,finalY,outsideDist,releaseDist},timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
             }
           }
         }
