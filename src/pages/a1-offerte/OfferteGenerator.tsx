@@ -1,10 +1,22 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, ChevronRight, FilePlus2 } from 'lucide-react';
 import type { Floor, Room } from './types';
-import TabPlattegrond from './tabs/TabPlattegrond';
-import TabElementen from './tabs/TabElementen';
-import TabWerkzaamheden from './tabs/TabWerkzaamheden';
-import TabPreview from './tabs/TabPreview';
+
+const TabPlattegrond = lazy(() => import('./tabs/TabPlattegrond'));
+const TabElementen = lazy(() => import('./tabs/TabElementen'));
+const TabWerkzaamheden = lazy(() => import('./tabs/TabWerkzaamheden'));
+const TabPreview = lazy(() => import('./tabs/TabPreview'));
+
+function TabPanelFallback() {
+  return (
+    <div className="flex-1 min-h-[200px] flex items-center justify-center">
+      <div
+        className="h-8 w-8 rounded-full border-2 border-dark-border border-t-accent animate-spin"
+        aria-label="Laden"
+      />
+    </div>
+  );
+}
 
 const MAX_HISTORY = 50;
 type HistorySnapshot = { floors: Floor[]; activeFloorId: string };
@@ -297,46 +309,48 @@ export default function OfferteGenerator() {
         className="flex-1 min-h-0 overflow-auto rounded-b-xl border border-t-0 border-dark-border flex flex-col items-center"
       >
         <div className="w-full max-w-[1800px] flex-1 flex flex-col min-h-0 min-w-0">
-          {activeTab === 1 && (
-            <TabPlattegrond
-              floors={floors}
-              setFloors={setFloors}
-              patchActiveFloorRoomsSilent={patchActiveFloorRoomsSilent}
-              activeFloorId={activeFloorId}
-              setActiveFloorId={setActiveFloorId}
-              setActiveTab={goTo}
-              beginBatch={beginBatch}
-              endBatch={endBatch}
-              canUndo={canUndo}
-              canRedo={canRedo}
-              onUndo={undo}
-              onRedo={redo}
-            />
-          )}
-          {activeTab === 2 && (
-            <TabElementen
-              floors={floors}
-              setFloors={setFloors}
-              activeFloorId={activeFloorId}
-              setActiveFloorId={setActiveFloorId}
-              setActiveTab={goTo}
-            />
-          )}
-          {activeTab === 3 && (
-            <TabWerkzaamheden
-              floors={floors}
-              setFloors={setFloors}
-              activeFloorId={activeFloorId}
-              setActiveFloorId={setActiveFloorId}
-              setActiveTab={goTo}
-            />
-          )}
-          {activeTab === 4 && (
-            <TabPreview
-              floors={floors}
-              setActiveTab={goTo}
-            />
-          )}
+          <Suspense fallback={<TabPanelFallback />}>
+            {activeTab === 1 && (
+              <TabPlattegrond
+                floors={floors}
+                setFloors={setFloors}
+                patchActiveFloorRoomsSilent={patchActiveFloorRoomsSilent}
+                activeFloorId={activeFloorId}
+                setActiveFloorId={setActiveFloorId}
+                setActiveTab={goTo}
+                beginBatch={beginBatch}
+                endBatch={endBatch}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={undo}
+                onRedo={redo}
+              />
+            )}
+            {activeTab === 2 && (
+              <TabElementen
+                floors={floors}
+                setFloors={setFloors}
+                activeFloorId={activeFloorId}
+                setActiveFloorId={setActiveFloorId}
+                setActiveTab={goTo}
+              />
+            )}
+            {activeTab === 3 && (
+              <TabWerkzaamheden
+                floors={floors}
+                setFloors={setFloors}
+                activeFloorId={activeFloorId}
+                setActiveFloorId={setActiveFloorId}
+                setActiveTab={goTo}
+              />
+            )}
+            {activeTab === 4 && (
+              <TabPreview
+                floors={floors}
+                setActiveTab={goTo}
+              />
+            )}
+          </Suspense>
         </div>
       </div>
     </div>
