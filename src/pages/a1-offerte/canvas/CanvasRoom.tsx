@@ -178,7 +178,7 @@ export default function CanvasRoom({
           const newX = e.target.x() - cx;
           const newY = e.target.y() - cy;
 
-          // Speciale kamers: probeer eerst wandsegment-snap (roteren + flush positioneren)
+          // Speciale kamers: probeer wandsegment-snap (rotatie + flush)
           if (room.roomType !== 'normal' && !isMultiSelected && onUpdateRoom && !room.isFinalized) {
             const tempRoom = { ...room, x: newX, y: newY };
             const wallSnap = snapSpecialRoomToWall(tempRoom, rooms);
@@ -191,7 +191,7 @@ export default function CanvasRoom({
             }
           }
 
-          // Normale kamers (of geen wandsnap gevonden): bestaande bounding-box snap
+          // Normale kamers of geen wandsnap gevonden: bounding-box snap
           const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
           e.target.x(snapped.x + cx);
           e.target.y(snapped.y + cy);
