@@ -4,12 +4,14 @@ import Konva from 'konva';
 import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints, isSpecialRoom, getRoomFillKey } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
 import { WallId, DraggingHandle, PX_PER_M, SnapResult } from './canvasTypes';
-import { isNonRect, quadBounds, boundingSize, snapPosition, snapSpecialRoomToWall } from './canvasUtils';
+import { isNonRect, quadBounds, boundingSize } from './canvasGeometry';
+import { snapPosition } from './canvasSnapping';
+import { snapSpecialRoomToWall } from './canvasWallSnap';
 import { wallMidDragCursor, rotatedResizeCursor, getRoomLabelCentreLocalPx } from './canvasGeometry';
 import RoomShape from './RoomShape';
 import RoomDimensionLines from './RoomDimensionLines';
 import RoomLabels from './RoomLabels';
-import RoomElementsList from './RoomElements';
+import RoomElementsList from './RoomElementsLayer';
 import RoomHandles from './RoomHandles';
 import RoomGhost from './RoomGhost';
 

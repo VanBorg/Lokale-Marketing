@@ -1,9 +1,9 @@
-import { SHAPES, Room, RoomType, isSpecialRoom } from './types';
-import { SPECIAL_ROOM_CONFIGS } from './specialRooms';
-import { RoomRotationPicker, SpecialRoomOrientationPicker } from './RoomEditPanel';
-import RotationDial from './canvas/RotationDial';
+import { SHAPES, Room, RoomType, isSpecialRoom } from '../types';
+import { SPECIAL_ROOM_CONFIGS } from '../specialRooms';
+import { RoomRotationPicker, SpecialRoomOrientationPicker } from '../RoomEditPanel';
+import RotationDial from '../canvas/RotationDial';
 import { Hammer } from 'lucide-react';
-import { useTheme } from '../../hooks/useTheme';
+import { useTheme } from '../../../hooks/useTheme';
 
 /* ── Shape icons ──────────────────────────────────────────────── */
 

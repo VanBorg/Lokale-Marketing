@@ -9,7 +9,7 @@ import {
   isSpecialRoomRechtRotation,
   SPECIAL_ROOM_SCHUIN_ROTATION_DEG,
 } from './types';
-import RoomWalls from './RoomWalls';
+import RoomWalls from './sidebar/RoomWalls';
 
 interface RoomEditPanelProps {
   room: Room;

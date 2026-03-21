@@ -4,7 +4,7 @@ import Konva from 'konva';
 import { Room, RoomElement } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
 import { PX_PER_M } from './canvasTypes';
-import { clamp } from './canvasUtils';
+import { clamp } from './canvasGeometry';
 import { renderElementContent } from './renderElementContent';
 
 interface RoomElementsListProps {

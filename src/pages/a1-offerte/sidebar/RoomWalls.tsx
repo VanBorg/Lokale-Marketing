@@ -9,9 +9,9 @@ import {
   vertexWallLengths,
   updateVertexWallLength,
   syncRoomFromVertices,
-} from './types';
-import { PX_PER_M } from './canvas/canvasTypes';
-import { snapToRooms } from './canvas/canvasUtils';
+} from '../types';
+import { PX_PER_M } from '../canvas/canvasTypes';
+import { snapToRooms } from '../canvas/canvasSnapping';
 
 interface RoomWallsProps {
   room: Room;

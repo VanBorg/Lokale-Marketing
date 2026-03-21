@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type Konva from 'konva';
-import type { WallId } from './canvasTypes';
+import type { WallId } from '../canvasTypes';
 
 const EDGE_THRESHOLD = 60;
 const SCROLL_SPEED = 2.5;

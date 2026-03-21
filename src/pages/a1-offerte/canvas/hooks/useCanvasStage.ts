@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import Konva from 'konva';
-import { SCALE_BY, MIN_SCALE, MAX_SCALE } from './canvasTypes';
+import { SCALE_BY, MIN_SCALE, MAX_SCALE } from '../canvasTypes';
 
 export function useCanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null);

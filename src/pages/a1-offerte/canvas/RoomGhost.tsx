@@ -2,7 +2,7 @@ import React from 'react';
 import { Group } from 'react-konva';
 import { RoomElement } from '../types';
 import { PX_PER_M, WallId } from './canvasTypes';
-import { clamp } from './canvasUtils';
+import { clamp } from './canvasGeometry';
 import { renderElementContent } from './renderElementContent';
 
 interface RoomGhostProps {

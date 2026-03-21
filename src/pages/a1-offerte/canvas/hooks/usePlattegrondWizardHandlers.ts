@@ -1,16 +1,16 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { flushSync } from 'react-dom';
-import type { Room } from '../types';
+import type { Room } from '../../types';
 import {
   computeWizardCarve,
   computeWizardFill,
   getWorldVertices,
   safeGapCarveDistance,
   safeGapFillDistance,
-  snapToRooms,
-} from './canvasUtils';
-import type { GapInfo } from './canvasTypes';
-import { PX_PER_M } from './canvasTypes';
+} from '../canvasWizard';
+import { snapToRooms } from '../canvasSnapping';
+import type { GapInfo } from '../canvasTypes';
+import { PX_PER_M } from '../canvasTypes';
 
 type Args = {
   rooms: Room[];

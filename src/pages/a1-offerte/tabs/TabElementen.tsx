@@ -1,20 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Stage as KonvaStage, Layer, Line, Rect, Text, Group } from 'react-konva';
-import Konva from 'konva';
 import { Trash2 } from 'lucide-react';
-import { Floor, RoomElement, ELEMENT_DEFAULTS, getShapePoints, ROOM_TYPE_ICONS, getRoomFillKey } from '../types';
-import { WallId, PX_PER_M } from '../canvas/canvasTypes';
-import { clamp, boundingSize } from '../canvas/canvasUtils';
-import { miniPoints } from '../canvas/canvasGeometry';
-import { renderElementContent } from '../canvas/renderElementContent';
+import { Floor, RoomElement, ELEMENT_DEFAULTS } from '../types';
+import { WallId } from '../canvas/canvasTypes';
 import { useTheme } from '../../../hooks/useTheme';
 import KamerSelector from '../components/KamerSelector';
-
-const Stage = KonvaStage as unknown as React.ComponentType<any>;
-
-const elementTypes = Object.keys(ELEMENT_DEFAULTS) as RoomElement['type'][];
-
-const WALL_LABELS: Record<WallId, string> = { top: 'Boven', right: 'Rechts', bottom: 'Onder', left: 'Links' };
+import MiniPlattegrond from '../components/MiniPlattegrond';
+import ElementCanvas, { WALL_LABELS } from '../components/ElementCanvas';
 
 interface TabElementenProps {
   floors: Floor[];
@@ -41,13 +32,11 @@ export default function TabElementen({
   const rooms = useMemo(() => activeFloor?.rooms ?? [], [activeFloor]);
   const selectedRoom = rooms.find(r => r.id === selectedRoomId) ?? null;
 
+  const elementTypes = Object.keys(ELEMENT_DEFAULTS) as RoomElement['type'][];
+
   useEffect(() => {
-    if (!selectedRoomId && rooms.length > 0) {
-      setSelectedRoomId(rooms[0].id);
-    }
-    if (selectedRoomId && !rooms.find(r => r.id === selectedRoomId) && rooms.length > 0) {
-      setSelectedRoomId(rooms[0].id);
-    }
+    if (!selectedRoomId && rooms.length > 0) setSelectedRoomId(rooms[0].id);
+    if (selectedRoomId && !rooms.find(r => r.id === selectedRoomId) && rooms.length > 0) setSelectedRoomId(rooms[0].id);
   }, [rooms, selectedRoomId]);
 
   useEffect(() => {
@@ -65,12 +54,7 @@ export default function TabElementen({
   const updateRoomElements = useCallback(
     (roomId: string, updater: (elements: RoomElement[]) => RoomElement[]) => {
       setFloors(prev =>
-        prev.map(f => ({
-          ...f,
-          rooms: f.rooms.map(r =>
-            r.id === roomId ? { ...r, elements: updater(r.elements) } : r,
-          ),
-        })),
+        prev.map(f => ({ ...f, rooms: f.rooms.map(r => r.id === roomId ? { ...r, elements: updater(r.elements) } : r) })),
       );
     },
     [setFloors],
@@ -80,14 +64,7 @@ export default function TabElementen({
     (type: RoomElement['type']) => {
       if (!selectedRoomId) return;
       const defaults = ELEMENT_DEFAULTS[type];
-      const el: RoomElement = {
-        id: crypto.randomUUID(),
-        type,
-        width: defaults.width,
-        height: defaults.height,
-        wall: 'top',
-        position: 0.5,
-      };
+      const el: RoomElement = { id: crypto.randomUUID(), type, width: defaults.width, height: defaults.height, wall: 'top', position: 0.5 };
       updateRoomElements(selectedRoomId, prev => [...prev, el]);
     },
     [selectedRoomId, updateRoomElements],
@@ -95,9 +72,7 @@ export default function TabElementen({
 
   const updateElement = useCallback(
     (roomId: string, elementId: string, updates: Partial<RoomElement>) => {
-      updateRoomElements(roomId, prev =>
-        prev.map(el => (el.id === elementId ? { ...el, ...updates } : el)),
-      );
+      updateRoomElements(roomId, prev => prev.map(el => (el.id === elementId ? { ...el, ...updates } : el)));
     },
     [updateRoomElements],
   );
@@ -110,59 +85,10 @@ export default function TabElementen({
     [updateRoomElements, selectedElementId],
   );
 
-  const [miniOpen, setMiniOpen] = useState(true);
-  const miniContainerRef = useRef<HTMLDivElement>(null);
-  const [miniWidth, setMiniWidth] = useState(400);
-
-  useEffect(() => {
-    if (!miniContainerRef.current) return;
-    const measure = () => {
-      const rect = miniContainerRef.current!.getBoundingClientRect();
-      setMiniWidth(rect.width);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(miniContainerRef.current);
-    return () => observer.disconnect();
-  }, [miniOpen]);
-
   const childRoomsOfSelected = useMemo(
     () => selectedRoom ? rooms.filter(r => r.parentRoomId === selectedRoom.id) : [],
     [rooms, selectedRoom],
   );
-
-  const miniData = useMemo(() => {
-    if (rooms.length === 0) return null;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const r of rooms) {
-      const { w, h } = boundingSize(r);
-      minX = Math.min(minX, r.x);
-      minY = Math.min(minY, r.y);
-      maxX = Math.max(maxX, r.x + w);
-      maxY = Math.max(maxY, r.y + h);
-    }
-    const totalW = maxX - minX || 1;
-    const totalH = maxY - minY || 1;
-    const miniH = 180;
-    const pad = 20;
-    const sX = (miniWidth - pad * 2) / totalW;
-    const sY = (miniH - pad * 2) / totalH;
-    const s = Math.min(sX, sY, 3);
-    const oX = (miniWidth - totalW * s) / 2 - minX * s;
-    const oY = (miniH - totalH * s) / 2 - minY * s;
-    return { s, oX, oY, miniH };
-  }, [rooms, miniWidth]);
-
-  const roomW = selectedRoom ? selectedRoom.length * PX_PER_M : 0;
-  
-  const roomH = selectedRoom ? selectedRoom.width * PX_PER_M : 0;
-
-  const padding = 60;
-  const scaleX = roomW > 0 ? (canvasSize.width - padding * 2) / roomW : 1;
-  const scaleY = roomH > 0 ? (canvasSize.height - padding * 2) / roomH : 1;
-  const canvasScale = Math.min(scaleX, scaleY, 3) * 0.8;
-  const offsetX = (canvasSize.width - roomW * canvasScale) / 2;
-  const offsetY = (canvasSize.height - roomH * canvasScale) / 2;
 
   return (
     <div className="flex h-full">
@@ -191,180 +117,31 @@ export default function TabElementen({
               </div>
             )}
             <div className="p-4 border-b border-dark-border">
-              <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-3">
-                Element toevoegen
-              </h3>
+              <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-3">Element toevoegen</h3>
               <div className="grid grid-cols-4 gap-2">
                 {elementTypes.map((type) => {
                   const def = ELEMENT_DEFAULTS[type];
                   return (
-                    <button
-                      key={type}
-                      onClick={() => addElement(type)}
-                      className="px-2 py-2 rounded-lg text-xs font-medium bg-dark-card border border-dark-border text-light/70 hover:border-accent/40 hover:text-light transition-colors cursor-pointer text-center"
-                    >
+                    <button key={type} onClick={() => addElement(type)} className="px-2 py-2 rounded-lg text-xs font-medium bg-dark-card border border-dark-border text-light/70 hover:border-accent/40 hover:text-light transition-colors cursor-pointer text-center">
                       <span className="block">{def.label}</span>
-                      <span className="block text-[10px] text-light/30 mt-0.5">
-                        {def.width}×{def.height}m
-                      </span>
+                      <span className="block text-[10px] text-light/30 mt-0.5">{def.width}×{def.height}m</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Mini plattegrond overview */}
-            <div className="border-b border-dark-border">
-              <button
-                type="button"
-                onClick={() => setMiniOpen(p => !p)}
-                className="w-full px-4 py-2 text-[11px] font-medium text-light/50 hover:text-light/80 transition-colors cursor-pointer text-left"
-              >
-                {miniOpen ? '▲ Plattegrond verbergen' : '▼ Plattegrond tonen'}
-              </button>
-              {miniOpen && miniData && (
-                <div ref={miniContainerRef} style={{ height: miniData.miniH, background: canvasColors.stageBg }}>
-                  <Stage width={miniWidth} height={miniData.miniH} listening={false}>
-                    <Layer>
-                      <Group x={miniData.oX} y={miniData.oY} scaleX={miniData.s} scaleY={miniData.s}>
-                        {rooms.map(r => {
-                          const { w: rw, h: rh } = boundingSize(r);
-                          const isSel = r.id === selectedRoomId;
-                          const pts = miniPoints(r, rw, rh);
-                          const fill = canvasColors[getRoomFillKey(r)];
-                          const strokeColor = isSel ? canvasColors.roomStrokeSelected : (r.isSubRoom ? canvasColors.subRoomStroke : canvasColors.roomStroke);
-                          return (
-                            <Group key={r.id} x={r.x} y={r.y}>
-                              <Line points={pts} closed fill={fill} stroke={strokeColor} strokeWidth={isSel ? 2 / miniData.s : 1 / miniData.s} />
-                              <Text
-                                text={r.name}
-                                x={4}
-                                y={4}
-                                fontSize={10 / miniData.s}
-                                fill={isSel ? canvasColors.textSelected : canvasColors.text}
-                                opacity={isSel ? 1 : 0.5}
-                                fontFamily="DM Sans, sans-serif"
-                              />
-                              {r.roomType !== 'normal' && (
-                                <Text text={ROOM_TYPE_ICONS[r.roomType] || ''} x={rw - 16 / miniData.s} y={4} fontSize={12 / miniData.s} />
-                              )}
-                            </Group>
-                          );
-                        })}
-                      </Group>
-                    </Layer>
-                  </Stage>
-                </div>
-              )}
-              {miniOpen && !miniData && (
-                <div ref={miniContainerRef} className="px-4 py-6 text-center text-xs text-light/30">
-                  Geen kamers om te tonen
-                </div>
-              )}
-            </div>
+            <MiniPlattegrond rooms={rooms} selectedRoomId={selectedRoomId} canvasColors={canvasColors} />
 
             <div ref={canvasContainerRef} className="flex-1 min-h-[300px]" style={{ background: canvasColors.stageBg }}>
-              <Stage width={canvasSize.width} height={canvasSize.height}>
-                <Layer>
-                  <Group x={offsetX} y={offsetY} scaleX={canvasScale} scaleY={canvasScale}>
-                    {selectedRoom && (
-                      <Line
-                        points={getShapePoints(selectedRoom.shape, roomW, roomH)}
-                        closed
-                        fill={canvasColors[getRoomFillKey(selectedRoom)]}
-                        stroke={canvasColors.roomStrokeSelected}
-                        strokeWidth={2 / canvasScale}
-                      />
-                    )}
-                    {(
-                      <>
-                        <Text text="1" x={roomW / 2 - 4} y={4} fontSize={12 / canvasScale} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
-                        <Text text="2" x={roomW - 16 / canvasScale} y={roomH / 2 - 6} fontSize={12 / canvasScale} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
-                        <Text text="3" x={roomW / 2 - 4} y={roomH - 16 / canvasScale} fontSize={12 / canvasScale} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
-                        <Text text="4" x={4} y={roomH / 2 - 6} fontSize={12 / canvasScale} fill={canvasColors.wallNumber} fontFamily="DM Sans, sans-serif" />
-                      </>
-                    )}
-
-                    {selectedRoom.elements.map((el) => {
-                      const elW = el.width * PX_PER_M;
-                      const isDoor = el.type === 'deur' || el.type === 'schuifdeur';
-                      const isWindow = el.type === 'raam';
-                      const thickness = isDoor ? 8 : isWindow ? 6 : 8;
-                      const pos = clamp(el.position, 0.05, 0.95);
-                      let ex = 0, ey = 0;
-
-                      switch (el.wall) {
-                        case 'top': ex = roomW * pos - elW / 2; ey = 0; break;
-                        case 'right': ex = roomW - thickness; ey = roomH * pos - elW / 2; break;
-                        case 'bottom': ex = roomW * pos - elW / 2; ey = roomH - thickness; break;
-                        case 'left': ex = 0; ey = roomH * pos - elW / 2; break;
-                      }
-
-                      const elH = el.height * PX_PER_M;
-                      const isHoriz = el.wall === 'top' || el.wall === 'bottom';
-                      const bw = isHoriz ? elW : thickness;
-                      const bh = isHoriz ? thickness : elW;
-                      const isElSelected = el.id === selectedElementId;
-
-                      const dragBoundFunc = (dragPos: { x: number; y: number }) => {
-                        const localX = (dragPos.x - offsetX) / canvasScale;
-                        const localY = (dragPos.y - offsetY) / canvasScale;
-                        if (el.wall === 'top' || el.wall === 'bottom') {
-                          const fixedY = el.wall === 'top' ? 0 : roomH - thickness;
-                          const clampedX = Math.max(0, Math.min(roomW - elW, localX));
-                          return { x: clampedX * canvasScale + offsetX, y: fixedY * canvasScale + offsetY };
-                        } else {
-                          const fixedX = el.wall === 'left' ? 0 : roomW - thickness;
-                          const clampedY = Math.max(0, Math.min(roomH - elH, localY));
-                          return { x: fixedX * canvasScale + offsetX, y: clampedY * canvasScale + offsetY };
-                        }
-                      };
-
-                      const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-                        const node = e.target;
-                        const localX = (node.x() - offsetX) / canvasScale;
-                        const localY = (node.y() - offsetY) / canvasScale;
-                        let newPos: number;
-                        if (el.wall === 'top' || el.wall === 'bottom') {
-                          newPos = (localX + elW / 2) / roomW;
-                        } else {
-                          newPos = (localY + elH / 2) / roomH;
-                        }
-                        newPos = clamp(newPos, 0.05, 0.95);
-                        updateElement(selectedRoom.id, el.id, { position: newPos });
-                        node.x(ex * canvasScale + offsetX);
-                        node.y(ey * canvasScale + offsetY);
-                      };
-
-                      return (
-                        <Group
-                          key={el.id}
-                          x={ex}
-                          y={ey}
-                          draggable
-                          dragBoundFunc={dragBoundFunc}
-                          onDragEnd={handleDragEnd}
-                          onClick={(e: Konva.KonvaEventObject<MouseEvent>) => {
-                            e.cancelBubble = true;
-                            setSelectedElementId(el.id);
-                          }}
-                        >
-                          {renderElementContent(el.type, el.wall, elW)}
-                          <Rect x={0} y={0} width={bw} height={bh} fill="transparent" stroke={isElSelected ? '#FF5C1A' : canvasColors.elementStrokeUnselected} strokeWidth={isElSelected ? 2 : 1} />
-                          {isElSelected && (
-                            <>
-                              <Rect x={-3} y={-3} width={6} height={6} fill="#FF5C1A" />
-                              <Rect x={bw - 3} y={-3} width={6} height={6} fill="#FF5C1A" />
-                              <Rect x={-3} y={bh - 3} width={6} height={6} fill="#FF5C1A" />
-                              <Rect x={bw - 3} y={bh - 3} width={6} height={6} fill="#FF5C1A" />
-                            </>
-                          )}
-                        </Group>
-                      );
-                    })}
-                  </Group>
-                </Layer>
-              </Stage>
+              <ElementCanvas
+                room={selectedRoom}
+                canvasSize={canvasSize}
+                selectedElementId={selectedElementId}
+                onSelectElement={setSelectedElementId}
+                onUpdateElement={updateElement}
+                canvasColors={canvasColors}
+              />
             </div>
 
             {selectedRoom.elements.length > 0 && (
@@ -381,19 +158,10 @@ export default function TabElementen({
                   </thead>
                   <tbody>
                     {selectedRoom.elements.map((el) => (
-                      <tr
-                        key={el.id}
-                        onClick={() => setSelectedElementId(el.id)}
-                        className={`cursor-pointer transition-colors ${el.id === selectedElementId ? 'bg-accent/5' : 'hover:bg-dark-hover'}`}
-                      >
+                      <tr key={el.id} onClick={() => setSelectedElementId(el.id)} className={`cursor-pointer transition-colors ${el.id === selectedElementId ? 'bg-accent/5' : 'hover:bg-dark-hover'}`}>
                         <td className="px-4 py-2 text-light/70">{ELEMENT_DEFAULTS[el.type].label}</td>
                         <td className="px-4 py-2">
-                          <select
-                            value={el.wall}
-                            onChange={(e) => updateElement(selectedRoom.id, el.id, { wall: e.target.value as WallId })}
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-dark border border-dark-border rounded px-1.5 py-0.5 text-light text-xs focus:outline-none focus:border-accent"
-                          >
+                          <select value={el.wall} onChange={(e) => updateElement(selectedRoom.id, el.id, { wall: e.target.value as WallId })} onClick={(e) => e.stopPropagation()} className="bg-dark border border-dark-border rounded px-1.5 py-0.5 text-light text-xs focus:outline-none focus:border-accent">
                             {(Object.keys(WALL_LABELS) as WallId[]).map(w => (
                               <option key={w} value={w}>{WALL_LABELS[w]}</option>
                             ))}
@@ -402,10 +170,7 @@ export default function TabElementen({
                         <td className="px-4 py-2 text-light/50">{el.width}m</td>
                         <td className="px-4 py-2 text-light/50">{el.height}m</td>
                         <td className="px-4 py-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); removeElement(selectedRoom.id, el.id); }}
-                            className="p-1 rounded text-light/30 hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
-                          >
+                          <button onClick={(e) => { e.stopPropagation(); removeElement(selectedRoom.id, el.id); }} className="p-1 rounded text-light/30 hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer">
                             <Trash2 size={14} />
                           </button>
                         </td>
@@ -419,16 +184,10 @@ export default function TabElementen({
         )}
 
         <div className="shrink-0 flex items-center justify-between p-4 border-t border-dark-border bg-dark">
-          <button
-            onClick={() => setActiveTab(1)}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-dark-card border border-dark-border text-light/60 hover:text-light transition-colors cursor-pointer"
-          >
+          <button onClick={() => setActiveTab(1)} className="px-4 py-2 rounded-lg text-sm font-medium bg-dark-card border border-dark-border text-light/60 hover:text-light transition-colors cursor-pointer">
             ← Plattegrond
           </button>
-          <button
-            onClick={() => setActiveTab(3)}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors cursor-pointer"
-          >
+          <button onClick={() => setActiveTab(3)} className="px-4 py-2 rounded-lg text-sm font-medium bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors cursor-pointer">
             Werkzaamheden →
           </button>
         </div>

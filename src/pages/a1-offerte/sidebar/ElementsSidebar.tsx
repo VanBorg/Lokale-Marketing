@@ -1,5 +1,5 @@
 import { Trash2 } from 'lucide-react';
-import { Room, RoomElement, ELEMENT_DEFAULTS } from './types';
+import { Room, RoomElement, ELEMENT_DEFAULTS } from '../types';
 
 interface RoomElementsProps {
   room: Room;
@@ -15,7 +15,7 @@ function parseNum(value: string, fallback: number): number {
   return isNaN(n) ? fallback : n;
 }
 
-export default function RoomElements({
+export default function ElementsSidebar({
   room,
   onAddElement,
   onUpdateElement,

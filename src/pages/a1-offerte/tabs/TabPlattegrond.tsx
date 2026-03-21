@@ -2,10 +2,10 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Room, RoomElement, RoomType, Floor, SHAPE_DEFAULTS, createDefaultWalls, createDefaultWallsCustomized, getShapeType, shapePointsToVertices, syncRoomFromVertices, ensureVertices, verticesBoundingBox, normalizeVertices, polygonArea, detectSubRooms } from '../types';
 import { PX_PER_M } from '../canvas/canvasTypes';
 import { getSpecialRoomConfig } from '../specialRooms';
-import RoomShapes, { SpecialRoomsSection } from '../RoomShapes';
+import RoomShapes, { SpecialRoomsSection } from '../sidebar/RoomShapes';
 import RoomEditPanel from '../RoomEditPanel';
 import FreeFormBuilder from '../FreeFormBuilder';
-import PlattegrondCanvas, { PlattegrondCanvasHandle } from '../PlattegrondCanvas';
+import PlattegrondCanvas, { PlattegrondCanvasHandle } from '../canvas/PlattegrondCanvas';
 import EtageTabBar from '../components/EtageTabBar';
 
 let counter = 0;
