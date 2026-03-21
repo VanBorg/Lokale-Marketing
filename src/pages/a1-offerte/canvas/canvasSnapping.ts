@@ -178,7 +178,7 @@ export function snapPosition(
     }
   }
 
-  const baseSnap = bestSnap ?? { x, y };
+  const baseSnap: SnapResult = bestSnap ?? { x, y };
 
   if (dragged.roomType !== 'normal') {
     const { w: dw, h: dh } = boundingSize(dragged);
@@ -202,8 +202,9 @@ export function snapPosition(
       const isRawCenterInside = rawCenterX > left && rawCenterX < right && rawCenterY > top && rawCenterY < bottom;
       if (!isRawCenterInside) continue;
 
-      let sx = x;
-      let sy = y;
+      // Start from segment/wall snap result so flush alignment is not discarded when clamping inside parent.
+      let sx = baseSnap.x;
+      let sy = baseSnap.y;
 
       // Snap to inner walls if close enough
       if (Math.abs(sx - left) < innerSnapThreshold) sx = left;

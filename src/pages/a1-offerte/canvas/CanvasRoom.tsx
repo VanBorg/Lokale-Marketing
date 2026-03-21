@@ -3,7 +3,7 @@ import { Line, Circle, Group, Rect, Text } from 'react-konva';
 import Konva from 'konva';
 import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, verticesToPoints, isSpecialRoom, getRoomFillKey } from '../types';
 import { CanvasColors } from '../../../hooks/useTheme';
-import { WallId, DraggingHandle, PX_PER_M } from './canvasTypes';
+import { WallId, DraggingHandle, PX_PER_M, SnapResult } from './canvasTypes';
 import { isNonRect, quadBounds, boundingSize, snapPosition, snapSpecialRoomToWall } from './canvasUtils';
 import { wallMidDragCursor, rotatedResizeCursor, getRoomLabelCentreLocalPx } from './canvasGeometry';
 import RoomShape from './RoomShape';
@@ -244,30 +244,60 @@ export default function CanvasRoom({
           const newX = e.target.x() - cx;
           const newY = e.target.y() - cy;
 
-          // Speciale kamers: probeer wandsegment-snap (rotatie + flush)
-          if (room.roomType !== 'normal' && !isMultiSelected && onUpdateRoom && !room.isFinalized) {
-            const tempRoom = { ...room, x: newX, y: newY };
-            const wallSnap = snapSpecialRoomToWall(tempRoom, rooms);
+          let finalX: number;
+          let finalY: number;
+          let finalRot = room.rotation ?? 0;
+          let snapForHighlight: SnapResult | null = null;
+
+          const useSpecialWallPipeline =
+            room.roomType !== 'normal'
+            && !isMultiSelected
+            && onUpdateRoom
+            && !room.isFinalized;
+
+          if (!useSpecialWallPipeline) {
+            const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
+            finalX = snapped.x;
+            finalY = snapped.y;
+            snapForHighlight = snapped;
+          } else {
+            // 1) Rotation + flush tegen hostwand (dit maakte speciale kamers “plakkerig”).
+            const wallSnap = snapSpecialRoomToWall({ ...room, x: newX, y: newY }, rooms);
             if (wallSnap) {
-              const { w: newW, h: newH } = boundingSize({ ...room, rotation: wallSnap.rotation });
-              const newCx = newW / 2;
-              const newCy = newH / 2;
-              e.target.x(wallSnap.x + newCx);
-              e.target.y(wallSnap.y + newCy);
-              onDragEndRoom();
-              onUpdateRoom(room.id, { x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation });
-              return;
+              finalRot = wallSnap.rotation;
+              const roomsWithWallSnap = rooms.map(r =>
+                r.id === room.id
+                  ? { ...r, x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation }
+                  : r,
+              );
+              // 2) Segment-snap met dezelfde rotatie/positie in de lijst, zodat je langs de wand kunt schuiven / tweede wand pakt.
+              const refined = snapPosition(room.id, wallSnap.x, wallSnap.y, roomsWithWallSnap, activeDragWalls);
+              finalX = refined.x;
+              finalY = refined.y;
+              snapForHighlight = refined;
+            } else {
+              const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
+              finalX = snapped.x;
+              finalY = snapped.y;
+              snapForHighlight = snapped;
             }
           }
 
-          // Normale kamers of geen wandsnap gevonden: bounding-box snap
-          const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
-          e.target.x(snapped.x + cx);
-          e.target.y(snapped.y + cy);
+          const { w: outW, h: outH } = boundingSize({ ...room, rotation: finalRot });
+          const outCx = outW / 2;
+          const outCy = outH / 2;
+          e.target.x(finalX + outCx);
+          e.target.y(finalY + outCy);
           onDragEndRoom();
-          onMoveRoom(room.id, snapped.x, snapped.y);
-          if (snapped.snappedToId && snapped.snappedWall && room.roomType !== 'normal') {
-            onSnapHighlight({ roomId: snapped.snappedToId, wall: snapped.snappedWall });
+
+          const rotationChanged = Math.abs(finalRot - (room.rotation ?? 0)) > 0.01;
+          if (room.roomType !== 'normal' && onUpdateRoom && rotationChanged) {
+            onUpdateRoom(room.id, { x: finalX, y: finalY, rotation: finalRot });
+          } else {
+            onMoveRoom(room.id, finalX, finalY);
+          }
+          if (snapForHighlight?.snappedToId && snapForHighlight?.snappedWall && room.roomType !== 'normal') {
+            onSnapHighlight({ roomId: snapForHighlight.snappedToId, wall: snapForHighlight.snappedWall });
             if (snapHighlightTimer.current) clearTimeout(snapHighlightTimer.current);
             snapHighlightTimer.current = setTimeout(() => onSnapHighlight(null), 1000);
           }
