@@ -435,7 +435,7 @@ export default function CanvasRoom({
       />
 
       {/* Selected-wall highlights and vertex drag handles */}
-      {isSelected && hasVertices && selectedWallIndices && selectedWallIndices.length > 0 && (() => {
+      {isSelected && hasVertices && selectedWallIndices !== undefined && (() => {
         const verts = ensureVertices(room);
         const n = verts.length;
 

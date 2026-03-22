@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef } from 'react';
-import { flushSync } from 'react-dom';
 import type { Room } from '../../types';
 import {
   computeWizardCarve,
@@ -58,17 +57,13 @@ export function usePlattegrondWizardHandlers({
       endBatch?.();
       return;
     }
-    const updatedRooms = rooms.map(r => r.id === targetRoom.id ? fill : r);
-    const snapped = snapToRooms(targetRoom.id, fill.x, fill.y, updatedRooms);
-    flushSync(() => {
-      onUpdateRoom(targetRoom.id, {
-        vertices: fill.vertices,
-        x: snapped.x,
-        y: snapped.y,
-        length: fill.length,
-        width: fill.width,
-        wallLengths: fill.wallLengths,
-      });
+    onUpdateRoom(targetRoom.id, {
+      vertices: fill.vertices,
+      x: fill.x,
+      y: fill.y,
+      length: fill.length,
+      width: fill.width,
+      wallLengths: fill.wallLengths,
     });
     endBatch?.();
     setWizardPreview(null);
@@ -98,15 +93,13 @@ export function usePlattegrondWizardHandlers({
     }
     const updatedRooms = rooms.map(r => r.id === targetRoom.id ? carved : r);
     const snapped = snapToRooms(targetRoom.id, carved.x, carved.y, updatedRooms);
-    flushSync(() => {
-      onUpdateRoom(targetRoom.id, {
-        vertices: carved.vertices,
-        x: snapped.x,
-        y: snapped.y,
-        length: carved.length,
-        width: carved.width,
-        wallLengths: carved.wallLengths,
-      });
+    onUpdateRoom(targetRoom.id, {
+      vertices: carved.vertices,
+      x: snapped.x,
+      y: snapped.y,
+      length: carved.length,
+      width: carved.width,
+      wallLengths: carved.wallLengths,
     });
     endBatch?.();
     setWizardPreview(null);

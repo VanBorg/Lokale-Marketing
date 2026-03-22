@@ -121,27 +121,6 @@ export function useTabPlattegrond({
     [rooms.length, updateActiveFloorRooms, cancelPendingSpecial],
   );
 
-  const handleAddRoomFromCornerFill = useCallback(
-    (worldX: number, worldY: number, widthM: number, heightM: number) => {
-      // Build a rectangular room at the exact fill position
-      const newRoom = buildStandardShapeRoom('rechthoek', rooms.length, undefined);
-      const finalRoom = {
-        ...newRoom,
-        x: worldX,
-        y: worldY,
-        length: widthM,
-        width: heightM,
-        wallLengths: { top: widthM, right: heightM, bottom: widthM, left: heightM },
-        effectiveArea: widthM * heightM,
-      };
-      updateActiveFloorRooms(prev => detectSubRooms([...prev, finalRoom]));
-      setSelectedRoomId(finalRoom.id);
-      setPlacingElement(null);
-      cancelPendingSpecial();
-    },
-    [rooms.length, updateActiveFloorRooms, cancelPendingSpecial],
-  );
-
   const addFreeFormRoom = useCallback(
     (rawVertices: { x: number; y: number }[]) => {
       const spawn = canvasRef.current?.getSpawnPosition?.();
@@ -342,7 +321,6 @@ export function useTabPlattegrond({
     addRoom,
     addFreeFormRoom,
     addSpecialRoom,
-    handleAddRoomFromCornerFill,
     cancelPendingSpecial,
     startPendingSpecialRoom,
     handleSelectTargetRoom,

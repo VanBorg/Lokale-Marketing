@@ -67,10 +67,13 @@ export default function RoomWalls({
   useEffect(() => {
     setWallStrings({});
     setIsExpanded(false);
+    const curVerts = ensureVertices(room);
+    const curLens = vertexWallLengths(curVerts);
     const strs: Record<string, string> = {};
-    wallLens.forEach((len, i) => { strs[String(i)] = len.toFixed(2); });
+    curLens.forEach((len, i) => { strs[String(i)] = len.toFixed(2); });
     setLengthStrings(strs);
-  }, [room.id, wallLens]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.id]);
 
   useEffect(() => {
     const newLens = vertexWallLengths(ensureVertices(room));

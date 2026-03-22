@@ -3,11 +3,10 @@ import { Stage as KonvaStage, Layer, Rect, Line } from 'react-konva';
 import Konva from 'konva';
 import { calcTotalWalls, getDependentRoomsForFinalization, RoomType } from '../types';
 import { useTheme } from '../../../hooks/useTheme';
-import { SCALE_BY, HANDLE_CURSORS, PlattegrondCanvasProps, GapInfo, CornerFillInfo } from './canvasTypes';
+import { SCALE_BY, HANDLE_CURSORS, PlattegrondCanvasProps, GapInfo } from './canvasTypes';
 import { rotatedResizeCursor } from './canvasGeometry';
 import { computeGridLines, computeSnapHighlightRect, boundingSize } from './canvasGeometry';
-import { detectRoomGaps, detectCornerFills } from './canvasWizard';
-import CornerFillWand from './CornerFillWand';
+import { detectRoomGaps } from './canvasWizard';
 import { useCanvasStage } from './hooks/useCanvasStage';
 import { usePlattegrondAutoPan } from './hooks/usePlattegrondAutoPan';
 import { usePlattegrondWizardHandlers } from './hooks/usePlattegrondWizardHandlers';
@@ -31,7 +30,6 @@ export type PlattegrondCanvasExtendedProps = PlattegrondCanvasProps & {
   onCancelPendingSpecial: () => void;
   onConfirmPlaceFinalized: () => void;
   onCancelPlaceFinalized: () => void;
-  onAddRoomFromCornerFill?: (x: number, y: number, widthM: number, heightM: number) => void;
 };
 
 export interface PlattegrondCanvasHandle {
@@ -57,7 +55,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
   onCancelPendingSpecial,
   onConfirmPlaceFinalized,
   onCancelPlaceFinalized,
-  onAddRoomFromCornerFill,
 }, ref) {
   const { theme, canvasColors } = useTheme();
   const { containerRef, stageRef, size, scale, stagePos, setStagePos, handleWheel, adjustZoom, resetZoom, goToCenter, handleStageDragEnd } = useCanvasStage();
@@ -108,8 +105,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
   const [wizardGaps, setWizardGaps] = useState<GapInfo[]>([]);
   const [wizardPreview, setWizardPreview] = useState<{ vertices: number[] } | null>(null);
   const [hoveredTargetRoomId, setHoveredTargetRoomId] = useState<string | null>(null);
-  const [cornerFills, setCornerFills] = useState<CornerFillInfo[]>([]);
-  const [cornerFillPreview, setCornerFillPreview] = useState<CornerFillInfo | null>(null);
 
   const { handleWizardFill, handleWizardCarve, handleWizardHoverStart, handleWizardHoverEnd, wizardGapsRef, handleWizardFillRef, selectedSpecialActionTarget } = usePlattegrondWizardHandlers({
     rooms, onUpdateRoom, beginBatch, endBatch, wizardGaps, setWizardPreview, selectedRoomId, scale,
@@ -162,15 +157,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
     }
     setWizardGaps(gaps);
   }, [rooms, selectedRoomId]);
-
-  useEffect(() => {
-    setCornerFills(detectCornerFills(rooms));
-  }, [rooms]);
-
-  const handleCornerFill = useCallback((fill: CornerFillInfo) => {
-    onAddRoomFromCornerFill?.(fill.fillX, fill.fillY, fill.fillWm, fill.fillHm);
-    setCornerFillPreview(null);
-  }, [onAddRoomFromCornerFill]);
 
   const totals = rooms.reduce(
     (acc, r) => ({ floor: acc.floor + r.length * r.width, walls: acc.walls + calcTotalWalls(r), ceiling: acc.ceiling + r.length * r.width }),
@@ -332,7 +318,6 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
             return <Rect x={r.x} y={r.y} width={r.w} height={r.h} fill="#FF5C1A22" stroke="#FF5C1A" strokeWidth={1} opacity={0.8} listening={false} />;
           })()}
           {wizardPreview && <Line points={wizardPreview.vertices} closed fill="rgba(245, 158, 11, 0.15)" stroke="rgba(245, 158, 11, 0.6)" strokeWidth={1.5} dash={[6, 4]} listening={false} />}
-          {cornerFillPreview && <Rect x={cornerFillPreview.fillX} y={cornerFillPreview.fillY} width={cornerFillPreview.fillWpx} height={cornerFillPreview.fillHpx} fill="rgba(59, 130, 246, 0.15)" stroke="rgba(59, 130, 246, 0.6)" strokeWidth={1.5} dash={[6, 4]} listening={false} />}
           {marquee && <Rect x={Math.min(marquee.startX, marquee.endX)} y={Math.min(marquee.startY, marquee.endY)} width={Math.abs(marquee.endX - marquee.startX)} height={Math.abs(marquee.endY - marquee.startY)} fill="rgba(59, 130, 246, 0.08)" stroke="rgba(59, 130, 246, 0.5)" strokeWidth={1} dash={[4, 4]} listening={false} />}
         </Layer>
       </Stage>
@@ -355,25 +340,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
       {wizardGaps.length > 0 && !draggingHandle && !isDraggingVertex && !isDraggingWall && !marquee && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ height: size.height }}>
           {selectedSpecialActionTarget ? (
-            <WizardWand key={`selected-special-action-${selectedSpecialActionTarget.targetRoomId}-${selectedSpecialActionTarget.wallIndex}`} target={selectedSpecialActionTarget} scale={scale} stagePos={stagePos} viewportSize={{ width: size.width, height: size.height }} onFill={handleWizardFill} onCarve={handleWizardCarve} onHoverStart={handleWizardHoverStart} onHoverEnd={handleWizardHoverEnd} />
+            <WizardWand key={`selected-special-action-${selectedSpecialActionTarget.targetRoomId}-${selectedSpecialActionTarget.wallIndex}`} target={selectedSpecialActionTarget} scale={scale} stagePos={stagePos} viewportSize={{ width: size.width, height: size.height }} onFill={handleWizardFill} onHoverStart={handleWizardHoverStart} onHoverEnd={handleWizardHoverEnd} />
           ) : wizardGaps.map((target, i) => (
-            <WizardWand key={`${target.targetRoomId}-${target.wallIndex}-${i}`} target={target} scale={scale} stagePos={stagePos} viewportSize={{ width: size.width, height: size.height }} onFill={handleWizardFill} onCarve={handleWizardCarve} onHoverStart={handleWizardHoverStart} onHoverEnd={handleWizardHoverEnd} />
-          ))}
-        </div>
-      )}
-      {cornerFills.length > 0 && onAddRoomFromCornerFill && !draggingHandle && !isDraggingVertex && !isDraggingWall && !marquee && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ height: size.height }}>
-          {cornerFills.map(fill => (
-            <CornerFillWand
-              key={fill.id}
-              fill={fill}
-              scale={scale}
-              stagePos={stagePos}
-              viewportSize={{ width: size.width, height: size.height }}
-              onFill={handleCornerFill}
-              onHoverStart={setCornerFillPreview}
-              onHoverEnd={() => setCornerFillPreview(null)}
-            />
+            <WizardWand key={`${target.targetRoomId}-${target.wallIndex}-${i}`} target={target} scale={scale} stagePos={stagePos} viewportSize={{ width: size.width, height: size.height }} onFill={handleWizardFill} onHoverStart={handleWizardHoverStart} onHoverEnd={handleWizardHoverEnd} />
           ))}
         </div>
       )}

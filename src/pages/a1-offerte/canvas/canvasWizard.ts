@@ -1,8 +1,8 @@
 import type { Room, Vertex } from '../types';
 import { ensureVertices, syncRoomFromVertices, verticesBoundingBox, isSpecialRoomType, ensureWallIds } from '../types';
-import { PX_PER_M, rotateVector2DDeg, type GapInfo, type CornerFillInfo } from './canvasTypes';
+import { PX_PER_M, rotateVector2DDeg, type GapInfo } from './canvasTypes';
 import { polygonIsClockwise } from './wallSegments';
-import { buildWallSegmentsEx, getAllRoomCorners, type RoomCorner } from './canvasWallSegments';
+import { buildWallSegmentsEx } from './canvasWallSegments';
 
 const GAP_MAX_PX = 120;
 const GAP_MIN_PX = 1;
@@ -333,109 +333,3 @@ export function safeGapCarveDistance(targetRoom: Room, gap: GapInfo): number {
   return lo < 1e-4 ? 0 : lo;
 }
 
-// ---------------------------------------------------------------------------
-// Corner fill detection
-// ---------------------------------------------------------------------------
-
-const CORNER_POS_EPS = 2; // px — two corners at this distance are considered the same point
-const MIN_FILL_M = 0.3;   // minimum fill dimension in metres
-
-function cornersAtSamePosition(a: RoomCorner, b: RoomCorner): boolean {
-  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2) < CORNER_POS_EPS;
-}
-
-/**
- * Detects empty rectangular areas formed between two corners from different
- * finalized rooms.  Returns up to 5 candidates sorted by area descending.
- */
-export function detectCornerFills(rooms: Room[]): CornerFillInfo[] {
-  const finalized = rooms.filter(
-    r => r.isFinalized && (r.rotation ?? 0) === 0 && !UNSUPPORTED.has(r.shape?.toLowerCase?.() ?? ''),
-  );
-  if (finalized.length < 2) return [];
-
-  const allCorners = getAllRoomCorners(finalized);
-  const results: CornerFillInfo[] = [];
-
-  // Compare every pair of corners from different rooms
-  for (let i = 0; i < allCorners.length; i++) {
-    const ca = allCorners[i];
-    for (let j = i + 1; j < allCorners.length; j++) {
-      const cb = allCorners[j];
-      if (ca.roomId === cb.roomId) continue;
-      // Corners cannot already be at the same position (that would be a shared corner)
-      if (cornersAtSamePosition(ca, cb)) continue;
-
-      // They must share either the same X or the same Y axis (aligned in one dimension)
-      const sameX = Math.abs(ca.x - cb.x) < CORNER_POS_EPS;
-      const sameY = Math.abs(ca.y - cb.y) < CORNER_POS_EPS;
-      if (!sameX && !sameY) continue;
-
-      // Compute the fill rectangle
-      const fillX = Math.min(ca.x, cb.x);
-      const fillY = Math.min(ca.y, cb.y);
-      const fillWpx = Math.abs(ca.x - cb.x);
-      const fillHpx = Math.abs(ca.y - cb.y);
-      const fillWm = fillWpx / PX_PER_M;
-      const fillHm = fillHpx / PX_PER_M;
-
-      // Skip if too small
-      if (fillWm < MIN_FILL_M || fillHm < MIN_FILL_M) continue;
-
-      // Check both walls face toward the fill rectangle (inward normals toward C)
-      // The outward normal of the wall should point roughly away from the fill centre
-      const fillCx = fillX + fillWpx / 2;
-      const fillCy = fillY + fillHpx / 2;
-
-      const wallSegsA = buildWallSegmentsEx(finalized.find(r => r.id === ca.roomId)!);
-      const wallSegsB = buildWallSegmentsEx(finalized.find(r => r.id === cb.roomId)!);
-      const segA = wallSegsA.find(s => s.wallId === ca.wallId2); // outgoing wall at corner A
-      const segB = wallSegsB.find(s => s.wallId === cb.wallId2); // outgoing wall at corner B
-
-      if (!segA || !segB) continue;
-
-      // Outward normal of segA should point away from fillCentre
-      const dax = fillCx - segA.midpoint.x;
-      const day = fillCy - segA.midpoint.y;
-      const dotA = dax * segA.outwardNormal.x + day * segA.outwardNormal.y;
-      if (dotA < 0) continue; // segA faces away from fill area
-
-      const dbx = fillCx - segB.midpoint.x;
-      const dby = fillCy - segB.midpoint.y;
-      const dotB = dbx * segB.outwardNormal.x + dby * segB.outwardNormal.y;
-      if (dotB < 0) continue; // segB faces away from fill area
-
-      // Check the fill rectangle doesn't overlap any existing room
-      const overlaps = finalized.some(r => {
-        const rx = r.x, ry = r.y;
-        const rw = r.length * PX_PER_M, rh = r.width * PX_PER_M;
-        return !(fillX + fillWpx <= rx || fillX >= rx + rw ||
-                 fillY + fillHpx <= ry || fillY >= ry + rh);
-      });
-      if (overlaps) continue;
-
-      results.push({
-        id: `${ca.cornerId}__${cb.cornerId}`,
-        roomIdA: ca.roomId,
-        roomIdB: cb.roomId,
-        wallIdA: ca.wallId2,
-        wallIdB: cb.wallId2,
-        cornerAx: ca.x,
-        cornerAy: ca.y,
-        cornerBx: cb.x,
-        cornerBy: cb.y,
-        fillX,
-        fillY,
-        fillWpx,
-        fillHpx,
-        fillWm,
-        fillHm,
-        wizardWorldPos: { x: fillCx, y: fillCy },
-      });
-    }
-  }
-
-  // Sort by area descending, return top 5
-  results.sort((a, b) => b.fillWm * b.fillHm - a.fillWm * a.fillHm);
-  return results.slice(0, 5);
-}
