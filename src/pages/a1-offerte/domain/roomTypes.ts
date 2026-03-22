@@ -1,3 +1,6 @@
+import { SpecialRoomPlacementMode } from '../specialRooms/types';
+export type { SpecialRoomPlacementMode };
+
 export type RoomElement = {
   id: string;
   type: 'deur' | 'raam' | 'schuifdeur' | 'openhaard' | 'radiator' | 'kolom' | 'badkuip' | 'toilet';
@@ -67,7 +70,8 @@ export type Room = {
   /** 0–1 position along the attached wall (when attachedWall is top/right/bottom/left). 0 = start, 1 = end. */
   wallOffset?: number;
   effectiveArea: number;
-  specialRoomPlacementMode?: 'against-wall' | 'inside-room' | 'freestanding';
+  specialRoomPlacementMode?: SpecialRoomPlacementMode;
+  wallSnapSide?: number;
   wallRotationDeg?: number;
 };
 

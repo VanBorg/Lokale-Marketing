@@ -15,13 +15,13 @@ export function detectSubRooms(rooms: Room[]): Room[] {
   let updated = rooms.map(r => {
     if (r.roomType === 'normal') return r;
 
-    if (r.specialRoomPlacementMode === 'freestanding') {
+    if (r.specialRoomPlacementMode === 'free') {
       return { ...r, parentRoomId: null, isSubRoom: false, attachedWall: null, wallOffset: undefined };
     }
 
     const parentCandidates = normalRooms;
 
-    const preferWallAttach = r.specialRoomPlacementMode === 'against-wall';
+    const preferWallAttach = r.specialRoomPlacementMode === 'inside' || r.specialRoomPlacementMode === 'outside' || r.specialRoomPlacementMode === undefined;
 
     if (preferWallAttach) {
       for (const parent of parentCandidates) {

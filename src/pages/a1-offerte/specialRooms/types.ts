@@ -1,7 +1,7 @@
 export type SpecialRoomPlacementMode =
-  | 'against-wall'
-  | 'inside-room'
-  | 'freestanding';
+  | 'inside'
+  | 'outside'
+  | 'free';
 
 /**
  * Role of each wall edge (index 0–3) in segment snapping.

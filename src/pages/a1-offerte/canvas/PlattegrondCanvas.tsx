@@ -4,6 +4,10 @@ import Konva from 'konva';
 import { calcTotalWalls, getDependentRoomsForFinalization, RoomType } from '../types';
 import { useTheme } from '../../../hooks/useTheme';
 import { SCALE_BY, HANDLE_CURSORS, PlattegrondCanvasProps, GapInfo } from './canvasTypes';
+import { snapSpecialRoomToWall } from './canvasWallSnap';
+import { snapPositionBySegment } from './canvasSegmentSnap';
+import { getSpecialRoomConfig } from '../specialRooms/index';
+import { SpecialRoomPlacementMode } from '../specialRooms/types';
 import { rotatedResizeCursor } from './canvasGeometry';
 import { computeGridLines, computeSnapHighlightRect, boundingSize } from './canvasGeometry';
 import { detectRoomGaps } from './canvasWizard';
@@ -110,6 +114,36 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
     rooms, onUpdateRoom, beginBatch, endBatch, wizardGaps, setWizardPreview, selectedRoomId, scale,
   });
 
+  const handleSetPlacementMode = useCallback((roomId: string, mode: SpecialRoomPlacementMode) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) return;
+    if (mode === 'free') {
+      onUpdateRoom?.(roomId, { specialRoomPlacementMode: 'free' });
+      return;
+    }
+    const currentSide = room.wallSnapSide ?? 1;
+    // Toggle: always flip to the opposite wall side.
+    // wallSnapSide encodes the current side; switching modes means go to the other side.
+    const forcedSideSign = -currentSide;
+    const wallSnap = snapSpecialRoomToWall({ ...room }, rooms, undefined, forcedSideSign);
+    if (!wallSnap) {
+      onUpdateRoom?.(roomId, { specialRoomPlacementMode: mode });
+      return;
+    }
+    const snapConfig = getSpecialRoomConfig(room.roomType);
+    const roomsWithSnap = rooms.map(r =>
+      r.id === roomId ? { ...r, x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation } : r,
+    );
+    const refined = snapPositionBySegment(roomId, wallSnap.x, wallSnap.y, roomsWithSnap,
+      snapConfig?.preferredAttachmentWallIndex);
+    const finalX = refined.snapType !== 'bbox' ? refined.x : wallSnap.x;
+    const finalY = refined.snapType !== 'bbox' ? refined.y : wallSnap.y;
+    onUpdateRoom?.(roomId, {
+      x: finalX, y: finalY, rotation: wallSnap.rotation,
+      specialRoomPlacementMode: mode, wallSnapSide: wallSnap.sideSign,
+    });
+  }, [rooms, onUpdateRoom]);
+
   const { EDGE_THRESHOLD, stopAutoPan, ensureAutoPan, handleRoomDragMovePosition } = usePlattegrondAutoPan({
     stageRef, size, scale, stagePos, setStagePos, onMoveRoom, onMoveRooms,
     draggedRoomIdsRef, draggedRoomPositionsRef, dragFromWalls,
@@ -147,14 +181,9 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
     if (!selectedRoomId) { setWizardGaps([]); return; }
     const selected = rooms.find(r => r.id === selectedRoomId);
     if (!selected || selected.isFinalized) { setWizardGaps([]); return; }
-    const wizardTarget = selected.roomType === 'normal'
-      ? selected
-      : (selected.parentRoomId ? rooms.find(r => r.id === selected.parentRoomId && r.roomType === 'normal') ?? null : null);
-    if (!wizardTarget || wizardTarget.isFinalized) { setWizardGaps([]); return; }
-    let gaps = detectRoomGaps(wizardTarget, rooms);
-    if (selected.roomType !== 'normal') {
-      gaps = gaps.filter(g => Math.abs(g.direction.nx) > 0.01 && Math.abs(g.direction.ny) > 0.01);
-    }
+    // Wizard wand only for normal (non-special) rooms
+    if (selected.roomType !== 'normal') { setWizardGaps([]); return; }
+    const gaps = detectRoomGaps(selected, rooms);
     setWizardGaps(gaps);
   }, [rooms, selectedRoomId]);
 
@@ -304,6 +333,7 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
               onDragEndRoom={() => { endBatch?.(); setDragFromWalls(null); draggedRoomIdsRef.current = null; }}
               onVertexHandleMouseDown={(vi, wx, wy) => handleVertexHandleMouseDown(room.id, vi, wx, wy)}
               onWallHandleMouseDown={(wi, wx, wy) => handleWallHandleMouseDown(room.id, wi, wx, wy)}
+              onSetPlacementMode={handleSetPlacementMode}
             />
           ))}
           {hoveredTargetRoomId && pendingSpecialRoom && !pendingTargetRoomId && (() => {

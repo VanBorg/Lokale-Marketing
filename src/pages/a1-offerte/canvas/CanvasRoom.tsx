@@ -9,6 +9,7 @@ import { snapPosition } from './canvasSnapping';
 import { snapPositionBySegment } from './canvasSegmentSnap';
 import { snapSpecialRoomToWall } from './canvasWallSnap';
 import { getSpecialRoomConfig } from '../specialRooms/index';
+import { SpecialRoomPlacementMode } from '../specialRooms/types';
 import { wallMidDragCursor, rotatedResizeCursor, getRoomLabelCentreLocalPx } from './canvasGeometry';
 import RoomShape from './RoomShape';
 import RoomDimensionLines from './RoomDimensionLines';
@@ -16,6 +17,7 @@ import RoomLabels from './RoomLabels';
 import RoomElementsList from './RoomElementsLayer';
 import RoomHandles from './RoomHandles';
 import RoomGhost from './RoomGhost';
+import SpecialRoomModeButtons from './SpecialRoomModeButtons';
 
 /** Centre zone: if pointer is this far from all edges (from centre), treat as whole-room grab. */
 const CENTER_ZONE_RATIO = 0.25;
@@ -85,6 +87,7 @@ interface CanvasRoomProps {
   onRoomDragMove?: (roomId: string, dx: number, dy: number) => void;
   /** Called during drag with screen pointer and current room top-left in world so parent can run edge-based auto-pan and keep room under cursor. */
   onRoomDragMovePosition?: (pointerX: number, pointerY: number, roomWorldX: number, roomWorldY: number) => void;
+  onSetPlacementMode?: (roomId: string, mode: SpecialRoomPlacementMode) => void;
 }
 
 export default function CanvasRoom({
@@ -120,6 +123,7 @@ export default function CanvasRoom({
   onRoomClick,
   onRoomDragMove,
   onRoomDragMovePosition,
+  onSetPlacementMode,
 }: CanvasRoomProps) {
   const snapHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -169,72 +173,6 @@ export default function CanvasRoom({
         }
       }}
       onDragMove={(e: Konva.KonvaEventObject<DragEvent>) => {
-        if (room.roomType !== 'normal' && room.specialRoomPlacementMode === 'against-wall' && room.parentRoomId) {
-          const parent = rooms.find(r => r.id === room.parentRoomId && r.roomType === 'normal');
-          if (parent) {
-            const rot = room.rotation || 0;
-            const rw = (rot === 90 || rot === 270 ? room.width : room.length) * PX_PER_M;
-            const rh = (rot === 90 || rot === 270 ? room.length : room.width) * PX_PER_M;
-            const bleed = 8;
-            const worldX = e.target.x() - cx;
-            const worldY = e.target.y() - cy;
-            const minX = parent.x - bleed;
-            const minY = parent.y - bleed;
-            const maxX = parent.x + parent.length * PX_PER_M + bleed - rw;
-            const maxY = parent.y + parent.width * PX_PER_M + bleed - rh;
-            const outsideDist = Math.max(
-              minX - worldX,
-              worldX - maxX,
-              minY - worldY,
-              worldY - maxY,
-              0,
-            );
-            const releaseDist = 64;
-            const shouldClamp = outsideDist <= releaseDist;
-            if (shouldClamp) {
-              let targetX = Math.max(minX, Math.min(maxX, worldX));
-              let targetY = Math.max(minY, Math.min(maxY, worldY));
-              const parentCorners = [
-                { x: minX, y: minY },
-                { x: maxX + rw, y: minY },
-                { x: minX, y: maxY + rh },
-                { x: maxX + rw, y: maxY + rh },
-              ];
-              const dragCornerCandidates = [
-                { dx: 0, dy: 0, tx: (corner: { x: number; y: number }) => ({ x: corner.x, y: corner.y }) },
-                { dx: rw, dy: 0, tx: (corner: { x: number; y: number }) => ({ x: corner.x - rw, y: corner.y }) },
-                { dx: 0, dy: rh, tx: (corner: { x: number; y: number }) => ({ x: corner.x, y: corner.y - rh }) },
-                { dx: rw, dy: rh, tx: (corner: { x: number; y: number }) => ({ x: corner.x - rw, y: corner.y - rh }) },
-              ];
-              let bestCornerDist = Infinity;
-              let cornerSnapX = targetX;
-              let cornerSnapY = targetY;
-              for (const pc of parentCorners) {
-                for (const dc of dragCornerCandidates) {
-                  const cx0 = targetX + dc.dx;
-                  const cy0 = targetY + dc.dy;
-                  const d = Math.hypot(pc.x - cx0, pc.y - cy0);
-                  if (d < bestCornerDist) {
-                    bestCornerDist = d;
-                    const snapped = dc.tx(pc);
-                    cornerSnapX = snapped.x;
-                    cornerSnapY = snapped.y;
-                  }
-                }
-              }
-              const cornerMagnetDist = 34;
-              const useCornerMagnet = bestCornerDist <= cornerMagnetDist;
-              if (useCornerMagnet) {
-                targetX = Math.max(minX, Math.min(maxX, cornerSnapX));
-                targetY = Math.max(minY, Math.min(maxY, cornerSnapY));
-              }
-              if (targetX !== worldX || targetY !== worldY) {
-                e.target.x(targetX + cx);
-                e.target.y(targetY + cy);
-              }
-            }
-          }
-        }
         if (isMultiSelected && onRoomDragMove) {
           onRoomDragMove(room.id, e.target.x() - cx - room.x, e.target.y() - cy - room.y);
         }
@@ -254,6 +192,7 @@ export default function CanvasRoom({
           let finalY: number;
           let finalRot = room.rotation ?? 0;
           let snapForHighlight: SnapResult | null = null;
+          let newWallSnapSide: number | undefined = room.wallSnapSide;
 
           const useSpecialWallPipeline =
             room.roomType !== 'normal'
@@ -266,26 +205,44 @@ export default function CanvasRoom({
             finalX = snapped.x;
             finalY = snapped.y;
             snapForHighlight = snapped;
+          } else if (room.specialRoomPlacementMode === 'free') {
+            finalX = newX;
+            finalY = newY;
           } else {
-            // 1) Rotation + flush tegen hostwand (dit maakte speciale kamers “plakkerig”).
-            const wallSnap = snapSpecialRoomToWall({ ...room, x: newX, y: newY }, rooms);
+            // 1) Rotation + flush against host wall, honouring inside/outside mode.
+            const storedSide = room.wallSnapSide ?? 0;
+            const placementMode = room.specialRoomPlacementMode;
+            // wallSnapSide already encodes the correct side (set correctly by handleSetPlacementMode
+            // on mode-switch). During drag we just maintain it — never negate here.
+            const forcedSideSign = storedSide;
+            const wallSnap = snapSpecialRoomToWall(
+              { ...room, x: newX, y: newY }, rooms, undefined, forcedSideSign || undefined,
+            );
             if (wallSnap) {
               finalRot = wallSnap.rotation;
+              newWallSnapSide = wallSnap.sideSign;
               const roomsWithWallSnap = rooms.map(r =>
                 r.id === room.id
                   ? { ...r, x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation }
                   : r,
               );
-              // 2) Segment-snap met dezelfde rotatie/positie in de lijst, zodat je langs de wand kunt schuiven / tweede wand pakt.
+              // 2) Segment-snap to slide along wall / catch second wall.
               const snapConfig = getSpecialRoomConfig(room.roomType);
               const refined = snapPositionBySegment(
                 room.id, wallSnap.x, wallSnap.y, roomsWithWallSnap,
                 snapConfig?.preferredAttachmentWallIndex, activeDragWalls,
               );
-              finalX = refined.x;
-              finalY = refined.y;
+              // When segment-snap falls back to 'bbox', the old _snapSpecialRoom bounding-box
+              // logic ignores rotation and shifts the room to the wrong position.
+              // Keep wallSnap's position in that case — it is already flush against the host wall.
+              finalX = refined.snapType !== 'bbox' ? refined.x : wallSnap.x;
+              finalY = refined.snapType !== 'bbox' ? refined.y : wallSnap.y;
               snapForHighlight = refined;
             } else {
+              // No axis-aligned wall in range — reset to nearest canonical rotation
+              // so a stale diagonal rotation from a previous snap doesn't persist.
+              const nearestCanonical = Math.round((room.rotation ?? 0) / 90) * 90;
+              finalRot = ((nearestCanonical % 360) + 360) % 360;
               const snapConfig = getSpecialRoomConfig(room.roomType);
               const snapped = snapPositionBySegment(
                 room.id, newX, newY, rooms,
@@ -305,12 +262,12 @@ export default function CanvasRoom({
           onDragEndRoom();
 
           const rotationChanged = Math.abs(finalRot - (room.rotation ?? 0)) > 0.01;
-          if (room.roomType !== 'normal' && onUpdateRoom && rotationChanged) {
-            onUpdateRoom(room.id, { x: finalX, y: finalY, rotation: finalRot });
+          if (room.roomType !== 'normal' && onUpdateRoom && (rotationChanged || room.specialRoomPlacementMode !== undefined)) {
+            onUpdateRoom(room.id, { x: finalX, y: finalY, rotation: finalRot, wallSnapSide: newWallSnapSide });
           } else {
             onMoveRoom(room.id, finalX, finalY);
           }
-          if (snapForHighlight?.snappedToId && snapForHighlight?.snappedWall && room.roomType !== 'normal') {
+          if (snapForHighlight?.snappedToId && snapForHighlight?.snappedWall && room.roomType === 'normal') {
             onSnapHighlight({ roomId: snapForHighlight.snappedToId, wall: snapForHighlight.snappedWall });
             if (snapHighlightTimer.current) clearTimeout(snapHighlightTimer.current);
             snapHighlightTimer.current = setTimeout(() => onSnapHighlight(null), 1000);
@@ -433,6 +390,16 @@ export default function CanvasRoom({
         w={w}
         h={h}
       />
+      {isSelected && room.roomType !== 'normal' && !room.isFinalized && onSetPlacementMode && (
+        <SpecialRoomModeButtons
+          w={w}
+          h={h}
+          cx={cx}
+          cy={cy}
+          currentMode={room.specialRoomPlacementMode}
+          onSetMode={(mode) => onSetPlacementMode(room.id, mode)}
+        />
+      )}
 
       {/* Selected-wall highlights and vertex drag handles */}
       {isSelected && hasVertices && selectedWallIndices !== undefined && (() => {
@@ -566,3 +533,4 @@ export default function CanvasRoom({
     </Group>
   );
 }
+

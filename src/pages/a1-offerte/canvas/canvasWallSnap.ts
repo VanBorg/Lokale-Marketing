@@ -60,7 +60,7 @@ function projT(p: Vec2, a: Vec2, b: Vec2): number {
   return dot(sub(p, a), normalize(ab)) / segLen;
 }
 
-export type WallSnapResult = { x: number; y: number; rotation: number };
+export type WallSnapResult = { x: number; y: number; rotation: number; sideSign: number };
 
 /**
  * Snap a special room flush against the nearest wall of any finalized room.
@@ -76,6 +76,7 @@ export function snapSpecialRoomToWall(
   draggedRoom: Room,
   allRooms: Room[],
   threshold: number = DEFAULT_THRESHOLD,
+  forcedSideSign?: number,
 ): WallSnapResult | null {
   if (draggedRoom.roomType === 'normal') return null;
 
@@ -108,6 +109,7 @@ export function snapSpecialRoomToWall(
   let bestCornerPoint: Vec2 | null = null;
   let bestCornerDist = Infinity;
   let bestEndpointProximity = Infinity;
+  let bestAxisDevDeg = 0;
   let pairCount = 0;
   let rejectedParallel = 0;
   let rejectedDistance = 0;
@@ -115,6 +117,10 @@ export function snapSpecialRoomToWall(
   let maxParallelSeen = -1;
   let minAngleDiffDeg = 180;
 
+  // Only snap to axis-aligned walls (deviation ≤ 5° from 0°/90°/180°/270°).
+  // Special rooms must not rotate to match irregular/diagonal rooms — if no
+  // axis-aligned wall is within range the function returns null and the caller
+  // falls back to free placement.
   for (const tryRot of ROTATIONS) {
     const { w, h } = boundingSize({ ...draggedRoom, rotation: tryRot });
     const tryCx = w / 2; const tryCy = h / 2;
@@ -136,57 +142,64 @@ export function snapSpecialRoomToWall(
 
       for (const hs of hostSegments) {
         pairCount++;
+        // Skip very short wall segments (corner-cuts / diagonal chamfers < 1 m).
+        if (vlen(sub(hs.b, hs.a)) < 40) continue;
         const hsDir = normalize(sub(hs.b, hs.a));
+        // Reject diagonal walls — special rooms only snap to axis-aligned surfaces.
+        const wallAngleRad = Math.atan2(hsDir.y, hsDir.x);
+        const mod90 = ((wallAngleRad % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2);
+        const axisDevDeg = Math.min(mod90, Math.PI / 2 - mod90) * 180 / Math.PI;
+        if (axisDevDeg > 5) continue;
+
         const parallel = Math.abs(dot(dDir, hsDir));
-        if (parallel > maxParallelSeen) maxParallelSeen = parallel;
-        const angleDiffDeg = Math.acos(Math.max(-1, Math.min(1, parallel))) * 180 / Math.PI;
-        if (angleDiffDeg < minAngleDiffDeg) minAngleDiffDeg = angleDiffDeg;
-        if (parallel < 0.6) { rejectedParallel++; continue; } // must be roughly parallel
+          if (parallel > maxParallelSeen) maxParallelSeen = parallel;
+          const angleDiffDeg = Math.acos(Math.max(-1, Math.min(1, parallel))) * 180 / Math.PI;
+          if (angleDiffDeg < minAngleDiffDeg) minAngleDiffDeg = angleDiffDeg;
+          if (parallel < 0.6) { rejectedParallel++; continue; } // must be roughly parallel
 
-        const absPerp = Math.abs(perpDistToLine(dMid, hs.a, hs.b));
-        const t = projT(dMid, hs.a, hs.b);
-        const lineEligible = t >= -0.3 && t <= 1.3;
-        const endpointProximity = Math.min(Math.abs(t), Math.abs(1 - t)); // 0 near endpoint
+          const absPerp = Math.abs(perpDistToLine(dMid, hs.a, hs.b));
+          const t = projT(dMid, hs.a, hs.b);
+          const lineEligible = t >= -0.3 && t <= 1.3;
+          const endpointProximity = Math.min(Math.abs(t), Math.abs(1 - t)); // 0 near endpoint
 
-        const dCornerA = vlen(sub(dMid, hs.a));
-        const dCornerB = vlen(sub(dMid, hs.b));
-        const nearestCornerDist = Math.min(dCornerA, dCornerB);
-        const cornerEligible = nearestCornerDist <= CORNER_THRESHOLD || (endpointProximity < 0.26 && absPerp < threshold);
+          const dCornerA = vlen(sub(dMid, hs.a));
+          const dCornerB = vlen(sub(dMid, hs.b));
+          const nearestCornerDist = Math.min(dCornerA, dCornerB);
+          const cornerEligible = nearestCornerDist <= CORNER_THRESHOLD || (endpointProximity < 0.26 && absPerp < threshold);
 
-        let candidateDist = Infinity;
-        let candidateUseCorner = false;
-        let candidateCorner: Vec2 | null = null;
-        let candidateT = t;
-        if (lineEligible) candidateDist = absPerp;
-        if (cornerEligible) {
-          // Keep corner preference strong, but never so strong that far corners
-          // beat nearby non-corner candidates.
-          const endpointBonus = Math.max(0, 1 - endpointProximity * 2); // 1 near endpoint, 0 at centre
-          let cornerScore = nearestCornerDist * 0.42 + absPerp * 0.35;
-          if (endpointProximity < 0.18) cornerScore -= 6 * endpointBonus;
-          cornerScore = Math.max(0, cornerScore);
-          if (cornerScore < candidateDist) {
-            candidateDist = cornerScore;
-            candidateUseCorner = true;
-            candidateCorner = dCornerA <= dCornerB ? hs.a : hs.b;
-            candidateT = dCornerA <= dCornerB ? 0 : 1;
+          let candidateDist = Infinity;
+          let candidateUseCorner = false;
+          let candidateCorner: Vec2 | null = null;
+          let candidateT = t;
+          if (lineEligible) candidateDist = absPerp;
+          if (cornerEligible) {
+            const endpointBonus = Math.max(0, 1 - endpointProximity * 2);
+            let cornerScore = nearestCornerDist * 0.42 + absPerp * 0.35;
+            if (endpointProximity < 0.18) cornerScore -= 6 * endpointBonus;
+            cornerScore = Math.max(0, cornerScore);
+            if (cornerScore < candidateDist) {
+              candidateDist = cornerScore;
+              candidateUseCorner = true;
+              candidateCorner = dCornerA <= dCornerB ? hs.a : hs.b;
+              candidateT = dCornerA <= dCornerB ? 0 : 1;
+            }
           }
-        }
-        if (candidateDist === Infinity) { rejectedProjection++; continue; }
-        if (candidateDist >= bestAbsPerp) { rejectedDistance++; continue; }
+          if (candidateDist === Infinity) { rejectedProjection++; continue; }
+          if (candidateDist >= bestAbsPerp) { rejectedDistance++; continue; }
 
-        bestAbsPerp = candidateDist;
-        bestRotation = tryRot;
-        bestEdgeIdx = di;
-        bestHostSeg = hs;
-        bestT = candidateT;
-        bestUseCorner = candidateUseCorner;
-        bestCornerPoint = candidateCorner;
-        bestCornerDist = nearestCornerDist;
-        bestEndpointProximity = endpointProximity;
+          bestAbsPerp = candidateDist;
+          bestRotation = tryRot;
+          bestEdgeIdx = di;
+          bestHostSeg = hs;
+          bestT = candidateT;
+          bestUseCorner = candidateUseCorner;
+          bestCornerPoint = candidateCorner;
+          bestCornerDist = nearestCornerDist;
+          bestEndpointProximity = endpointProximity;
+          bestAxisDevDeg = axisDevDeg;
+        }
       }
     }
-  }
 
   if (bestHostSeg === null || bestEdgeIdx === -1 || bestRotation === null) return null;
 
@@ -244,24 +257,52 @@ export function snapSpecialRoomToWall(
   const signA = Math.sign(candA.signedCenterDist);
   const signB = Math.sign(candB.signedCenterDist);
 
+  const chosenSign = forcedSideSign ?? preferSign;
   let chosen = candA;
-  if (preferSign !== 0) {
-    const aMatches = signA === preferSign;
-    const bMatches = signB === preferSign;
-    if (!aMatches && bMatches) chosen = candB;
-    else if (aMatches && bMatches) {
-      const da = Math.abs(candA.signedCenterDist - draggedSideDist);
-      const db = Math.abs(candB.signedCenterDist - draggedSideDist);
-      if (db < da) chosen = candB;
-    }
+  if (chosenSign !== 0) {
+    if (Math.sign(candA.signedCenterDist) !== chosenSign
+        && Math.sign(candB.signedCenterDist) === chosenSign)
+      chosen = candB;
   } else if (Math.abs(candB.signedCenterDist) > Math.abs(candA.signedCenterDist)) {
-    // If dragged exactly on wall line, pick the candidate with a clearer side.
     chosen = candB;
   }
 
+  // ── Clamp position along the host wall so neither attachment-edge corner
+  // extends past the wall segment endpoints. This prevents the room body from
+  // overlapping perpendicular adjacent walls.
+  const chosenRot = chosen.rotation;
+  const { w: cw, h: ch } = boundingSize({ ...draggedRoom, rotation: chosenRot });
+  const ccx = cw / 2; const ccy = ch / 2;
+  const crad = chosenRot * Math.PI / 180;
+  // World coords of chosen bounding-box top-left
+  const chosenTopLeft = { x: chosen.x, y: chosen.y };
+  // Attachment edge vertices in local px (relative to bounding-box top-left)
+  const verts2 = ensureVertices(draggedRoom);
+  const av1Local = { x: verts2[bestEdgeIdx].x * PX_PER_M, y: verts2[bestEdgeIdx].y * PX_PER_M };
+  const av2Local = { x: verts2[(bestEdgeIdx + 1) % verts2.length].x * PX_PER_M, y: verts2[(bestEdgeIdx + 1) % verts2.length].y * PX_PER_M };
+  const rotPt = (lx: number, ly: number) => {
+    const c = Math.cos(crad); const s = Math.sin(crad);
+    return { x: chosenTopLeft.x + (lx - ccx) * c - (ly - ccy) * s + ccx,
+             y: chosenTopLeft.y + (lx - ccx) * s + (ly - ccy) * c + ccy };
+  };
+  const av1World = rotPt(av1Local.x, av1Local.y);
+  const av2World = rotPt(av2Local.x, av2Local.y);
+  // Project both onto the host wall line and clamp to [0,1]
+  const hostSegLen = vlen(sub(bestHostSeg.b, bestHostSeg.a));
+  const t1 = hostSegLen > 0.001 ? dot(sub(av1World, bestHostSeg.a), hDir) / hostSegLen : 0;
+  const t2 = hostSegLen > 0.001 ? dot(sub(av2World, bestHostSeg.a), hDir) / hostSegLen : 0;
+  const tMin = Math.min(t1, t2); const tMax = Math.max(t1, t2);
+  let slideT = 0;
+  if (tMin < 0) slideT = -tMin;           // slide forward: attachment corner past start
+  else if (tMax > 1) slideT = 1 - tMax;  // slide backward: attachment corner past end
+  const finalX = chosen.x + hDir.x * slideT * hostSegLen;
+  const finalY = chosen.y + hDir.y * slideT * hostSegLen;
+
   return {
-    x: chosen.x,
-    y: chosen.y,
+    x: finalX,
+    y: finalY,
     rotation: chosen.rotation,
+    sideSign: Math.sign(chosen.signedCenterDist),
   };
 }
+

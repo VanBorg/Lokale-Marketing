@@ -13,7 +13,7 @@ export function applySpecialRoomMoveConstraints(
   let finalX = x;
   let finalY = y;
 
-  if (room?.specialRoomPlacementMode === 'inside-room') {
+  if (room?.specialRoomPlacementMode === 'inside') {
     const rot = room.rotation || 0;
     const rw = (rot === 90 || rot === 270 ? room.width : room.length) * PX_PER_M;
     const rh = (rot === 90 || rot === 270 ? room.length : room.width) * PX_PER_M;
@@ -37,7 +37,7 @@ export function applySpecialRoomMoveConstraints(
     }
   }
 
-  if (room && room.specialRoomPlacementMode === 'against-wall' && room.parentRoomId) {
+  if (room && (room.specialRoomPlacementMode === 'outside' || room.specialRoomPlacementMode === undefined) && room.parentRoomId) {
     const parent = prev.find(r => r.id === room.parentRoomId);
     if (parent && parent.roomType === 'normal') {
       const rot = room.rotation || 0;

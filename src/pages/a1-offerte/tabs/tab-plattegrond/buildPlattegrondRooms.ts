@@ -168,7 +168,7 @@ export function buildSpecialTypeRoom(
     isSubRoom: false,
     attachedWall: null,
     effectiveArea: resolvedLength * resolvedWidth,
-    specialRoomPlacementMode: config?.defaultPlacementMode ?? 'against-wall',
+    specialRoomPlacementMode: config?.defaultPlacementMode ?? 'inside',
     wallRotationDeg: 0,
   };
   specialRoom.wallIds = ensureWallIds(specialRoom);
