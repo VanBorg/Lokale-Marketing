@@ -174,3 +174,32 @@ export interface PlattegrondCanvasProps {
   onUndo?: () => void;
   onRedo?: () => void;
 }
+
+// ─── Snap thresholds (shared across snapping modules) ─────────────────────────
+export const SNAP_THRESHOLD = 40;
+export const SNAP_THRESHOLD_SPECIAL = 50;
+
+// ─── Segment snapping types ───────────────────────────────────────────────────
+
+/** World-pixel representation of one wall edge, including outward normal. */
+export type WallSegmentWorld = {
+  roomId: string;
+  wallIndex: number;
+  v1: { x: number; y: number };
+  v2: { x: number; y: number };
+  length: number;
+  midpoint: { x: number; y: number };
+  /** Unit vector pointing away from room interior (world space). */
+  outwardNormal: { x: number; y: number };
+  isAttachment: boolean;
+};
+
+/** Result of a segment-based snap operation. */
+export type CornerSnapResult = {
+  x: number;
+  y: number;
+  snappedToId?: string;
+  snappedWall?: 'top' | 'right' | 'bottom' | 'left';
+  snapType: 'corner-to-corner' | 'wall-to-wall' | 'bbox';
+  matchedWallIndex?: number;
+};

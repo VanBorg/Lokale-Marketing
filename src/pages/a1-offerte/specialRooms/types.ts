@@ -4,6 +4,14 @@ export type SpecialRoomPlacementMode =
   | 'freestanding';
 
 /**
+ * Role of each wall edge (index 0–3) in segment snapping.
+ * attachment = the wall that snaps flush against a host room.
+ * exterior   = outward-facing wall, never used as snap wall.
+ * free       = may touch another room but does not have to.
+ */
+export type WallRole = 'attachment' | 'exterior' | 'free';
+
+/**
  * Catalogue entry for one special room **type** (WC, badkamer, …).
  *
  * These files stay small on purpose: they only hold **defaults and labels** for the
@@ -31,10 +39,13 @@ export type SpecialRoomConfig = {
   canRotate: boolean;
   canPlaceOnDiagonalWall: boolean;
   /**
-   * Which **wall edge** (0–3) to prefer when several snap targets tie — see
-   * `RECT_WALL_INDEX` in `wallIndexConvention.ts`. This is **not** a corner ID;
-   * corners are where two wall indices meet. Currently reserved for future snapping logic.
+   * Which **wall edge** (0–3) to prefer when snapping — wall that attaches
+   * flush to the host room. See `RECT_WALL_INDEX` in `wallIndexConvention.ts`.
    */
   preferredAttachmentWallIndex: number;
   description: string;
+  /** Role of each of the 4 rectangular wall edges for segment snapping. */
+  wallRoles: [WallRole, WallRole, WallRole, WallRole];
+  /** The two vertex indices that form the attachment wall edge. */
+  cornerSnapVertices: [number, number];
 };

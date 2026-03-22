@@ -16,6 +16,8 @@ export const PLATEAU_CONFIG: SpecialRoomConfig = {
   defaultPlacementMode: 'inside-room',
   canRotate: true,
   canPlaceOnDiagonalWall: false,
-  preferredAttachmentWallIndex: RECT_WALL_INDEX.TOP,
+  preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Verhoogd vloergedeelte',
+  wallRoles: ['free', 'free', 'free', 'free'],
+  cornerSnapVertices: [2, 3],
 };

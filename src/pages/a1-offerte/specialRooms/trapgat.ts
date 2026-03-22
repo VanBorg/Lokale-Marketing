@@ -16,6 +16,8 @@ export const TRAPGAT_CONFIG: SpecialRoomConfig = {
   defaultPlacementMode: 'inside-room',
   canRotate: true,
   canPlaceOnDiagonalWall: false,
-  preferredAttachmentWallIndex: RECT_WALL_INDEX.TOP,
+  preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Opening in de vloer voor een trap',
+  wallRoles: ['free', 'free', 'attachment', 'free'],
+  cornerSnapVertices: [2, 3],
 };

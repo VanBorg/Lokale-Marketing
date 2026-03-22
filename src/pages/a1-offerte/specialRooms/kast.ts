@@ -18,4 +18,6 @@ export const KAST_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: true,
   preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Inbouwkast of walk-in closet',
+  wallRoles: ['exterior', 'exterior', 'attachment', 'exterior'],
+  cornerSnapVertices: [2, 3],
 };

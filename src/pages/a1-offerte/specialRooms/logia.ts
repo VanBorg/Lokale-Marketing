@@ -18,4 +18,6 @@ export const LOGIA_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: false,
   preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Inpandige buitenruimte',
+  wallRoles: ['exterior', 'exterior', 'attachment', 'exterior'],
+  cornerSnapVertices: [2, 3],
 };

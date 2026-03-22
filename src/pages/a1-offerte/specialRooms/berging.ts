@@ -18,4 +18,6 @@ export const BERGING_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: false,
   preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Opslagruimte',
+  wallRoles: ['free', 'free', 'attachment', 'free'],
+  cornerSnapVertices: [2, 3],
 };

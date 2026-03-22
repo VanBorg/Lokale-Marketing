@@ -18,4 +18,6 @@ export const NIS_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: false,
   preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Uitsparing in de muur',
+  wallRoles: ['exterior', 'exterior', 'attachment', 'exterior'],
+  cornerSnapVertices: [2, 3],
 };

@@ -17,4 +17,6 @@ export const BALKON_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: true,
   preferredAttachmentWallIndex: 2,
   description: 'Buitenruimte aan de gevel',
+  wallRoles: ['exterior', 'exterior', 'attachment', 'exterior'],
+  cornerSnapVertices: [2, 3],
 };

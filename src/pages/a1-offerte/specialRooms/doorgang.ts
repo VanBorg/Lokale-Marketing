@@ -18,4 +18,6 @@ export const DOORGANG_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: true,
   preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Overgangsruimte of gang',
+  wallRoles: ['exterior', 'exterior', 'attachment', 'exterior'],
+  cornerSnapVertices: [2, 3],
 };

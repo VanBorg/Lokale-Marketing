@@ -18,4 +18,6 @@ export const BADKAMER_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: false,
   preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Badkamer met douche of bad',
+  wallRoles: ['free', 'free', 'attachment', 'free'],
+  cornerSnapVertices: [2, 3],
 };

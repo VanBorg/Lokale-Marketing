@@ -18,4 +18,6 @@ export const WC_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: false,
   preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Toilet ruimte, minimaal 0.9×1.0m',
+  wallRoles: ['free', 'free', 'attachment', 'free'],
+  cornerSnapVertices: [2, 3],
 };

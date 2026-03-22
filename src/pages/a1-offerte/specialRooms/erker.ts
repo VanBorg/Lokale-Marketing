@@ -18,4 +18,6 @@ export const ERKER_CONFIG: SpecialRoomConfig = {
   canPlaceOnDiagonalWall: true,
   preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Uitbouw aan de buitenmuur',
+  wallRoles: ['exterior', 'exterior', 'attachment', 'exterior'],
+  cornerSnapVertices: [2, 3],
 };

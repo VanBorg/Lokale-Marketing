@@ -6,7 +6,9 @@ import { CanvasColors } from '../../../hooks/useTheme';
 import { WallId, DraggingHandle, PX_PER_M, SnapResult } from './canvasTypes';
 import { isNonRect, quadBounds, boundingSize } from './canvasGeometry';
 import { snapPosition } from './canvasSnapping';
+import { snapPositionBySegment } from './canvasSegmentSnap';
 import { snapSpecialRoomToWall } from './canvasWallSnap';
+import { getSpecialRoomConfig } from '../specialRooms/index';
 import { wallMidDragCursor, rotatedResizeCursor, getRoomLabelCentreLocalPx } from './canvasGeometry';
 import RoomShape from './RoomShape';
 import RoomDimensionLines from './RoomDimensionLines';
@@ -275,12 +277,20 @@ export default function CanvasRoom({
                   : r,
               );
               // 2) Segment-snap met dezelfde rotatie/positie in de lijst, zodat je langs de wand kunt schuiven / tweede wand pakt.
-              const refined = snapPosition(room.id, wallSnap.x, wallSnap.y, roomsWithWallSnap, activeDragWalls);
+              const snapConfig = getSpecialRoomConfig(room.roomType);
+              const refined = snapPositionBySegment(
+                room.id, wallSnap.x, wallSnap.y, roomsWithWallSnap,
+                snapConfig?.preferredAttachmentWallIndex, activeDragWalls,
+              );
               finalX = refined.x;
               finalY = refined.y;
               snapForHighlight = refined;
             } else {
-              const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
+              const snapConfig = getSpecialRoomConfig(room.roomType);
+              const snapped = snapPositionBySegment(
+                room.id, newX, newY, rooms,
+                snapConfig?.preferredAttachmentWallIndex, activeDragWalls,
+              );
               finalX = snapped.x;
               finalY = snapped.y;
               snapForHighlight = snapped;
