@@ -4,9 +4,7 @@ import Konva from 'konva';
 import { calcTotalWalls, getDependentRoomsForFinalization, RoomType } from '../types';
 import { useTheme } from '../../../hooks/useTheme';
 import { SCALE_BY, HANDLE_CURSORS, PlattegrondCanvasProps, GapInfo } from './canvasTypes';
-import { snapSpecialRoomToWall } from './canvasWallSnap';
-import { snapPositionBySegment } from './canvasSegmentSnap';
-import { getSpecialRoomConfig } from '../specialRooms/index';
+import { snapSpecialRoom } from './canvasSnapping';
 import { SpecialRoomPlacementMode } from '../specialRooms/types';
 import { rotatedResizeCursor } from './canvasGeometry';
 import { computeGridLines, computeSnapHighlightRect, boundingSize } from './canvasGeometry';
@@ -122,25 +120,12 @@ const PlattegrondCanvas = forwardRef<PlattegrondCanvasHandle, PlattegrondCanvasE
       return;
     }
     const currentSide = room.wallSnapSide ?? 1;
-    // Toggle: always flip to the opposite wall side.
-    // wallSnapSide encodes the current side; switching modes means go to the other side.
-    const forcedSideSign = -currentSide;
-    const wallSnap = snapSpecialRoomToWall({ ...room }, rooms, undefined, forcedSideSign);
-    if (!wallSnap) {
-      onUpdateRoom?.(roomId, { specialRoomPlacementMode: mode });
-      return;
-    }
-    const snapConfig = getSpecialRoomConfig(room.roomType);
-    const roomsWithSnap = rooms.map(r =>
-      r.id === roomId ? { ...r, x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation } : r,
-    );
-    const refined = snapPositionBySegment(roomId, wallSnap.x, wallSnap.y, roomsWithSnap,
-      snapConfig?.preferredAttachmentWallIndex);
-    const finalX = refined.snapType !== 'bbox' ? refined.x : wallSnap.x;
-    const finalY = refined.snapType !== 'bbox' ? refined.y : wallSnap.y;
+    const flippedRoom = { ...room, specialRoomPlacementMode: mode, wallSnapSide: -currentSide };
+    const updatedRooms = rooms.map(r => r.id === roomId ? flippedRoom : r);
+    const result = snapSpecialRoom(roomId, room.x, room.y, updatedRooms);
     onUpdateRoom?.(roomId, {
-      x: finalX, y: finalY, rotation: wallSnap.rotation,
-      specialRoomPlacementMode: mode, wallSnapSide: wallSnap.sideSign,
+      x: result.x, y: result.y, rotation: result.rotation,
+      specialRoomPlacementMode: mode, wallSnapSide: result.wallSnapSide,
     });
   }, [rooms, onUpdateRoom]);
 

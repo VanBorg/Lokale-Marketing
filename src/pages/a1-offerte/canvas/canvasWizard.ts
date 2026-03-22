@@ -1,8 +1,7 @@
 import type { Room, Vertex } from '../types';
 import { ensureVertices, syncRoomFromVertices, verticesBoundingBox, isSpecialRoomType, ensureWallIds } from '../types';
 import { PX_PER_M, rotateVector2DDeg, type GapInfo } from './canvasTypes';
-import { polygonIsClockwise } from './wallSegments';
-import { buildWallSegmentsEx } from './canvasWallSegments';
+import { computeWallSegments } from './wallSegments';
 
 const GAP_MAX_PX = 120;
 const GAP_MIN_PX = 1;
@@ -19,17 +18,8 @@ type WorldEdge = {
 };
 
 export function getWorldVertices(room: Room): { x: number; y: number }[] {
-  const lv = ensureVertices(room);
-  if (lv.length < 3) return [];
-  const bb = verticesBoundingBox(lv);
-  const cx = bb.minX + bb.w / 2;
-  const cy = bb.minY + bb.h / 2;
-  const rot = room.rotation ?? 0;
-  const rv = rot === 0 ? lv : lv.map(v => {
-    const r = rotateVector2DDeg(v.x - cx, v.y - cy, rot);
-    return { x: r.x + cx, y: r.y + cy };
-  });
-  return rv.map(v => ({ x: room.x + v.x * PX_PER_M, y: room.y + v.y * PX_PER_M }));
+  const segs = computeWallSegments(room);
+  return segs.map(s => ({ x: s.p1.x, y: s.p1.y }));
 }
 
 function worldDeltaToLocal(dxPx: number, dyPx: number, rotation: number) {
@@ -41,7 +31,12 @@ function buildWorldEdges(room: Room): WorldEdge[] {
   const wv = getWorldVertices(room);
   const n = wv.length;
   if (n < 3) return [];
-  const cw = polygonIsClockwise(wv);
+  let shoelace = 0;
+  for (let si = 0; si < n; si++) {
+    const sa = wv[si], sb = wv[(si + 1) % n];
+    shoelace += sa.x * sb.y - sb.x * sa.y;
+  }
+  const cw = shoelace > 0;
   const edges: WorldEdge[] = [];
   for (let i = 0; i < n; i++) {
     const p1 = wv[i], p2 = wv[(i + 1) % n];
@@ -150,13 +145,13 @@ export function detectRoomGaps(selectedRoom: Room, allRooms: Room[]): GapInfo[] 
   if (gaps.length === 0) {
     // Fallback detector for diagonal/crooked walls: compare nearly-parallel wall
     // segments in world space and derive gap vectors from midpoint-to-midpoint.
-    const tSegs = buildWallSegmentsEx(selectedRoom).filter(s => s.lengthPx >= OVERLAP_MIN_PX);
+    const tSegs = computeWallSegments(selectedRoom).filter(s => s.lengthPx >= OVERLAP_MIN_PX);
     for (const other of allRooms) {
       if (other.id === selectedRoom.id) continue;
       const includeOther = other.isFinalized || isSpecialRoomType(other.roomType);
       if (!includeOther) continue;
       if (UNSUPPORTED.has(other.shape?.toLowerCase?.() ?? '')) continue;
-      const rSegs = buildWallSegmentsEx(other).filter(s => s.lengthPx >= OVERLAP_MIN_PX);
+      const rSegs = computeWallSegments(other).filter(s => s.lengthPx >= OVERLAP_MIN_PX);
 
       for (const te of tSegs) {
         const tdx = te.p2.x - te.p1.x;
@@ -280,10 +275,10 @@ export function computeWizardCarve(targetRoom: Room, gap: GapInfo): Room | null 
 }
 
 function wizardResultCollides(filledRoom: Room, allRooms: Room[]): boolean {
-  const segs = buildWallSegmentsEx(filledRoom);
+  const segs = computeWallSegments(filledRoom);
   for (const other of allRooms) {
     if (other.id === filledRoom.id) continue;
-    const os = buildWallSegmentsEx(other);
+    const os = computeWallSegments(other);
     for (const a of segs) {
       for (const b of os) {
         const d1x = a.p2.x - a.p1.x, d1y = a.p2.y - a.p1.y;

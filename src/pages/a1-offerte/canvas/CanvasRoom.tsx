@@ -5,10 +5,7 @@ import { Room, RoomElement, getShapePoints, getShapeType, ensureVertices, vertic
 import { CanvasColors } from '../../../hooks/useTheme';
 import { WallId, DraggingHandle, PX_PER_M, SnapResult } from './canvasTypes';
 import { isNonRect, quadBounds, boundingSize } from './canvasGeometry';
-import { snapPosition } from './canvasSnapping';
-import { snapPositionBySegment } from './canvasSegmentSnap';
-import { snapSpecialRoomToWall } from './canvasWallSnap';
-import { getSpecialRoomConfig } from '../specialRooms/index';
+import { snapRoom, snapSpecialRoom } from './canvasSnapping';
 import { SpecialRoomPlacementMode } from '../specialRooms/types';
 import { wallMidDragCursor, rotatedResizeCursor, getRoomLabelCentreLocalPx } from './canvasGeometry';
 import RoomShape from './RoomShape';
@@ -194,64 +191,24 @@ export default function CanvasRoom({
           let snapForHighlight: SnapResult | null = null;
           let newWallSnapSide: number | undefined = room.wallSnapSide;
 
-          const useSpecialWallPipeline =
+          const useSpecialPipeline =
             room.roomType !== 'normal'
             && !isMultiSelected
             && onUpdateRoom
             && !room.isFinalized;
 
-          if (!useSpecialWallPipeline) {
-            const snapped = snapPosition(room.id, newX, newY, rooms, activeDragWalls);
+          if (useSpecialPipeline) {
+            const result = snapSpecialRoom(room.id, newX, newY, rooms);
+            finalX = result.x;
+            finalY = result.y;
+            finalRot = result.rotation;
+            newWallSnapSide = result.wallSnapSide;
+            snapForHighlight = result;
+          } else {
+            const snapped = snapRoom(room.id, newX, newY, rooms, activeDragWalls);
             finalX = snapped.x;
             finalY = snapped.y;
             snapForHighlight = snapped;
-          } else if (room.specialRoomPlacementMode === 'free') {
-            finalX = newX;
-            finalY = newY;
-          } else {
-            // 1) Rotation + flush against host wall, honouring inside/outside mode.
-            const storedSide = room.wallSnapSide ?? 0;
-            const placementMode = room.specialRoomPlacementMode;
-            // wallSnapSide already encodes the correct side (set correctly by handleSetPlacementMode
-            // on mode-switch). During drag we just maintain it — never negate here.
-            const forcedSideSign = storedSide;
-            const wallSnap = snapSpecialRoomToWall(
-              { ...room, x: newX, y: newY }, rooms, undefined, forcedSideSign || undefined,
-            );
-            if (wallSnap) {
-              finalRot = wallSnap.rotation;
-              newWallSnapSide = wallSnap.sideSign;
-              const roomsWithWallSnap = rooms.map(r =>
-                r.id === room.id
-                  ? { ...r, x: wallSnap.x, y: wallSnap.y, rotation: wallSnap.rotation }
-                  : r,
-              );
-              // 2) Segment-snap to slide along wall / catch second wall.
-              const snapConfig = getSpecialRoomConfig(room.roomType);
-              const refined = snapPositionBySegment(
-                room.id, wallSnap.x, wallSnap.y, roomsWithWallSnap,
-                snapConfig?.preferredAttachmentWallIndex, activeDragWalls,
-              );
-              // When segment-snap falls back to 'bbox', the old _snapSpecialRoom bounding-box
-              // logic ignores rotation and shifts the room to the wrong position.
-              // Keep wallSnap's position in that case — it is already flush against the host wall.
-              finalX = refined.snapType !== 'bbox' ? refined.x : wallSnap.x;
-              finalY = refined.snapType !== 'bbox' ? refined.y : wallSnap.y;
-              snapForHighlight = refined;
-            } else {
-              // No axis-aligned wall in range — reset to nearest canonical rotation
-              // so a stale diagonal rotation from a previous snap doesn't persist.
-              const nearestCanonical = Math.round((room.rotation ?? 0) / 90) * 90;
-              finalRot = ((nearestCanonical % 360) + 360) % 360;
-              const snapConfig = getSpecialRoomConfig(room.roomType);
-              const snapped = snapPositionBySegment(
-                room.id, newX, newY, rooms,
-                snapConfig?.preferredAttachmentWallIndex, activeDragWalls,
-              );
-              finalX = snapped.x;
-              finalY = snapped.y;
-              snapForHighlight = snapped;
-            }
           }
 
           const { w: outW, h: outH } = boundingSize({ ...room, rotation: finalRot });

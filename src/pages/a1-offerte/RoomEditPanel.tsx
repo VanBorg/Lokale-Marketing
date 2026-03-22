@@ -9,6 +9,7 @@ import {
   isSpecialRoomRechtRotation,
   SPECIAL_ROOM_SCHUIN_ROTATION_DEG,
 } from './types';
+import type { SpecialRoomPlacementMode } from './specialRooms/types';
 import RoomWalls from './sidebar/RoomWalls';
 
 interface RoomEditPanelProps {
@@ -74,6 +75,53 @@ export function SpecialRoomOrientationPicker({
         >
           Schuin
         </button>
+      </div>
+    </div>
+  );
+}
+
+export function SpecialRoomPlacementPicker({
+  room,
+  onUpdateRoom,
+  disabled,
+  className = '',
+}: {
+  room: Room;
+  onUpdateRoom: (id: string, updates: Partial<Room>) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const current: SpecialRoomPlacementMode = room.specialRoomPlacementMode ?? 'inside';
+  const modes: { value: SpecialRoomPlacementMode; label: string }[] = [
+    { value: 'inside', label: 'Binnen' },
+    { value: 'outside', label: 'Buiten' },
+    { value: 'free', label: 'Vrij' },
+  ];
+  const btn = (active: boolean) => `
+    px-2 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer
+    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+    ${active
+      ? 'bg-accent text-white'
+      : 'bg-dark-card border border-dark-border text-light/60 hover:border-light/30 hover:text-light'
+    }
+  `;
+  return (
+    <div className={className}>
+      <h3 className="text-xs font-semibold text-light/50 uppercase tracking-wider mb-2">
+        Plaatsing
+      </h3>
+      <div className="grid grid-cols-3 gap-1.5">
+        {modes.map(m => (
+          <button
+            key={m.value}
+            type="button"
+            disabled={disabled}
+            onClick={() => onUpdateRoom(room.id, { specialRoomPlacementMode: m.value })}
+            className={btn(current === m.value)}
+          >
+            {m.label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -281,11 +329,18 @@ export default function RoomEditPanel({
         </div>
 
         {isSpecialRoom(room) ? (
-          <SpecialRoomOrientationPicker
-            room={room}
-            onUpdateRoom={onUpdate}
-            disabled={room.isFinalized}
-          />
+          <>
+            <SpecialRoomOrientationPicker
+              room={room}
+              onUpdateRoom={onUpdate}
+              disabled={room.isFinalized}
+            />
+            <SpecialRoomPlacementPicker
+              room={room}
+              onUpdateRoom={onUpdate}
+              disabled={room.isFinalized}
+            />
+          </>
         ) : (
           <RoomRotationPicker
             room={room}

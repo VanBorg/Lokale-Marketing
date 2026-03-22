@@ -5,5 +5,4 @@ export * from './canvasGeometry';
 export * from './canvasSnapping';
 export * from './canvasResize';
 export * from './canvasWizard';
-export { getRoomWallSegments, getAttachmentWallWorldCoords, snapPositionBySegment } from './canvasSegmentSnap';
 export type { WallSegmentWorld, CornerSnapResult } from './canvasTypes';

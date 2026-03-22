@@ -95,59 +95,7 @@ export type GapInfo = {
   isRectangularFill?: boolean;
 };
 
-// ─── Wall Segment Architecture ────────────────────────────────────────────────
-//
-// Every wall of every room is described as a directed segment in world-pixel
-// space.  The outward unit normal (nx, ny) always points AWAY from the room
-// interior, so a special room approaching from the outside has a positive
-// signed distance to the segment line.
-//
-// Wall A = the segment a special room snaps its face against (primary).
-// Wall B = the adjacent segment (at the corner end of Wall A) that the special
-//          room's side aligns with, eliminating the corner gap.
-// Gap C  = the remaining space along Wall A beyond the special room's far edge,
-//          used later by the corner-filler UI (+/- buttons).
-
-export type WallSegment = {
-  roomId: string;
-  wallIndex: number;   // index i into the room's vertex array: segment from verts[i] → verts[(i+1)%n]
-  x1: number; y1: number; // world coords in pixels (start point)
-  x2: number; y2: number; // world coords in pixels (end point)
-  nx: number; ny: number; // outward unit normal
-  tx: number; ty: number; // unit tangent  (x1 → x2 direction)
-  length: number;         // segment length in pixels
-};
-
-// Result of snapping a special room to a wall.
-// Stored on the snap result so the canvas and future filler UI know which
-// walls were involved.
-export type SpecialRoomSnapInfo = {
-  wallA: WallSegment;
-  wallB: WallSegment | null;   // null if no corner wall was found within threshold
-  wallBSide: 'start' | 'end' | null; // 'start' = WallB is at P1 of WallA, 'end' = at P2
-  snapX: number;   // final snapped world X of the special room's top-left
-  snapY: number;   // final snapped world Y of the special room's top-left
-  // Gap C: remaining length (px) along WallA beyond the special room's far edge.
-  gapCPx: number;
-};
-
-// Future use: describes the corner triangle/rectangle that remains after
-// a special room is placed in a corner (Wall A + Wall B).
-export type CornerGapInfo = {
-  specialRoomId: string;
-  mainRoomId: string;
-  wallA: WallSegment;
-  wallB: WallSegment;
-  cornerX: number;
-  cornerY: number;
-  gapAreaM2: number;
-  gapPolygon: Array<{ x: number; y: number }>;
-};
-
-// Extend SnapResult to optionally carry special-room snap metadata
-export type SnapResultWithInfo = SnapResult & {
-  specialSnapInfo?: SpecialRoomSnapInfo;
-};
+export type SnapResultWithInfo = SnapResult;
 
 export interface PlattegrondCanvasProps {
   rooms: Room[];

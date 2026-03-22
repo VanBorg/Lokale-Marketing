@@ -7,9 +7,9 @@ import {
   syncRoomFromVertices,
 } from '../types';
 import { HandleType, PX_PER_M } from './canvasTypes';
-import { rotateVector2D } from './wallSegments';
+import { rotateVector2DDeg } from './canvasTypes';
 
-/** Same convention as {@link computeWorldWallSegments}: rotate vertex around bbox centre (metres). */
+/** Same convention as {@link computeWallSegments}: rotate vertex around bbox centre (metres). */
 function rotatePointAroundCentreMetres(
   vx: number,
   vy: number,
@@ -19,7 +19,7 @@ function rotatePointAroundCentreMetres(
 ): { x: number; y: number } {
   const dx = vx - cx;
   const dy = vy - cy;
-  const r = rotateVector2D(dx, dy, rotation);
+  const r = rotateVector2DDeg(dx, dy, rotation);
   return { x: r.x + cx, y: r.y + cy };
 }
 

@@ -6,7 +6,7 @@ import { ensureVertices, syncRoomFromVertices } from '../../types';
 import type { DraggingVertex, DraggingWall } from '../canvasTypes';
 import { PX_PER_M } from '../canvasTypes';
 import { wallNormal, projectWorldDeltaToNormalMetres } from '../canvasGeometry';
-import { rotateVector2D } from '../wallSegments';
+import { rotateVector2DDeg } from '../canvasTypes';
 import { snapToRooms } from '../canvasSnapping';
 
 interface UseVertexDragArgs {
@@ -75,10 +75,10 @@ export function useVertexDrag({ rooms, onUpdateRoom, beginBatch, endBatch, justF
       newRoomX = draggingVertex.startRoomPos.x + minX * PX_PER_M;
       newRoomY = draggingVertex.startRoomPos.y + minY * PX_PER_M;
     } else {
-      const refOldRel = rotateVector2D(sv[refIdxV].x * PX_PER_M - startCx, sv[refIdxV].y * PX_PER_M - startCy, rotDeg);
+      const refOldRel = rotateVector2DDeg(sv[refIdxV].x * PX_PER_M - startCx, sv[refIdxV].y * PX_PER_M - startCy, rotDeg);
       const refWorldX = draggingVertex.startRoomPos.x + startCx + refOldRel.x;
       const refWorldY = draggingVertex.startRoomPos.y + startCy + refOldRel.y;
-      const refNewRel = rotateVector2D(normalizedVerts[refIdxV].x * PX_PER_M - newCx, normalizedVerts[refIdxV].y * PX_PER_M - newCy, rotDeg);
+      const refNewRel = rotateVector2DDeg(normalizedVerts[refIdxV].x * PX_PER_M - newCx, normalizedVerts[refIdxV].y * PX_PER_M - newCy, rotDeg);
       newRoomX = refWorldX - refNewRel.x - newCx;
       newRoomY = refWorldY - refNewRel.y - newCy;
     }
@@ -145,10 +145,10 @@ export function useVertexDrag({ rooms, onUpdateRoom, beginBatch, endBatch, justF
       newRoomX = draggingWall.startRoomPos.x + minX * PX_PER_M;
       newRoomY = draggingWall.startRoomPos.y + minY * PX_PER_M;
     } else {
-      const refOldRelW = rotateVector2D(sv[refIdxW].x * PX_PER_M - startCxW, sv[refIdxW].y * PX_PER_M - startCyW, rotDegW);
+      const refOldRelW = rotateVector2DDeg(sv[refIdxW].x * PX_PER_M - startCxW, sv[refIdxW].y * PX_PER_M - startCyW, rotDegW);
       const refWorldXW = draggingWall.startRoomPos.x + startCxW + refOldRelW.x;
       const refWorldYW = draggingWall.startRoomPos.y + startCyW + refOldRelW.y;
-      const refNewRelW = rotateVector2D(normalizedVerts[refIdxW].x * PX_PER_M - newCxW, normalizedVerts[refIdxW].y * PX_PER_M - newCyW, rotDegW);
+      const refNewRelW = rotateVector2DDeg(normalizedVerts[refIdxW].x * PX_PER_M - newCxW, normalizedVerts[refIdxW].y * PX_PER_M - newCyW, rotDegW);
       newRoomX = refWorldXW - refNewRelW.x - newCxW;
       newRoomY = refWorldYW - refNewRelW.y - newCyW;
     }

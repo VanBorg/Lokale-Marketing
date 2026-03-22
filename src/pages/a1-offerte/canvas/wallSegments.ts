@@ -1,71 +1,57 @@
-import { Room, ensureVertices, verticesBoundingBox } from '../types';
+import Flatten from '@flatten-js/core';
+import { Room, ensureVertices, verticesBoundingBox, ensureWallIds, cornerIdFromWalls } from '../types';
 import { PX_PER_M, rotateVector2DDeg } from './canvasTypes';
 
-export type ConnectZone =
-  | { type: 'full' }
-  | { type: 'vertex'; point: { x: number; y: number } }
-  | { type: 'partial'; from: number; to: number };
+// ─── Types ────────────────────────────────────────────────────
 
 export type WallSegment = {
   roomId: string;
   wallIndex: number;
-  p1: { x: number; y: number };
-  p2: { x: number; y: number };
-  midpoint: { x: number; y: number };
-  outwardNormal: { x: number; y: number };
+  wallId: string;
+  p1: Flatten.Point;
+  p2: Flatten.Point;
+  segment: Flatten.Segment;
+  midpoint: Flatten.Point;
+  outwardNormal: Flatten.Vector;
   lengthPx: number;
-  lengthM: number;
   axis: 'horizontal' | 'vertical' | 'diagonal';
-  isConvex: boolean;
-  connectZone: ConnectZone;
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+export type RoomCorner = {
+  cornerId: string;
+  roomId: string;
+  wallId1: string;
+  wallId2: string;
+  point: Flatten.Point;
+  isConvex: boolean;
+};
 
-export function polygonIsClockwise(pts: { x: number; y: number }[]): boolean {
+// ─── Private helpers ──────────────────────────────────────────
+
+function shoelaceSign(pts: { x: number; y: number }[]): number {
   let sum = 0;
   const n = pts.length;
   for (let i = 0; i < n; i++) {
     const a = pts[i];
     const b = pts[(i + 1) % n];
-    sum += (a.x * b.y - b.x * a.y);
+    sum += a.x * b.y - b.x * a.y;
   }
-  return sum > 0;
+  return sum;
 }
 
-/**
- * Rotates a direction vector by `rotation` degrees (any angle; matches Konva room.rotation).
- */
-export function rotateVector2D(vx: number, vy: number, rotation: number): { x: number; y: number } {
-  return rotateVector2DDeg(vx, vy, rotation);
-}
-
-// Rotates (vx, vy) around (cx, cy) by `rotation` degrees.
-function rotatePoint(
-  vx: number,
-  vy: number,
-  cx: number,
-  cy: number,
-  rotation: number,
+function rotateAroundCentre(
+  vx: number, vy: number, cx: number, cy: number, rotation: number,
 ): { x: number; y: number } {
-  const dx = vx - cx;
-  const dy = vy - cy;
-  const r = rotateVector2D(dx, dy, rotation);
+  const r = rotateVector2DDeg(vx - cx, vy - cy, rotation);
   return { x: r.x + cx, y: r.y + cy };
 }
 
-// ---------------------------------------------------------------------------
-// Main export
-// ---------------------------------------------------------------------------
+// ─── Main exports ─────────────────────────────────────────────
 
-export function computeWorldWallSegments(room: Room): WallSegment[] {
-  // 1. Get vertices in local metre-space
+export function computeWallSegments(room: Room): WallSegment[] {
   const localVerts = ensureVertices(room);
   if (localVerts.length < 3) return [];
 
-  // 2. Apply rotation around bounding-box centre (metre-space)
   const bb = verticesBoundingBox(localVerts);
   const cx = bb.minX + bb.w / 2;
   const cy = bb.minY + bb.h / 2;
@@ -73,106 +59,89 @@ export function computeWorldWallSegments(room: Room): WallSegment[] {
 
   const rotatedVerts = rotation === 0
     ? localVerts
-    : localVerts.map(v => rotatePoint(v.x, v.y, cx, cy, rotation));
+    : localVerts.map(v => rotateAroundCentre(v.x, v.y, cx, cy, rotation));
 
-  // 3. Translate to world-space pixels
   const worldPts = rotatedVerts.map(v => ({
     x: room.x + v.x * PX_PER_M,
     y: room.y + v.y * PX_PER_M,
   }));
 
-  // 4. Winding direction via shoelace
-  const cw = polygonIsClockwise(worldPts);
-
+  const cw = shoelaceSign(worldPts) > 0;
   const n = worldPts.length;
-
-  // 5. Per-vertex convexity: cross product of incoming × outgoing edge
-  const vertexConvex: boolean[] = new Array(n);
-  for (let i = 0; i < n; i++) {
-    const prev = worldPts[(i - 1 + n) % n];
-    const curr = worldPts[i];
-    const next = worldPts[(i + 1) % n];
-    const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x);
-    // Y-down screen space: right turn (CW turn) gives cross > 0.
-    // CW polygon on screen: convex vertices = right turns = cross > 0.
-    // CCW polygon on screen: convex vertices = left turns = cross < 0.
-    vertexConvex[i] = cw ? cross > 0 : cross < 0;
-  }
-
-  // 6. Build segments
+  const wallIds = ensureWallIds(room);
   const segments: WallSegment[] = [];
 
   for (let i = 0; i < n; i++) {
-    const p1 = worldPts[i];
-    const p2 = worldPts[(i + 1) % n];
-
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
+    const wp1 = worldPts[i];
+    const wp2 = worldPts[(i + 1) % n];
+    const dx = wp2.x - wp1.x;
+    const dy = wp2.y - wp1.y;
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len < 1e-6) continue;
 
-    // Outward normal
-    let nx: number, ny: number;
-    if (cw) {
-      nx = dy / len;
-      ny = -dx / len;
-    } else {
-      nx = -dy / len;
-      ny = dx / len;
-    }
+    const p1 = new Flatten.Point(wp1.x, wp1.y);
+    const p2 = new Flatten.Point(wp2.x, wp2.y);
 
-    // Axis classification (using pixel coords)
-    const absDy = Math.abs(dy);
-    const absDx = Math.abs(dx);
-    let axis: 'horizontal' | 'vertical' | 'diagonal';
-    if (absDy < 0.5) {
-      axis = 'horizontal';
-    } else if (absDx < 0.5) {
-      axis = 'vertical';
-    } else {
-      axis = 'diagonal';
-    }
+    const nx = cw ? dy / len : -dy / len;
+    const ny = cw ? -dx / len : dx / len;
 
-    const midpoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-
-    // A wall is convex when both its endpoint vertices are convex corners
-    const isConvex = vertexConvex[i] && vertexConvex[(i + 1) % n];
-
-    // Connect zone
-    let connectZone: ConnectZone;
-    if (axis === 'diagonal') {
-      connectZone = { type: 'vertex', point: midpoint };
-    } else if (!isConvex) {
-      connectZone = { type: 'partial', from: 0, to: 1 };
-    } else {
-      connectZone = { type: 'full' };
-    }
+    const axis: WallSegment['axis'] =
+      Math.abs(dy) < 0.5 ? 'horizontal' : Math.abs(dx) < 0.5 ? 'vertical' : 'diagonal';
 
     segments.push({
       roomId: room.id,
       wallIndex: i,
+      wallId: wallIds[i] ?? `${room.id}-w${i}`,
       p1,
       p2,
-      midpoint,
-      outwardNormal: { x: nx, y: ny },
+      segment: new Flatten.Segment(p1, p2),
+      midpoint: new Flatten.Point((wp1.x + wp2.x) / 2, (wp1.y + wp2.y) / 2),
+      outwardNormal: new Flatten.Vector(nx, ny),
       lengthPx: len,
-      lengthM: len / PX_PER_M,
       axis,
-      isConvex,
-      connectZone,
     });
   }
 
   return segments;
 }
 
-/**
- * Returns all wall segments of a room as snap candidates.
- * All walls (including step walls of L/T/Z/S shapes) have correctly-computed
- * outward normals and are valid attachment points. The snapping loop in
- * canvasSnapping.ts independently guards against false snaps via opposing-normals,
- * overlap, and distance checks.
- */
-export function getSnapCandidateSegments(room: Room): WallSegment[] {
-  return computeWorldWallSegments(room);
+export function computeRoomCorners(room: Room): RoomCorner[] {
+  const segs = computeWallSegments(room);
+  if (segs.length < 2) return [];
+
+  const n = segs.length;
+  const worldPts = segs.map(s => ({ x: s.p1.x, y: s.p1.y }));
+  const cw = shoelaceSign(worldPts) > 0;
+  const corners: RoomCorner[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const incoming = segs[(i - 1 + n) % n];
+    const outgoing = segs[i];
+
+    const inDx = incoming.p2.x - incoming.p1.x;
+    const inDy = incoming.p2.y - incoming.p1.y;
+    const outDx = outgoing.p2.x - outgoing.p1.x;
+    const outDy = outgoing.p2.y - outgoing.p1.y;
+    const cross = inDx * outDy - inDy * outDx;
+
+    corners.push({
+      cornerId: cornerIdFromWalls(incoming.wallId, outgoing.wallId),
+      roomId: room.id,
+      wallId1: incoming.wallId,
+      wallId2: outgoing.wallId,
+      point: outgoing.p1,
+      isConvex: cw ? cross > 0 : cross < 0,
+    });
+  }
+
+  return corners;
+}
+
+export function computeAllWallSegments(rooms: Room[], excludeId?: string): WallSegment[] {
+  const result: WallSegment[] = [];
+  for (const room of rooms) {
+    if (room.id === excludeId) continue;
+    result.push(...computeWallSegments(room));
+  }
+  return result;
 }
