@@ -24,7 +24,8 @@ export type SnapResult = {
   x: number;
   y: number;
   snappedToId?: string;
-  snappedWall?: 'top' | 'right' | 'bottom' | 'left';
+  /** Legacy axis-aligned value ('top'|'right'|'bottom'|'left') OR a stable wallId string from canvasWallSegments. */
+  snappedWall?: string;
 };
 
 export type HandleType = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
@@ -86,6 +87,12 @@ export type GapInfo = {
   direction: { nx: number; ny: number };
   wizardWorldPos: { x: number; y: number };
   deltaPx: { x: number; y: number };
+  /** Stable wallId of the wall being moved (from selectedRoom.wallIds). */
+  wallIdTarget?: string;
+  /** Stable wallId of the reference wall on the other room. */
+  wallIdRef?: string;
+  /** True when the fill is purely horizontal or vertical (no diagonal walls involved). */
+  isRectangularFill?: boolean;
 };
 
 // ─── Wall Segment Architecture ────────────────────────────────────────────────
@@ -175,6 +182,42 @@ export interface PlattegrondCanvasProps {
   onRedo?: () => void;
 }
 
+// ─── Corner Fill ───────────────────────────────────────────────────────────────
+
+/**
+ * Describes an empty rectangular area between two room corners that can be
+ * filled by adding a new room.
+ */
+export type CornerFillInfo = {
+  /** Unique ID for this suggestion. */
+  id: string;
+  /** Room that contributes corner A. */
+  roomIdA: string;
+  /** Room that contributes corner B. */
+  roomIdB: string;
+  /** Specific wall from room A facing the fill area. */
+  wallIdA: string;
+  /** Specific wall from room B facing the fill area. */
+  wallIdB: string;
+  /** World-pixel position of corner A. */
+  cornerAx: number;
+  cornerAy: number;
+  /** World-pixel position of corner B. */
+  cornerBx: number;
+  cornerBy: number;
+  /** Top-left world-pixel position of the fill rectangle. */
+  fillX: number;
+  fillY: number;
+  /** Fill rectangle size in pixels. */
+  fillWpx: number;
+  fillHpx: number;
+  /** Fill rectangle size in metres. */
+  fillWm: number;
+  fillHm: number;
+  /** Suggested position for the wand button in world pixels. */
+  wizardWorldPos: { x: number; y: number };
+};
+
 // ─── Snap thresholds (shared across snapping modules) ─────────────────────────
 export const SNAP_THRESHOLD = 40;
 export const SNAP_THRESHOLD_SPECIAL = 50;
@@ -199,7 +242,7 @@ export type CornerSnapResult = {
   x: number;
   y: number;
   snappedToId?: string;
-  snappedWall?: 'top' | 'right' | 'bottom' | 'left';
+  snappedWall?: string;
   snapType: 'corner-to-corner' | 'wall-to-wall' | 'bbox';
   matchedWallIndex?: number;
 };

@@ -58,6 +58,7 @@ export default function TabPlattegrond(props: TabPlattegrondProps) {
           onCancelPendingSpecial={p.cancelPendingSpecial}
           onConfirmPlaceFinalized={p.confirmPlaceOnFinalizedTarget}
           onCancelPlaceFinalized={p.cancelPendingSpecial}
+          onAddRoomFromCornerFill={p.handleAddRoomFromCornerFill}
         />
 
         <TabPlattegrondSidebar

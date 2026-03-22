@@ -10,3 +10,4 @@ export * from './domain/vertices';
 export * from './domain/spatial';
 export * from './domain/roomMetrics';
 export * from './domain/detectSubRooms';
+export * from './domain/wallIds';

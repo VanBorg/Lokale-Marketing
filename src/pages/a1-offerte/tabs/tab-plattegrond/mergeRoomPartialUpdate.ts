@@ -1,5 +1,5 @@
 import type { Room } from '../../types';
-import { ensureVertices, verticesBoundingBox, syncRoomFromVertices } from '../../types';
+import { ensureVertices, verticesBoundingBox, syncRoomFromVertices, ensureWallIds } from '../../types';
 
 /**
  * Applies partial updates to a single room, including vertex scaling when length/width change.
@@ -42,6 +42,13 @@ export function mergeRoomPartialUpdate(r: Room, updates: Partial<Room>): Room {
     merged.wallLengths = synced.wallLengths;
     merged.length = updates.length ?? synced.length;
     merged.width  = updates.width  ?? synced.width;
+    // Regenerate wallIds: preserve existing IDs for unchanged positions, add/remove for resized vertex count
+    merged.wallIds = ensureWallIds(merged);
+  }
+
+  // Also regenerate wallIds when vertices are directly replaced with a different count
+  if (updates.vertices && updates.vertices.length !== (r.vertices ?? []).length) {
+    merged.wallIds = ensureWallIds(merged);
   }
 
   return merged;

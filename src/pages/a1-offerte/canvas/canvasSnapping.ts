@@ -1,17 +1,25 @@
 import { Room } from '../types';
-import { WallId, SnapResult, SnapResultWithInfo } from './canvasTypes';
-import { computeWorldWallSegments, getSnapCandidateSegments, rotateVector2D, WallSegment as RichWallSeg } from './wallSegments';
+import { WallId, SnapResultWithInfo } from './canvasTypes';
+import {
+  buildWallSegmentsEx,
+  getAllWallSegmentsEx,
+  getAllRoomCorners,
+  buildRoomCorners,
+  findParallelSegments,
+  computeWallToWallSnap,
+  type WallSegmentEx,
+} from './canvasWallSegments';
+import { rotateVector2D } from './wallSegments';
 import { boundingSize, extractWallSegments, snapSpecialRoomToWallSegment } from './canvasGeometry';
 
 const SNAP_THRESHOLD = 40;
 const SNAP_THRESHOLD_SPECIAL = 50;
-const MIN_OVERLAP_PX = 8;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function offsetSegments(segs: RichWallSeg[], dx: number, dy: number): RichWallSeg[] {
+function offsetSegmentsEx(segs: WallSegmentEx[], dx: number, dy: number): WallSegmentEx[] {
   return segs.map(s => ({
     ...s,
     p1: { x: s.p1.x + dx, y: s.p1.y + dy },
@@ -29,12 +37,8 @@ function normalForWallId(wall: WallId): { nx: number; ny: number } {
   }
 }
 
-/**
- * `wall` is in local room space (Konva child coords); segment normals are in world space
- * after `rotationDeg`. Rotate the local outward normal to compare.
- */
 function segmentMatchesActiveWall(
-  seg: RichWallSeg,
+  seg: WallSegmentEx,
   wall: WallId,
   rotationDeg: number,
 ): boolean {
@@ -45,15 +49,18 @@ function segmentMatchesActiveWall(
 }
 
 // ---------------------------------------------------------------------------
-// Core snap logic (special rooms: Wall A / Wall B via snapSpecialRoomToWallSegment)
+// Unified entry point
 // ---------------------------------------------------------------------------
 
 /**
  * Unified snap function.
  *
- * - When `activeWalls` is provided and non-empty, uses wall-segment snap (like the old `snapPosition`).
- * - When `activeWalls` is null/undefined/empty, uses simple bounding-box snap (like the old `snapToRooms`).
- * - Special rooms always use the wall-segment pipeline regardless of `activeWalls`.
+ * - When `activeWalls` is provided and non-empty, wall-segment snap is used
+ *   for normal rooms.
+ * - When `activeWalls` is null/undefined/empty, bounding-box snap is used as
+ *   a fallback for normal rooms.
+ * - Special rooms: corner-to-corner snap has priority, then wall-segment snap
+ *   (Wall A / Wall B), using the legacy geometry helpers.
  */
 export function snapToGrid(
   draggedId: string,
@@ -65,12 +72,10 @@ export function snapToGrid(
   const dragged = rooms.find(r => r.id === draggedId);
   if (!dragged) return { x, y };
 
-  // Special rooms: always use wall-segment snap
   if (dragged.roomType !== 'normal') {
     return _snapSpecialRoom(draggedId, x, y, rooms);
   }
 
-  // Normal rooms: wall-segment snap when active walls known, bbox snap otherwise
   if (activeWalls && activeWalls.length > 0) {
     return _snapNormalWallSegment(draggedId, x, y, rooms, dragged, activeWalls);
   }
@@ -90,7 +95,6 @@ export function snapPosition(
 
 /**
  * Simplified snap used after handle/vertex drag — checks all directions.
- * Special rooms use the wall-segment snap pipeline.
  * @deprecated use snapToGrid
  */
 export function snapToRooms(
@@ -103,7 +107,7 @@ export function snapToRooms(
 }
 
 // ---------------------------------------------------------------------------
-// Private snap implementations
+// Special room snap (corner priority → wall A/B)
 // ---------------------------------------------------------------------------
 
 function _snapSpecialRoom(
@@ -113,6 +117,41 @@ function _snapSpecialRoom(
   rooms: Room[],
 ): SnapResultWithInfo {
   const dragged = rooms.find(r => r.id === draggedId)!;
+
+  // ── 1. Corner-to-corner snap (highest priority) ──────────────────────────
+  const finalizedOthers = rooms.filter(r => r.id !== draggedId && r.isFinalized);
+  const targetCorners = getAllRoomCorners(finalizedOthers);
+
+  if (targetCorners.length > 0) {
+    // Build corners of the dragged room at candidate position
+    const candidateRoom: Room = { ...dragged, x, y };
+    const dragCorners = buildRoomCorners(candidateRoom);
+
+    let bestCornerDist = SNAP_THRESHOLD_SPECIAL;
+    let bestCornerSnap: SnapResultWithInfo | null = null;
+
+    for (const dc of dragCorners) {
+      for (const tc of targetCorners) {
+        const dist = Math.sqrt((dc.x - tc.x) ** 2 + (dc.y - tc.y) ** 2);
+        if (dist < bestCornerDist) {
+          bestCornerDist = dist;
+          // Move dragged room so that dc.x/y coincides with tc.x/y
+          const snapX = x + (tc.x - dc.x);
+          const snapY = y + (tc.y - dc.y);
+          bestCornerSnap = {
+            x: snapX,
+            y: snapY,
+            snappedToId: tc.roomId,
+            snappedWall: tc.wallId2,
+          };
+        }
+      }
+    }
+
+    if (bestCornerSnap) return bestCornerSnap;
+  }
+
+  // ── 2. Wall A / Wall B segment snap (existing logic) ────────────────────
   const { w: dw, h: dh } = boundingSize(dragged);
   let bestScore = Infinity;
   let bestResult: SnapResultWithInfo = { x, y };
@@ -137,7 +176,7 @@ function _snapSpecialRoom(
       if (score < bestScore) {
         bestScore = score;
         const nSegs = segments.length;
-        let snappedWall: 'top' | 'right' | 'bottom' | 'left' | undefined;
+        let snappedWall: string | undefined;
         if (nSegs === 4) {
           const wallNames: Array<'top' | 'right' | 'bottom' | 'left'> = ['top', 'right', 'bottom', 'left'];
           snappedWall = wallNames[seg.wallIndex % 4];
@@ -149,6 +188,10 @@ function _snapSpecialRoom(
   return bestResult;
 }
 
+// ---------------------------------------------------------------------------
+// Normal room — wall-segment snap
+// ---------------------------------------------------------------------------
+
 function _snapNormalWallSegment(
   draggedId: string,
   x: number,
@@ -157,86 +200,80 @@ function _snapNormalWallSegment(
   dragged: Room,
   activeWalls: WallId[],
 ): SnapResultWithInfo {
-  const threshold = SNAP_THRESHOLD;
   const ddx = x - dragged.x;
   const ddy = y - dragged.y;
-  const allDragSegs = offsetSegments(computeWorldWallSegments(dragged), ddx, ddy);
 
+  // Build the dragged room's segments at the candidate position
+  const allDragSegsEx = offsetSegmentsEx(buildWallSegmentsEx(dragged), ddx, ddy);
   const rotationDeg = dragged.rotation ?? 0;
-  let dragCandidates = allDragSegs.filter(seg =>
+
+  let dragCandidates = allDragSegsEx.filter(seg =>
     activeWalls.some(wall => segmentMatchesActiveWall(seg, wall, rotationDeg)),
   );
-  if (dragCandidates.length === 0) dragCandidates = [...allDragSegs];
+  if (dragCandidates.length === 0) dragCandidates = [...allDragSegsEx];
 
-  let bestDist = threshold;
-  let bestSnap: SnapResult | null = null;
+  // All segments from other rooms as snap candidates
+  const otherSegs = getAllWallSegmentsEx(rooms, draggedId);
+
+  let bestDx = 0;
+  let bestDy = 0;
+  let bestDxDist = SNAP_THRESHOLD;
+  let bestDyDist = SNAP_THRESHOLD;
+  let snappedToId: string | undefined;
+  let snappedWall: string | undefined;
 
   for (const dragSeg of dragCandidates) {
     if (dragSeg.axis === 'diagonal') continue;
-    for (const other of rooms) {
-      if (other.id === draggedId) continue;
-      for (const otherSeg of getSnapCandidateSegments(other)) {
-        if (otherSeg.axis === 'diagonal') continue;
-        if (dragSeg.axis !== otherSeg.axis) continue;
-        const dot = dragSeg.outwardNormal.x * otherSeg.outwardNormal.x
-                  + dragSeg.outwardNormal.y * otherSeg.outwardNormal.y;
-        if (dot > -0.5) continue;
 
-        let overlapPx: number;
-        let dist: number;
-        let dx = 0, dy = 0;
+    const matches = findParallelSegments(dragSeg, otherSegs, SNAP_THRESHOLD);
+    if (matches.length === 0) continue;
 
-        if (dragSeg.axis === 'horizontal') {
-          const overlapMin = Math.max(Math.min(dragSeg.p1.x, dragSeg.p2.x), Math.min(otherSeg.p1.x, otherSeg.p2.x));
-          const overlapMax = Math.min(Math.max(dragSeg.p1.x, dragSeg.p2.x), Math.max(otherSeg.p1.x, otherSeg.p2.x));
-          overlapPx = overlapMax - overlapMin;
-          if (overlapPx < MIN_OVERLAP_PX) continue;
-          dist = Math.abs(dragSeg.p1.y - otherSeg.p1.y);
-          dy = otherSeg.p1.y - dragSeg.p1.y;
-        } else {
-          const overlapMin = Math.max(Math.min(dragSeg.p1.y, dragSeg.p2.y), Math.min(otherSeg.p1.y, otherSeg.p2.y));
-          const overlapMax = Math.min(Math.max(dragSeg.p1.y, dragSeg.p2.y), Math.max(otherSeg.p1.y, otherSeg.p2.y));
-          overlapPx = overlapMax - overlapMin;
-          if (overlapPx < MIN_OVERLAP_PX) continue;
-          dist = Math.abs(dragSeg.p1.x - otherSeg.p1.x);
-          dx = otherSeg.p1.x - dragSeg.p1.x;
-        }
+    const best = matches[0]; // already sorted by distPx ascending
+    const snap = computeWallToWallSnap(dragSeg, best.segment);
 
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestSnap = {
-            x: x + dx, y: y + dy, snappedToId: other.id,
-            snappedWall: otherSeg.outwardNormal.y < -0.5 ? 'top'
-              : otherSeg.outwardNormal.y > 0.5 ? 'bottom'
-              : otherSeg.outwardNormal.x < -0.5 ? 'left' : 'right',
-          };
-        }
-      }
+    if (dragSeg.axis === 'horizontal' && best.distPx < bestDyDist) {
+      bestDyDist = best.distPx;
+      bestDy = snap.dy;
+      snappedToId = best.segment.roomId;
+      snappedWall = best.segment.wallId;
+    } else if (dragSeg.axis === 'vertical' && best.distPx < bestDxDist) {
+      bestDxDist = best.distPx;
+      bestDx = snap.dx;
+      snappedToId = best.segment.roomId;
+      snappedWall = best.segment.wallId;
     }
   }
 
-  // Diagonal / vertex snapping
-  const hasDiagonal = allDragSegs.some(s => s.axis === 'diagonal');
+  // Diagonal / vertex snapping for free-form rooms
+  const hasDiagonal = allDragSegsEx.some(s => s.axis === 'diagonal');
   if (hasDiagonal) {
-    const dragVerts = collectVertices(allDragSegs);
+    const dragVerts = collectVerticesEx(allDragSegsEx);
     for (const other of rooms) {
       if (other.id === draggedId) continue;
-      const otherVerts = collectVertices(computeWorldWallSegments(other));
+      const otherVerts = collectVerticesEx(buildWallSegmentsEx(other));
       for (const dv of dragVerts) {
         for (const ov of otherVerts) {
           const ex = ov.x - dv.x, ey = ov.y - dv.y;
           const dist = Math.sqrt(ex * ex + ey * ey);
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestSnap = { x: x + ex, y: y + ey, snappedToId: other.id };
+          if (dist < Math.min(bestDxDist, bestDyDist)) {
+            bestDxDist = dist;
+            bestDyDist = dist;
+            bestDx = ex;
+            bestDy = ey;
+            snappedToId = other.id;
           }
         }
       }
     }
   }
 
-  return bestSnap ?? { x, y };
+  if (bestDx === 0 && bestDy === 0) return { x, y };
+  return { x: x + bestDx, y: y + bestDy, snappedToId, snappedWall };
 }
+
+// ---------------------------------------------------------------------------
+// Normal room — bounding-box snap (fallback)
+// ---------------------------------------------------------------------------
 
 function _snapNormalBbox(
   draggedId: string,
@@ -249,7 +286,7 @@ function _snapNormalBbox(
   const { w: dw, h: dh } = boundingSize(dragged);
   let sx = x, sy = y;
   let snappedToId: string | undefined;
-  let snappedWall: 'top' | 'right' | 'bottom' | 'left' | undefined;
+  let snappedWall: string | undefined;
 
   let bestDx = threshold;
   for (const other of rooms) {
@@ -278,9 +315,7 @@ function _snapNormalBbox(
 // Utility
 // ---------------------------------------------------------------------------
 
-function collectVertices(
-  segments: RichWallSeg[],
-): { x: number; y: number }[] {
+function collectVerticesEx(segments: WallSegmentEx[]): { x: number; y: number }[] {
   const pts: { x: number; y: number }[] = [];
   const EPS = 0.5;
   for (const s of segments) {

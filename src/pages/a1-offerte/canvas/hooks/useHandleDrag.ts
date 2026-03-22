@@ -16,7 +16,7 @@ interface UseHandleDragArgs {
 
 export function useHandleDrag({ rooms, onUpdateRoom, beginBatch, endBatch, justFinishedDragRef }: UseHandleDragArgs) {
   const [draggingHandle, setDraggingHandleRaw] = useState<DraggingHandle>(null);
-  const [snapHighlight, setSnapHighlight] = useState<{ roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null>(null);
+  const [snapHighlight, setSnapHighlight] = useState<{ roomId: string; wall: string } | null>(null);
   const [dragFromWalls, setDragFromWalls] = useState<{ roomId: string; walls: WallId[] } | null>(null);
 
   const setDraggingHandle = useCallback((handle: DraggingHandle) => {

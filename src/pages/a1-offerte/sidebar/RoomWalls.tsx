@@ -9,6 +9,7 @@ import {
   vertexWallLengths,
   updateVertexWallLength,
   syncRoomFromVertices,
+  getRoomCornerIds,
 } from '../types';
 import { PX_PER_M } from '../canvas/canvasTypes';
 import { snapToRooms } from '../canvas/canvasSnapping';
@@ -43,6 +44,8 @@ export default function RoomWalls({
   const wallLens = vertexWallLengths(verts);
   const wallCount = verts.length;
   const locks = room.wallLocks ?? new Array(wallCount).fill(false);
+  const cornerIds = getRoomCornerIds(room);
+  const isSpecial = room.roomType !== 'normal';
 
   // Collect wall lengths from all other rooms for magnetic snap suggestions
   const snapSuggestions = useMemo(() => {
@@ -197,25 +200,40 @@ export default function RoomWalls({
               const len = wallLens[i];
               const isLocked = locks[i] ?? false;
               const isSel = selectedWallIndices.includes(i);
+              // Adjacent wall labels: wall at start is wall (i-1+n)%n, wall at end is wall (i+1)%n
+              const startAdj = (i - 1 + wallCount) % wallCount;
+              const endAdj = (i + 1) % wallCount;
+              // Short corner ID for special rooms: last 6 chars of the corner hash
+              const startCornerId = cornerIds[i];
+              const endCornerId = cornerIds[endAdj];
+              const startCornerShort = startCornerId ? startCornerId.split('+').map(s => s.split('-w').pop()).join('·') : '';
+              const endCornerShort = endCornerId ? endCornerId.split('+').map(s => s.split('-w').pop()).join('·') : '';
               return (
                 <button
                   key={i}
                   type="button"
                   onClick={() => !room.isFinalized && onToggleWallIndex(i)}
                   disabled={room.isFinalized}
-                  title={`Muur ${i + 1} — ${len.toFixed(2)} m${isLocked ? ' (vergrendeld)' : ''}`}
+                  title={`Muur ${i + 1} — ${len.toFixed(2)} m${isLocked ? ' (vergrendeld)' : ''} | hoek met M${startAdj + 1} en M${endAdj + 1}`}
                   className={`rounded-lg border px-1.5 py-2 text-center transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                     ${isSel
                       ? 'border-accent bg-accent/10 text-accent'
                       : 'border-dark-border bg-dark-card text-light/60 hover:border-light/30 hover:text-light'
                     }`}
                 >
-                  <div className="text-[9px] leading-none mb-0.5 opacity-70">
-                    M{i + 1}{isLocked ? ' 🔒' : ''}
+                  <div className="text-[9px] leading-none mb-0.5 opacity-70 flex items-center justify-between gap-0.5">
+                    <span className="opacity-50 text-[8px]">M{startAdj + 1}⌐</span>
+                    <span>M{i + 1}{isLocked ? ' 🔒' : ''}</span>
+                    <span className="opacity-50 text-[8px]">⌐M{endAdj + 1}</span>
                   </div>
                   <div className="text-[11px] font-medium leading-none">
                     {len.toFixed(2)}<span className="text-[8px] ml-0.5 opacity-60">m</span>
                   </div>
+                  {isSpecial && wallCount <= 6 && (
+                    <div className="text-[7px] leading-none mt-0.5 opacity-30 truncate">
+                      {startCornerShort}·{endCornerShort}
+                    </div>
+                  )}
                 </button>
               );
             })}

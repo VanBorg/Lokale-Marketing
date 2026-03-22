@@ -73,7 +73,7 @@ interface CanvasRoomProps {
   onPlaceElement?: (roomId: string, wall: WallId, position: number) => void;
   onSetSelectedElement: (id: string | null) => void;
   onSetDraggingHandle: (handle: DraggingHandle) => void;
-  onSnapHighlight: (snap: { roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' } | null) => void;
+  onSnapHighlight: (snap: { roomId: string; wall: string } | null) => void;
   onDragStartWalls: (roomId: string, walls: WallId[]) => void;
   onDragEndRoom: () => void;
   onVertexHandleMouseDown?: (vertexIndex: number, worldX: number, worldY: number) => void;

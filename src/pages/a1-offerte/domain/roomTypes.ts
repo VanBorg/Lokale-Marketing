@@ -52,6 +52,8 @@ export type Room = {
   wallLengths: { top: number; right: number; bottom: number; left: number };
   vertices?: Vertex[];
   wallLocks?: boolean[];
+  /** Stable wall IDs parallel to the vertices array. wallIds[i] = ID of wall from vertex[i] to vertex[(i+1)%n]. */
+  wallIds?: string[];
   slopedCeiling: boolean;
   highestPoint: number;
   ridgeCeiling: boolean;

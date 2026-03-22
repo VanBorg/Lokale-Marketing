@@ -10,6 +10,7 @@ import {
   normalizeVertices,
   polygonArea,
   verticesBoundingBox,
+  ensureWallIds,
 } from '../../types';
 import { PX_PER_M } from '../../canvas/canvasTypes';
 import { getSpecialRoomConfig } from '../../specialRooms';
@@ -25,8 +26,9 @@ export function buildStandardShapeRoom(
   const x = spawn ? spawn.x - (dims.length * 40) / 2 : 50 + roomCount * 30;
   const y = spawn ? spawn.y - (dims.width * 40) / 2 : 50 + roomCount * 30;
   const n = nextKamerNumber();
-  return {
-    id: crypto.randomUUID(),
+  const id = crypto.randomUUID();
+  const room: Room = {
+    id,
     name: `Kamer${n}`,
     shape,
     shapeType: getShapeType(shape),
@@ -53,6 +55,8 @@ export function buildStandardShapeRoom(
     attachedWall: null,
     effectiveArea: dims.length * dims.width,
   };
+  room.wallIds = ensureWallIds(room);
+  return room;
 }
 
 export function buildFreeFormRoom(
@@ -72,8 +76,9 @@ export function buildFreeFormRoom(
   const x = spawn ? spawn.x - pixelW / 2 : defaultX;
   const y = spawn ? spawn.y - pixelH / 2 : defaultY;
   const n = nextKamerNumber();
-  return {
-    id: crypto.randomUUID(),
+  const freeId = crypto.randomUUID();
+  const freeRoom: Room = {
+    id: freeId,
     name: `Kamer${n}`,
     shape: 'vrije-vorm',
     shapeType: 'rect',
@@ -100,6 +105,8 @@ export function buildFreeFormRoom(
     attachedWall: null,
     effectiveArea: area,
   };
+  freeRoom.wallIds = ensureWallIds(freeRoom);
+  return freeRoom;
 }
 
 export function buildSpecialTypeRoom(
@@ -129,8 +136,9 @@ export function buildSpecialTypeRoom(
     : spawn
       ? spawn.y - (resolvedWidth * PX_PER_M) / 2
       : defaultY;
-  return {
-    id: crypto.randomUUID(),
+  const specialId = crypto.randomUUID();
+  const specialRoom: Room = {
+    id: specialId,
     name,
     shape: 'rechthoek',
     shapeType: 'rect',
@@ -163,4 +171,6 @@ export function buildSpecialTypeRoom(
     specialRoomPlacementMode: config?.defaultPlacementMode ?? 'against-wall',
     wallRotationDeg: 0,
   };
+  specialRoom.wallIds = ensureWallIds(specialRoom);
+  return specialRoom;
 }

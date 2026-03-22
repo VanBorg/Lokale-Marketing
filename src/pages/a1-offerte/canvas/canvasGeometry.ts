@@ -246,16 +246,19 @@ export function computeGhostPos(
 
 export function computeSnapHighlightRect(
   rooms: Room[],
-  snapHighlight: { roomId: string; wall: 'top' | 'right' | 'bottom' | 'left' },
+  snapHighlight: { roomId: string; wall: string },
 ): { x: number; y: number; w: number; h: number } | null {
   const target = rooms.find(r => r.id === snapHighlight.roomId);
   if (!target) return null;
+  // Only show the highlight for axis-aligned legacy wall values
+  const wall = snapHighlight.wall;
+  if (wall !== 'top' && wall !== 'right' && wall !== 'bottom' && wall !== 'left') return null;
   const { w: tw, h: th } = boundingSize(target);
   const wallThickness = 4;
   let hx = target.x, hy = target.y, hw = tw, hh = wallThickness;
-  if (snapHighlight.wall === 'bottom') { hy = target.y + th - wallThickness; }
-  if (snapHighlight.wall === 'left') { hw = wallThickness; hh = th; }
-  if (snapHighlight.wall === 'right') { hx = target.x + tw - wallThickness; hw = wallThickness; hh = th; }
+  if (wall === 'bottom') { hy = target.y + th - wallThickness; }
+  if (wall === 'left') { hw = wallThickness; hh = th; }
+  if (wall === 'right') { hx = target.x + tw - wallThickness; hw = wallThickness; hh = th; }
   return { x: hx, y: hy, w: hw, h: hh };
 }
 
