@@ -1,4 +1,5 @@
 import { SpecialRoomConfig } from './types';
+import { RECT_WALL_INDEX } from './wallIndexConvention';
 
 export const PLATEAU_CONFIG: SpecialRoomConfig = {
   type: 'plateau',
@@ -15,6 +16,6 @@ export const PLATEAU_CONFIG: SpecialRoomConfig = {
   defaultPlacementMode: 'inside-room',
   canRotate: true,
   canPlaceOnDiagonalWall: false,
-  preferredAttachmentWallIndex: 0,
+  preferredAttachmentWallIndex: RECT_WALL_INDEX.TOP,
   description: 'Verhoogd vloergedeelte',
 };

@@ -1,4 +1,5 @@
 import { SpecialRoomConfig } from './types';
+import { RECT_WALL_INDEX } from './wallIndexConvention';
 
 export const TRAPGAT_CONFIG: SpecialRoomConfig = {
   type: 'trapgat',
@@ -15,6 +16,6 @@ export const TRAPGAT_CONFIG: SpecialRoomConfig = {
   defaultPlacementMode: 'inside-room',
   canRotate: true,
   canPlaceOnDiagonalWall: false,
-  preferredAttachmentWallIndex: 0,
+  preferredAttachmentWallIndex: RECT_WALL_INDEX.TOP,
   description: 'Opening in de vloer voor een trap',
 };

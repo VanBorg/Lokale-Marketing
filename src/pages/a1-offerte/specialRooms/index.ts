@@ -1,3 +1,7 @@
+/**
+ * Special room **definitions**: compact metadata per type (defaults, labels, placement).
+ * Geometry and interaction are implemented elsewhere; see `types.ts` and `wallIndexConvention.ts`.
+ */
 import { SpecialRoomConfig } from './types';
 import { WC_CONFIG } from './wc';
 import { BADKAMER_CONFIG } from './badkamer';
@@ -32,3 +36,9 @@ export function getSpecialRoomConfig(type: string): SpecialRoomConfig | null {
 }
 
 export type { SpecialRoomConfig, SpecialRoomPlacementMode } from './types';
+export {
+  RECT_WALL_INDEX,
+  humanWallNumberToIndex,
+  rectWallIndexToHumanNumber,
+} from './wallIndexConvention';
+export type { RectWallIndex } from './wallIndexConvention';

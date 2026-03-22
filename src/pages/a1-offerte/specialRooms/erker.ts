@@ -1,4 +1,5 @@
 import { SpecialRoomConfig } from './types';
+import { RECT_WALL_INDEX } from './wallIndexConvention';
 
 export const ERKER_CONFIG: SpecialRoomConfig = {
   type: 'erker',
@@ -15,6 +16,6 @@ export const ERKER_CONFIG: SpecialRoomConfig = {
   defaultPlacementMode: 'against-wall',
   canRotate: true,
   canPlaceOnDiagonalWall: true,
-  preferredAttachmentWallIndex: 2,
+  preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Uitbouw aan de buitenmuur',
 };

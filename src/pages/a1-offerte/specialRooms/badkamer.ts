@@ -1,4 +1,5 @@
 import { SpecialRoomConfig } from './types';
+import { RECT_WALL_INDEX } from './wallIndexConvention';
 
 export const BADKAMER_CONFIG: SpecialRoomConfig = {
   type: 'badkamer',
@@ -15,6 +16,6 @@ export const BADKAMER_CONFIG: SpecialRoomConfig = {
   defaultPlacementMode: 'against-wall',
   canRotate: true,
   canPlaceOnDiagonalWall: false,
-  preferredAttachmentWallIndex: 2,
+  preferredAttachmentWallIndex: RECT_WALL_INDEX.BOTTOM,
   description: 'Badkamer met douche of bad',
 };
