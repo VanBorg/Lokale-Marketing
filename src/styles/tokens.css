@@ -8,7 +8,8 @@
   --color-text: 240 237 232;
   --color-card: 26 26 26;
   --color-border: 42 42 42;
-  --color-hover: 37 37 37;
+  /* Hover net iets boven card — zacht, niet “sprong” */
+  --color-hover: 30 30 30;
 
   /* Semantic UI tokens (use in custom CSS or var() where @apply is not used) */
   --ui-radius-sm: 0.375rem;
@@ -22,10 +23,13 @@
 
 :root.theme-light {
   --color-bg: 255 255 255;
-  --color-text: 26 26 26;
-  --color-card: 245 245 245;
-  --color-border: 224 224 224;
-  --color-hover: 235 235 235;
+  /* Zachte koele tint, dicht bij wit — minder “depressief” grijs */
+  --color-text: 28 32 38;
+  --color-card: 252 253 255;
+  /* Iets donkerder dan voorheen: topbar / sidebar / scheidingen beter zichtbaar op wit */
+  --color-border: 198 206 218;
+  /* Hover: mini verschil met card — subtiel */
+  --color-hover: 246 248 252;
 }
 
 body {

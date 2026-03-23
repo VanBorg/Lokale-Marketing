@@ -24,7 +24,25 @@ export function useProjects() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => {
+    if (!supabase) return;
+    fetchProjects();
+  }, [fetchProjects]);
+
+  const sortByUpdated = useCallback((list: Project[]) => {
+    return [...list].sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (supabase) return;
+    setProjects(sortByUpdated(projectStore.all()));
+    setLoading(false);
+    return projectStore.subscribe(() => {
+      setProjects(sortByUpdated(projectStore.all()));
+    });
+  }, [sortByUpdated]);
 
   const createProject = useCallback(async (values: Partial<Project>) => {
     if (!supabase) {
@@ -40,15 +58,15 @@ export function useProjects() {
         status: 'Concept',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        is_favorite: false,
       };
       projectStore.set(newProject);
-      setProjects(projectStore.all());
       return newProject;
     }
 
     const { data, error } = await supabase
       .from('projects')
-      .insert(values)
+      .insert({ ...values, is_favorite: false })
       .select()
       .single();
 
@@ -58,5 +76,32 @@ export function useProjects() {
     return project;
   }, []);
 
-  return { projects, loading, createProject, refetch: fetchProjects };
+  const toggleFavorite = useCallback(
+    async (id: string) => {
+      if (!supabase) {
+        const p = projectStore.get(id);
+        if (!p) return;
+        projectStore.set({
+          ...p,
+          is_favorite: !p.is_favorite,
+          updated_at: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const p = projects.find(x => x.id === id);
+      if (!p) return;
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          is_favorite: !p.is_favorite,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (!error) await fetchProjects();
+    },
+    [projects, fetchProjects],
+  );
+
+  return { projects, loading, createProject, toggleFavorite, refetch: fetchProjects };
 }

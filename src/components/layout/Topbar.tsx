@@ -1,23 +1,31 @@
-import { NavLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { User, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
+import BlauwdrukMarkIcon from '../BlauwdrukMarkIcon';
+import Breadcrumb from './Breadcrumb';
 
 export default function Topbar() {
   const { theme, toggleTheme } = useTheme();
 
   return (
     <header className="ui-topbar">
-      <div className="flex items-center gap-8">
-        <span className="ui-brand-wordmark">Pixel Blueprint</span>
-
-        <nav className="flex items-center gap-1">
-          <NavLink to="/" end className={({ isActive }) => `ui-nav-pill ${isActive ? 'ui-nav-pill--active' : ''}`}>
-            Dashboard
-          </NavLink>
-          <NavLink to="/projects" end className={({ isActive }) => `ui-nav-pill ${isActive ? 'ui-nav-pill--active' : ''}`}>
-            Projecten
-          </NavLink>
-        </nav>
+      <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-6">
+        <Link
+          to="/dashboard"
+          className="flex shrink-0 items-center gap-1 no-underline text-inherit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-dark"
+          title="Pixel Blueprint — Dashboard"
+        >
+          <BlauwdrukMarkIcon size={22} compact />
+          <div className="flex flex-col">
+            <span className="block text-lg font-bold leading-none text-accent tracking-tight">
+              Pixel
+            </span>
+            <span className="-mt-2 block text-lg font-bold leading-none text-accent tracking-tight">
+              Blueprint
+            </span>
+          </div>
+        </Link>
+        <Breadcrumb />
       </div>
 
       <div className="flex items-center gap-3">

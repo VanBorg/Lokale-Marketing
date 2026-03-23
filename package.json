@@ -18,8 +18,10 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "immer": "^11.1.4",
     "konva": "9.3.22",
     "lucide-react": "^0.577.0",
+    "nanoid": "^5.1.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hook-form": "^7.71.2",
@@ -28,7 +30,9 @@
     "react-scripts": "^5.0.1",
     "typescript": "^4.9.5",
     "use-immer": "^0.11.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "zundo": "^2.3.0",
+    "zustand": "^5.0.12"
   },
   "scripts": {
     "start": "react-scripts start",

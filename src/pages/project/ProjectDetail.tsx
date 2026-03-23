@@ -29,6 +29,19 @@ export default function ProjectDetail() {
     );
   }
 
+  // Blauwdruk is full-screen — no side panel
+  if (activeTab === 'blauwdruk') {
+    return (
+      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden w-full">
+        <TabBlauwdruk
+          project={project}
+          onUpdateProject={updateProject}
+          onTabChange={setActiveTab}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
       <ProjectSidePanel
@@ -38,20 +51,12 @@ export default function ProjectDetail() {
         onUpdate={updateProject}
         onReset={resetProject}
       />
-
-      {/* Blauwdruk needs h-full for the canvas; other tabs scroll normally */}
-      {activeTab === 'blauwdruk' ? (
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <TabBlauwdruk />
-        </div>
-      ) : (
-        <div className="flex-1 min-w-0 overflow-auto p-6">
-          {activeTab === 'materialen' && <TabMaterialen />}
-          {activeTab === 'uren' && <TabUren />}
-          {activeTab === 'offerte' && <TabOfferte />}
-          {activeTab === 'contract' && <TabContract />}
-        </div>
-      )}
+      <div className="flex-1 min-w-0 overflow-auto p-6">
+        {activeTab === 'materialen' && <TabMaterialen />}
+        {activeTab === 'uren' && <TabUren />}
+        {activeTab === 'offerte' && <TabOfferte />}
+        {activeTab === 'contract' && <TabContract />}
+      </div>
     </div>
   );
 }

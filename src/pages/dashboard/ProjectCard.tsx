@@ -1,12 +1,21 @@
+import { MapPin, Calendar, Star } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import type { Project, ProjectStatus } from '../../lib/database.types';
 
-const statusStyles: Record<ProjectStatus, string> = {
-  Concept: 'bg-light/10 text-light/60',
-  'Offerte Verstuurd': 'bg-accent/15 text-accent',
-  Akkoord: 'bg-green-500/15 text-green-400',
-  'In Uitvoering': 'bg-amber-500/15 text-amber-400',
-  Afgerond: 'bg-light/5 text-light/40',
+const statusBadgeClass: Record<ProjectStatus, string> = {
+  Concept: 'ui-badge--neutral',
+  'Offerte Verstuurd': 'ui-badge--accent',
+  Akkoord: 'ui-badge--success',
+  'In Uitvoering': 'ui-badge--warning',
+  Afgerond: 'ui-badge--muted',
+};
+
+const statusLabel: Record<ProjectStatus, string> = {
+  Concept: 'Concept',
+  'Offerte Verstuurd': 'Offerte',
+  Akkoord: 'Akkoord',
+  'In Uitvoering': 'In uitvoering',
+  Afgerond: 'Afgerond',
 };
 
 function formatDate(iso: string) {
@@ -20,29 +29,54 @@ function formatDate(iso: string) {
 interface ProjectCardProps {
   project: Project;
   onClick: () => void;
+  onToggleFavorite: () => void;
 }
 
-export default function ProjectCard({ project, onClick }: ProjectCardProps) {
+/** Zie ui.css: .ui-project-card, .ui-project-card__* */
+export default function ProjectCard({ project, onClick, onToggleFavorite }: ProjectCardProps) {
+  const favorite = Boolean(project.is_favorite);
+
   return (
-    <Card hover onClick={onClick}>
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <h3 className="text-sm font-semibold text-light truncate">{project.name}</h3>
-        <span
-          className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${statusStyles[project.status]}`}
-        >
-          {project.status}
+    <Card hover onClick={onClick} className="ui-project-card group relative">
+      <div className="ui-project-card__accent-bar" aria-hidden />
+
+      <button
+        type="button"
+        aria-label={favorite ? 'Verwijder uit favorieten' : 'Voeg toe aan favorieten'}
+        aria-pressed={favorite}
+        className={`absolute right-3 top-3 z-10 rounded-md p-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
+          favorite
+            ? 'fill-amber-400 text-amber-400'
+            : 'text-light/20 hover:text-light/50'
+        }`}
+        onClick={e => {
+          e.stopPropagation();
+          onToggleFavorite();
+        }}
+      >
+        <Star size={18} className={favorite ? 'fill-current' : ''} strokeWidth={favorite ? 0 : 2} />
+      </button>
+
+      <div className="flex items-start justify-between gap-3 pr-9">
+        <h3 className="ui-project-card__title">{project.name}</h3>
+        <span className={`ui-badge shrink-0 ${statusBadgeClass[project.status]}`}>
+          {statusLabel[project.status]}
         </span>
       </div>
 
       {project.client_name && (
-        <p className="text-xs text-light/50 truncate">{project.client_name}</p>
+        <p className="mt-2 text-xs font-medium text-light/70">{project.client_name}</p>
       )}
       {project.client_address && (
-        <p className="text-xs text-light/40 truncate mt-0.5">{project.client_address}</p>
+        <p className="mt-1 flex items-start gap-1.5 text-xs text-light/45">
+          <MapPin size={12} className="mt-0.5 shrink-0 text-accent/70" aria-hidden />
+          <span className="min-w-0 leading-relaxed">{project.client_address}</span>
+        </p>
       )}
 
-      <p className="text-xs text-light/30 mt-3">
-        Laatst gewijzigd: {formatDate(project.updated_at)}
+      <p className="ui-project-card__footer">
+        <Calendar size={12} className="shrink-0 text-accent/50" aria-hidden />
+        <span>Laatst gewijzigd: {formatDate(project.updated_at)}</span>
       </p>
     </Card>
   );

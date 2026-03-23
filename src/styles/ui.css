@@ -1,0 +1,302 @@
+/**
+ * Pixel Blueprint — shared UI classes (@apply). Single file so Create React App + Tailwind
+ * resolve all utilities in one pass (splitting into multiple imported files breaks @apply).
+ *
+ * When this grows, extract sections into partials and concatenate via build step, or migrate to Vite.
+ */
+
+/* --- Buttons --- */
+.ui-btn {
+  @apply inline-flex items-center justify-center rounded-lg font-medium
+    transition-colors duration-300 ease-out focus:outline-none focus:ring-2
+    focus:ring-accent/50 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.ui-btn--primary {
+  @apply bg-accent hover:bg-accent/[0.94];
+  color: rgb(255 255 255 / 0.88);
+}
+
+.ui-btn--primary:hover {
+  color: rgb(255 255 255 / 0.92);
+}
+
+.theme-light .ui-btn--primary,
+.theme-light .ui-btn--primary:hover {
+  @apply text-white;
+}
+
+.ui-btn--secondary {
+  @apply bg-dark-card hover:bg-dark-hover text-light border border-dark-border;
+}
+
+.ui-btn--ghost {
+  @apply bg-transparent hover:bg-dark-card text-light;
+}
+
+.ui-btn--sm {
+  @apply px-3 py-1.5 text-sm;
+}
+
+.ui-btn--md {
+  @apply px-4 py-2 text-sm;
+}
+
+.ui-btn--lg {
+  @apply px-6 py-3 text-base;
+}
+
+/* --- Cards --- */
+.ui-card {
+  @apply rounded-xl bg-dark-card border p-5 border-dark-border;
+}
+
+.ui-card--interactive {
+  @apply cursor-pointer transition-[background-color,box-shadow,border-color,transform] duration-300 ease-out hover:bg-dark-hover hover:shadow-md hover:shadow-accent/5;
+}
+
+.ui-card--interactive:hover {
+  @apply border-accent/50;
+}
+
+/* --- Projects: dashboard summary + stat chips (ProjectsPage) --- */
+.ui-projects-summary {
+  @apply mb-8 rounded-xl border border-accent/35 bg-gradient-to-br from-dark-card via-dark-card to-accent/[0.04] p-5 shadow-sm ring-1 ring-accent/15 transition-shadow duration-200 hover:shadow-md hover:shadow-accent/5;
+}
+
+.ui-projects-summary__layout {
+  @apply flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6;
+}
+
+.ui-projects-summary__title {
+  @apply min-w-0 shrink-0 border-b-2 border-accent/40 pb-4 lg:border-b-0 lg:border-r-2 lg:border-accent/50 lg:pb-0 lg:pr-8 lg:max-w-xs;
+}
+
+.ui-projects-summary__stats {
+  @apply flex min-w-0 flex-1 flex-wrap items-stretch justify-start gap-2 lg:flex-nowrap lg:justify-end;
+}
+
+.ui-stat-chip {
+  @apply min-w-[4.5rem] flex-1 rounded-lg border border-accent/35 bg-accent/[0.06] px-3 py-2 transition-all duration-200 hover:border-accent/55 hover:bg-accent/10 hover:shadow-sm sm:min-w-[5.5rem] sm:flex-none sm:px-3.5 sm:py-2.5 lg:max-w-[6.5rem] lg:flex-1;
+}
+
+.ui-stat-chip.ui-stat-chip--primary {
+  @apply border-accent/50 bg-accent/10 shadow-sm ring-1 ring-accent/20 hover:border-accent/70 hover:bg-accent/[0.14];
+}
+
+.ui-stat-chip__value {
+  @apply text-xl font-bold tabular-nums text-light sm:text-2xl;
+}
+
+.ui-stat-chip__label {
+  @apply mt-0.5 text-[10px] font-medium leading-tight text-light/45 sm:text-xs;
+}
+
+/* --- Project card (rich variant, ProjectCard) --- */
+.ui-card.ui-project-card {
+  @apply relative overflow-hidden border-accent/25 bg-gradient-to-b from-dark-card to-dark-card/90 shadow-sm ring-1 ring-accent/10;
+}
+
+.ui-card.ui-project-card.ui-card--interactive:hover {
+  @apply border-accent/45 bg-gradient-to-b from-dark-hover to-dark-hover/[0.97] shadow-md shadow-accent/[0.06] ring-accent/15;
+}
+
+.ui-project-card__accent-bar {
+  @apply pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-accent/70 to-transparent opacity-80 transition-opacity duration-200;
+}
+
+.group:hover .ui-project-card__accent-bar {
+  @apply opacity-100;
+}
+
+.ui-project-card__title {
+  @apply min-w-0 flex-1 text-sm font-semibold leading-snug text-light transition-colors group-hover:text-accent;
+}
+
+.ui-project-card__footer {
+  @apply mt-4 flex items-center gap-1.5 border-t border-dark-border/80 pt-3 text-xs text-light/35;
+}
+
+/* --- Forms --- */
+.ui-label {
+  @apply block text-sm font-medium text-light/70 mb-1.5;
+}
+
+.ui-input {
+  @apply w-full px-3 py-2 rounded-lg bg-dark-card border border-dark-border
+    text-light placeholder-light/30 transition-colors duration-150
+    focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50;
+}
+
+.ui-input--error {
+  @apply border-red-500;
+}
+
+.ui-field-error {
+  @apply mt-1 text-sm text-red-400;
+}
+
+/* --- Badges --- */
+.ui-badge {
+  @apply inline-flex items-center shrink-0 text-xs font-medium px-2 py-0.5 rounded-full;
+}
+
+.ui-badge--neutral {
+  @apply bg-light/10 text-light/60;
+}
+
+.ui-badge--accent {
+  @apply bg-accent/15 text-accent;
+}
+
+.ui-badge--success {
+  @apply bg-green-500/15 text-green-400;
+}
+
+.ui-badge--warning {
+  @apply bg-amber-500/15 text-amber-400;
+}
+
+.ui-badge--muted {
+  @apply bg-light/5 text-light/40;
+}
+
+/* Badges — light mode contrast (status tags readable on light surfaces) */
+.theme-light .ui-badge--neutral {
+  @apply bg-neutral-200/80 text-neutral-800;
+}
+
+.theme-light .ui-badge--accent {
+  @apply bg-accent/20 text-brand-orange;
+}
+
+.theme-light .ui-badge--success {
+  @apply bg-emerald-100 text-emerald-900;
+}
+
+.theme-light .ui-badge--warning {
+  @apply bg-amber-100 text-amber-900 border border-amber-300/80;
+}
+
+.theme-light .ui-badge--muted {
+  @apply bg-neutral-100 text-neutral-600;
+}
+
+/* --- App shell / layout --- */
+.ui-shell {
+  @apply min-h-screen bg-dark;
+}
+
+.ui-topbar {
+  @apply fixed top-0 left-0 right-0 z-50 h-14 bg-dark border-b border-dark-border flex items-center justify-between px-6;
+}
+
+.ui-brand-wordmark {
+  @apply text-lg font-bold text-accent tracking-tight;
+}
+
+.ui-nav-pill {
+  @apply px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ease-out;
+}
+
+.ui-nav-pill:not(.ui-nav-pill--active) {
+  @apply text-light/60 hover:text-light hover:bg-dark-card;
+}
+
+.ui-nav-pill--active {
+  @apply bg-accent/10 text-accent;
+}
+
+.ui-icon-button {
+  @apply p-2 rounded-lg text-light/50 transition-colors duration-300 ease-out hover:bg-dark-card hover:text-light cursor-pointer;
+}
+
+.ui-topbar-user {
+  @apply flex items-center gap-2 text-sm text-light/70;
+}
+
+.ui-sidebar {
+  @apply fixed left-0 top-14 bottom-0 bg-dark border-r border-dark-border transition-all duration-200 overflow-hidden flex flex-col;
+}
+
+.ui-sidebar--open {
+  @apply w-64;
+}
+
+.ui-sidebar--collapsed {
+  @apply w-12;
+}
+
+.ui-sidebar-toggle {
+  @apply shrink-0 flex h-10 w-full cursor-pointer items-center justify-center border-b border-dark-border text-light/40 transition-colors duration-300 ease-out hover:bg-dark-card hover:text-light;
+}
+
+.ui-sidebar-link {
+  @apply flex items-center gap-3 px-3 py-2 mx-2 rounded-lg text-sm transition-[background-color,color] duration-300 ease-out;
+}
+
+.ui-sidebar-link:not(.ui-sidebar-link--active) {
+  @apply text-light/60 hover:text-light hover:bg-dark-card;
+}
+
+.ui-sidebar-link--active {
+  @apply bg-accent/10 text-accent;
+}
+
+/* Snelle links: light mode = lichtblauwe hover op projectrijen; dark ongewijzigd */
+.theme-light .ui-sidebar-link:not(.ui-sidebar-link--active):hover {
+  @apply bg-accent/[0.12] text-light;
+}
+
+.ui-sidebar-link--collapsed {
+  @apply mx-2 flex justify-center rounded-lg py-1.5 transition-[background-color] duration-300 ease-out;
+}
+
+.ui-sidebar-link--collapsed:not(.ui-sidebar-link--active):hover {
+  @apply bg-dark-card;
+}
+
+.theme-light .ui-sidebar-link--collapsed:not(.ui-sidebar-link--active):hover {
+  @apply bg-accent/[0.12];
+}
+
+.ui-shell-main {
+  @apply pt-14 min-h-screen transition-all duration-200;
+}
+
+.ui-shell-main--sidebar-open {
+  @apply ml-64;
+}
+
+.ui-shell-main--sidebar-collapsed {
+  @apply ml-12;
+}
+
+.ui-shell-main--flush {
+  @apply ml-0;
+}
+
+.ui-page-padding {
+  @apply p-6;
+}
+
+/* --- Motion / focus helpers --- */
+.ui-transition-fast {
+  transition-duration: var(--ui-duration-fast);
+  transition-property: color, background-color, border-color, opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ui-transition-surface {
+  transition-duration: var(--ui-duration-surface);
+  transition-property: background-color, border-color, box-shadow, color, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ui-focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-0;
+}
+
+.ui-focus-ring-inset {
+  @apply focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent/40;
+}

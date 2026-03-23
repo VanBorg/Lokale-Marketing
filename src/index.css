@@ -3,7 +3,7 @@
 @import './styles/tokens.css';
 
 @tailwind components;
-@import './styles/components/index.css';
 
 @tailwind utilities;
-@import './styles/utilities/effects.css';
+
+@import './styles/ui.css';

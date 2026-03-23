@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './hooks/useTheme';
 import Layout from './components/layout/Layout';
 
@@ -29,7 +29,8 @@ export default function App() {
             <Route path="/login" element={<Login />} />
 
             <Route element={<Layout />}>
-              <Route index element={<Dashboard />} />
+              <Route index element={<Navigate to="/projects" replace />} />
+              <Route path="dashboard" element={<Dashboard />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="archief" element={<ArchiefPlaceholder />} />
               <Route path="project/:id" element={<ProjectDetail />} />
