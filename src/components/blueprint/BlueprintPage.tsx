@@ -49,7 +49,7 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
       <div className="flex flex-1 min-h-0">
 
         {/* Column 1 — Canvas (~55%) */}
-        <div className="flex-[11] min-w-0 relative overflow-hidden">
+        <div className="flex-[11] min-w-0 relative overflow-hidden flex flex-col">
           <BlueprintCanvas />
 
           {/* Floating selection bar — appears when exactly one room is selected */}
@@ -78,15 +78,24 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
           )}
         </div>
 
-        {/* Column 2 — Live preview panel (220px) */}
-        <div className="w-[220px] shrink-0 border-l border-dark-border bg-dark flex flex-col">
+        {/* Column 2 — Live preview panel (280px) */}
+        <div className="w-[280px] shrink-0 border-l border-dark-border bg-dark flex flex-col">
           <div className="px-3 py-2 border-b border-dark-border">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40">
               Voorvertoning
             </span>
           </div>
           <div className="flex-1 flex items-center justify-center p-3">
-            <RoomPreviewCanvas vertices={previewVertices} width={194} height={194} />
+            <RoomPreviewCanvas
+              vertices={previewVertices}
+              width={252}
+              height={252}
+              room={selectedRoom}
+              onToggleWallLock={selectedRoom
+                ? (wallIndex) => blueprintStore.getState().toggleWallLock(selectedRoom.id, wallIndex)
+                : undefined
+              }
+            />
           </div>
           <div className="px-3 pb-3 pt-2 border-t border-dark-border">
             <p className="text-[10px] text-light/30 text-center leading-relaxed">

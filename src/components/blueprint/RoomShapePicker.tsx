@@ -12,21 +12,27 @@ interface ShapeOption {
   path: string
 }
 
+// 8 shapes in a 4×2 grid — the most commonly used floor plan shapes
 const SHAPES: ShapeOption[] = [
   {
     id: 'rechthoek',
-    label: 'Rechthoek',
-    path: 'M4 4h24v16H4z',
+    label: 'Vierkant',
+    path: 'M4 4h24v24H4z',
   },
   {
     id: 'l-vorm',
     label: 'L-vorm',
-    path: 'M4 4h14v10h10v10H4z',
+    path: 'M4 4h14v12h14v12H4z',
+  },
+  {
+    id: 'l-omgekeerd',
+    label: 'L omgek.',
+    path: 'M28 4H14v12H4v12h24z',
   },
   {
     id: 't-vorm',
     label: 'T-vorm',
-    path: 'M4 4h24v8H18v12h-4V12H4z',
+    path: 'M4 4h24v8H18v16h-4V12H4z',
   },
   {
     id: 'u-vorm',
@@ -34,24 +40,20 @@ const SHAPES: ShapeOption[] = [
     path: 'M4 4h8v16h8V4h8v24H4z',
   },
   {
+    id: 'i-vorm',
+    label: 'I-vorm',
+    path: 'M4 4h24v6H19v12h9v6H4v-6h9V10H4z',
+  },
+  {
     id: 'plus-vorm',
-    label: 'Plus',
+    label: 'Kruis',
     path: 'M11 4h10v7h7v10h-7v7H11v-7H4V11h7z',
   },
   {
-    id: 'trapezium',
-    label: 'Trapezium',
-    path: 'M8 4h16l4 20H4z',
-  },
-  {
-    id: 'zeshoek',
-    label: 'Zeshoek',
-    path: 'M16 2 l12 7 v14 l-12 7 l-12 -7 V9z',
-  },
-  {
     id: 'vrije-vorm',
-    label: 'Vrij tekenen',
-    path: 'M4 20 Q8 4 16 6 Q24 8 28 20 Q24 28 16 26 Q8 28 4 20z',
+    label: 'Vrij',
+    // hammer icon
+    path: 'M18 4h10v8H20L8 28H4L16 12V4z',
   },
 ]
 
@@ -65,6 +67,7 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
             key={s.id}
             type="button"
             onClick={() => onSelect(s.id)}
+            title={s.label}
             className={[
               'flex flex-col items-center gap-1 p-2 rounded-lg border transition-all duration-150',
               'bg-dark hover:bg-dark-hover text-light/70 hover:text-light',
@@ -84,7 +87,7 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
             >
               <path d={s.path} />
             </svg>
-            <span className={`text-[9px] font-medium leading-none text-center ${isSelected ? 'text-accent' : ''}`}>
+            <span className={`text-[9px] font-medium leading-none text-center truncate w-full ${isSelected ? 'text-accent' : ''}`}>
               {s.label}
             </span>
           </button>

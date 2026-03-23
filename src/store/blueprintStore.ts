@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
-import type { Point, ShapeType } from '../utils/blueprintGeometry'
+import type { Point, ShapeType, RoofType } from '../utils/blueprintGeometry'
 
 export type { Point }
 
@@ -16,6 +16,9 @@ export interface Room {
   wallHeight: number
   label?: string
   shape?: ShapeType
+  lockedWalls: number[]
+  roofType: RoofType
+  roofPeakHeight?: number
 }
 
 export type ElementType = 'deur' | 'raam' | 'trap' | 'kast' | 'overig'
@@ -73,6 +76,9 @@ interface BlueprintState extends BlueprintDoc {
   addElement: (el: Omit<FloorElement, 'id'>) => string
   updateElement: (id: string, updates: Partial<FloorElement>) => void
   deleteElement: (id: string) => void
+  toggleWallLock: (roomId: string, wallIndex: number) => void
+  setWallLength: (roomId: string, wallIndex: number, lengthCm: number) => void
+  setRoofType: (roomId: string, type: RoofType, peakHeight?: number) => void
 
   // Actions — ephemeral
   initProject: (projectId: string) => void
@@ -131,6 +137,9 @@ export const useBlueprintStore = create<BlueprintState>()(
             wallHeight: meta.wallHeight ?? DEFAULT_WALL_HEIGHT,
             label: meta.label,
             shape: meta.shape,
+            lockedWalls: meta.lockedWalls ?? [],
+            roofType: meta.roofType ?? 'plat',
+            roofPeakHeight: meta.roofPeakHeight,
           }
           state.roomOrder.push(id)
         })
@@ -159,7 +168,6 @@ export const useBlueprintStore = create<BlueprintState>()(
         set(state => {
           delete state.rooms[id]
           state.roomOrder = state.roomOrder.filter(rid => rid !== id)
-          // Remove elements belonging to this room
           for (const eid of Object.keys(state.elements)) {
             if (state.elements[eid].roomId === id) delete state.elements[eid]
           }
@@ -186,6 +194,47 @@ export const useBlueprintStore = create<BlueprintState>()(
         })
       },
 
+      toggleWallLock: (roomId, wallIndex) => {
+        set(state => {
+          const room = state.rooms[roomId]
+          if (!room) return
+          const idx = room.lockedWalls.indexOf(wallIndex)
+          if (idx >= 0) {
+            room.lockedWalls.splice(idx, 1)
+          } else {
+            room.lockedWalls.push(wallIndex)
+          }
+        })
+      },
+
+      setWallLength: (roomId, wallIndex, lengthCm) => {
+        set(state => {
+          const room = state.rooms[roomId]
+          if (!room) return
+          const n = room.vertices.length
+          const a = room.vertices[wallIndex]
+          const b = room.vertices[(wallIndex + 1) % n]
+          const dx = b.x - a.x
+          const dy = b.y - a.y
+          const currentLen = Math.sqrt(dx * dx + dy * dy)
+          if (currentLen === 0) return
+          const ratio = lengthCm / currentLen
+          room.vertices[(wallIndex + 1) % n] = {
+            x: a.x + dx * ratio,
+            y: a.y + dy * ratio,
+          }
+        })
+      },
+
+      setRoofType: (roomId, type, peakHeight) => {
+        set(state => {
+          const room = state.rooms[roomId]
+          if (!room) return
+          room.roofType = type
+          if (peakHeight !== undefined) room.roofPeakHeight = peakHeight
+        })
+      },
+
       // ── Ephemeral actions ─────────────────────────────────────────────
 
       initProject: (projectId) => {
@@ -200,7 +249,6 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.activeRoomDraft = null
           state.snapGuides = []
         })
-        // Also clear undo history when switching projects
         useBlueprintStore.temporal.getState().clear()
       },
 
@@ -258,7 +306,6 @@ export const useBlueprintStore = create<BlueprintState>()(
       },
     })),
     {
-      // Only persist document state in undo history
       partialize: (state): BlueprintDoc => ({
         rooms: state.rooms,
         roomOrder: state.roomOrder,
