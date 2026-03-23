@@ -62,6 +62,7 @@ interface BlueprintState extends BlueprintDoc {
   viewport: Viewport
   activeRoomDraft: Partial<Room> | null
   snapGuides: SnapGuide[]
+  canvasSize: { width: number; height: number }
 
   // Actions — document (undo-able)
   addRoom: (vertices: Point[], meta?: Partial<Omit<Room, 'id' | 'vertices'>>) => string
@@ -84,6 +85,7 @@ interface BlueprintState extends BlueprintDoc {
   setViewport: (vp: Partial<Viewport>) => void
   setActiveRoomDraft: (draft: Partial<Room> | null) => void
   setSnapGuides: (guides: SnapGuide[]) => void
+  setCanvasSize: (size: { width: number; height: number }) => void
 }
 
 // ─── Default values ────────────────────────────────────────────────────────
@@ -114,6 +116,7 @@ export const useBlueprintStore = create<BlueprintState>()(
       viewport: DEFAULT_VIEWPORT,
       activeRoomDraft: null,
       snapGuides: [],
+      canvasSize: { width: 800, height: 600 },
 
       // ── Document actions ──────────────────────────────────────────────
 
@@ -248,6 +251,10 @@ export const useBlueprintStore = create<BlueprintState>()(
 
       setSnapGuides: (guides) => {
         set(state => { state.snapGuides = guides })
+      },
+
+      setCanvasSize: (size) => {
+        set(state => { state.canvasSize = size })
       },
     })),
     {

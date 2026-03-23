@@ -68,11 +68,12 @@ export function useBlueprintKeyboard() {
         return
       }
 
-      // S — snap viewport back to world origin (0,0) at scale 1
+      // S — reset viewport so world (0,0) is centred on screen at scale 1
       if (e.key === 's' || e.key === 'S') {
         if (!e.ctrlKey && !e.metaKey) {
           e.preventDefault()
-          store.setViewport({ x: 0, y: 0, scale: 1 })
+          const { canvasSize } = store
+          store.setViewport({ x: canvasSize.width / 2, y: canvasSize.height / 2, scale: 1 })
           return
         }
       }

@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Stage, Layer, Circle, Line, Group } from 'react-konva'
+import { Stage, Layer, Circle } from 'react-konva'
 import type Konva from 'konva'
 import {
   useBlueprintStore,
@@ -27,18 +27,27 @@ export default function BlueprintCanvas() {
   const activeTool = useActiveTool()
   const viewport = useViewport()
   const snapGuides = useSnapGuides()
+  const isDark = !document.documentElement.classList.contains('theme-light')
 
   const isPanning = useRef(false)
   const panStart = useRef({ x: 0, y: 0 })
   const spaceDown = useRef(false)
 
-  // Responsive resize
+  // Responsive resize — centres viewport on world (0,0) on first render only
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
+    let initialized = false
     const obs = new ResizeObserver(entries => {
       const { width, height } = entries[0].contentRect
-      if (width > 0 && height > 0) setSize({ width, height })
+      if (width > 0 && height > 0) {
+        setSize({ width, height })
+        blueprintStore.getState().setCanvasSize({ width, height })
+        if (!initialized) {
+          initialized = true
+          blueprintStore.getState().setViewport({ x: width / 2, y: height / 2, scale: 1 })
+        }
+      }
     })
     obs.observe(el)
     return () => obs.disconnect()
@@ -152,6 +161,15 @@ export default function BlueprintCanvas() {
       className="relative flex-1 w-full h-full bg-dark overflow-hidden"
       style={{ cursor: activeTool === 'draw' ? 'crosshair' : 'default' }}
     >
+      {/* Screen-space centre cross — fixed at visual centre, not world space */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <line x1="16" y1="4" x2="16" y2="28" stroke="#00D4D4" strokeWidth="1.5" opacity="0.7" />
+          <line x1="4" y1="16" x2="28" y2="16" stroke="#00D4D4" strokeWidth="1.5" opacity="0.7" />
+          <circle cx="16" cy="16" r="2.5" fill="#00D4D4" opacity="0.8" />
+        </svg>
+      </div>
+
       <Stage
         ref={stageRef}
         width={size.width}
@@ -168,7 +186,7 @@ export default function BlueprintCanvas() {
         onDblClick={handleStageDblClick}
       >
         {/* Layer 1: Static grid — never rerenders during interaction */}
-        <GridLayer width={size.width} height={size.height} viewport={viewport} />
+        <GridLayer width={size.width} height={size.height} viewport={viewport} isDark={isDark} />
 
         {/* Layer 2: Rooms and elements */}
         <Layer>
@@ -191,38 +209,9 @@ export default function BlueprintCanvas() {
           ))}
         </Layer>
 
-        {/* Layer 3: UI overlays — snap guides + center cross */}
+        {/* Layer 3: UI overlays — snap guides only */}
         <Layer listening={false}>
           <SnapGuides guides={snapGuides} />
-          {/* World origin cross — always at (0,0) in world space.
-              Arm size and stroke compensated for zoom so it stays 20px on screen. */}
-          <Group listening={false}>
-            <Line
-              points={[
-                -20 / viewport.scale, 0,
-                 20 / viewport.scale, 0,
-              ]}
-              stroke="#00D4D4"
-              strokeWidth={1.5 / viewport.scale}
-              opacity={0.8}
-            />
-            <Line
-              points={[
-                0, -20 / viewport.scale,
-                0,  20 / viewport.scale,
-              ]}
-              stroke="#00D4D4"
-              strokeWidth={1.5 / viewport.scale}
-              opacity={0.8}
-            />
-            <Circle
-              x={0}
-              y={0}
-              radius={3 / viewport.scale}
-              fill="#00D4D4"
-              opacity={0.8}
-            />
-          </Group>
         </Layer>
       </Stage>
     </div>

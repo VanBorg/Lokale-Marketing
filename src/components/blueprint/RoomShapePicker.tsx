@@ -57,7 +57,7 @@ const SHAPES: ShapeOption[] = [
 
 const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: RoomShapePickerProps) {
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-4 gap-1.5">
       {SHAPES.map(s => {
         const isSelected = selected === s.id
         return (
@@ -66,7 +66,7 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
             type="button"
             onClick={() => onSelect(s.id)}
             className={[
-              'flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all duration-150',
+              'flex flex-col items-center gap-1 p-2 rounded-lg border transition-all duration-150',
               'bg-dark hover:bg-dark-hover text-light/70 hover:text-light',
               isSelected
                 ? 'border-accent text-accent shadow-[0_0_0_1px_#35B4D3]'
@@ -75,8 +75,8 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
           >
             <svg
               viewBox="0 0 32 32"
-              width={32}
-              height={32}
+              width={22}
+              height={22}
               fill={isSelected ? 'rgba(53,180,211,0.2)' : 'rgba(255,255,255,0.06)'}
               stroke={isSelected ? '#35B4D3' : 'rgba(255,255,255,0.4)'}
               strokeWidth={1.5}
@@ -84,7 +84,7 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
             >
               <path d={s.path} />
             </svg>
-            <span className={`text-[10px] font-medium leading-none ${isSelected ? 'text-accent' : ''}`}>
+            <span className={`text-[9px] font-medium leading-none text-center ${isSelected ? 'text-accent' : ''}`}>
               {s.label}
             </span>
           </button>

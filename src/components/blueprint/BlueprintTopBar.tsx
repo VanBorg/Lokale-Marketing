@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Undo2, Redo2, RotateCcw, User, HelpCircle, ArrowLeft } from 'lucide-react'
 import { useBlueprintStore, blueprintStore } from '../../store/blueprintStore'
 import { Button, Badge } from '../ui'
@@ -12,7 +13,8 @@ interface BlueprintTopBarProps {
   onTabChange: (tab: string) => void
 }
 
-export default function BlueprintTopBar({ project, onUpdateProject, onTabChange }: BlueprintTopBarProps) {
+export default function BlueprintTopBar({ project, onUpdateProject, onTabChange: _onTabChange }: BlueprintTopBarProps) {
+  const navigate = useNavigate()
   const [showKlant, setShowKlant] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
 
@@ -38,7 +40,6 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange 
   const handleReset = () => {
     if (window.confirm('Weet je zeker dat je opnieuw wilt beginnen? Alle kamers worden verwijderd.')) {
       const store = useBlueprintStore.getState()
-      // Delete all rooms
       Object.keys(store.rooms).forEach(id => store.deleteRoom(id))
       blueprintStore.temporal.getState().clear()
     }
@@ -46,22 +47,22 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange 
 
   return (
     <>
-      <div className="flex items-center gap-2 px-4 h-12 border-b border-dark-border bg-dark shrink-0">
-        {/* Back to project tabs */}
+      <div className="flex items-center gap-2 px-3 h-12 border-b border-dark-border bg-dark shrink-0">
+        {/* Back to projects list — consistent with "← Projecten" in the side panel */}
         <button
-          onClick={() => onTabChange('materialen')}
-          className="ui-icon-button mr-1"
-          title="Terug naar project"
-          aria-label="Terug naar project"
+          onClick={() => navigate('/projects')}
+          className="ui-icon-button mr-1 shrink-0"
+          title="Terug naar projecten"
+          aria-label="Terug naar projecten"
         >
           <ArrowLeft size={15} />
         </button>
 
         {/* Project name + status */}
-        <span className="text-sm font-bold text-light truncate max-w-[200px]">
+        <span className="text-sm font-bold text-light truncate max-w-[160px] shrink-0">
           {project.name}
         </span>
-        <Badge className="text-[10px] px-2 py-0.5 bg-accent/15 text-accent border border-accent/30">
+        <Badge className="text-[10px] px-2 py-0.5 bg-accent/15 text-accent border border-accent/30 shrink-0">
           {project.status}
         </Badge>
 
@@ -72,7 +73,7 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange 
           variant="ghost"
           size="sm"
           onClick={() => setShowKlant(true)}
-          className="gap-1.5 text-xs"
+          className="gap-1.5 text-xs shrink-0"
         >
           <User size={13} />
           Klantgegevens
@@ -83,14 +84,14 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange 
           variant="ghost"
           size="sm"
           onClick={handleReset}
-          className="gap-1.5 text-xs text-light/60 hover:text-light"
+          className="gap-1.5 text-xs text-light/60 hover:text-light shrink-0"
         >
           <RotateCcw size={13} />
           Opnieuw beginnen
         </Button>
 
         {/* Separator */}
-        <div className="w-px h-5 bg-dark-border mx-1" />
+        <div className="w-px h-5 bg-dark-border mx-1 shrink-0" />
 
         {/* Undo */}
         <button
@@ -115,7 +116,7 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange 
         </button>
 
         {/* Separator */}
-        <div className="w-px h-5 bg-dark-border mx-1" />
+        <div className="w-px h-5 bg-dark-border mx-1 shrink-0" />
 
         {/* Shortcuts help */}
         <button
