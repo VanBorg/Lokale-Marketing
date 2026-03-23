@@ -1,0 +1,25 @@
+/**
+ * Reusable motion, focus, and elevation helpers (Tailwind @layer utilities).
+ */
+
+@layer utilities {
+  .ui-transition-fast {
+    transition-duration: var(--ui-duration-fast);
+    transition-property: color, background-color, border-color, opacity;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .ui-transition-surface {
+    transition-duration: var(--ui-duration-surface);
+    transition-property: background-color, border-color, box-shadow, color, transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .ui-focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-0;
+  }
+
+  .ui-focus-ring-inset {
+    @apply focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent/40;
+  }
+}

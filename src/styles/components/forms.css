@@ -1,0 +1,19 @@
+@layer components {
+  .ui-label {
+    @apply block text-sm font-medium text-light/70 mb-1.5;
+  }
+
+  .ui-input {
+    @apply w-full px-3 py-2 rounded-lg bg-dark-card border border-dark-border
+      text-light placeholder-light/30 transition-colors duration-150
+      focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50;
+  }
+
+  .ui-input--error {
+    @apply border-red-500;
+  }
+
+  .ui-field-error {
+    @apply mt-1 text-sm text-red-400;
+  }
+}

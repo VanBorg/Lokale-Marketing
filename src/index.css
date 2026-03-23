@@ -1,38 +1,9 @@
 @tailwind base;
+
+@import './styles/tokens.css';
+
 @tailwind components;
+@import './styles/components/index.css';
+
 @tailwind utilities;
-
-:root {
-  --color-bg: 14 14 14;
-  --color-text: 240 237 232;
-  --color-card: 26 26 26;
-  --color-border: 42 42 42;
-  --color-hover: 37 37 37;
-}
-
-:root.theme-light {
-  --color-bg: 255 255 255;
-  --color-text: 26 26 26;
-  --color-card: 245 245 245;
-  --color-border: 224 224 224;
-  --color-hover: 235 235 235;
-}
-
-body {
-  margin: 0;
-  background-color: rgb(var(--color-bg));
-  color: rgb(var(--color-text));
-  font-family: 'DM Sans', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.disable-transitions,
-.disable-transitions * {
-  transition: none !important;
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--color-border)) rgb(var(--color-bg));
-}
+@import './styles/utilities/effects.css';

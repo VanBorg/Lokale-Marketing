@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useMatch } from 'react-router-dom';
 import Topbar from './Topbar';
 import Sidebar from './Sidebar';
 
 export default function Layout() {
+  const isProjectPage = !!useMatch('/project/:id');
+
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     try { return localStorage.getItem('sidebar-open') !== 'false'; } catch { return true; }
   });
@@ -16,14 +18,26 @@ export default function Layout() {
     });
   };
 
+  const mainClass = [
+    'ui-shell-main',
+    isProjectPage && 'ui-shell-main--flush',
+    !isProjectPage && (sidebarOpen ? 'ui-shell-main--sidebar-open' : 'ui-shell-main--sidebar-collapsed'),
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="min-h-screen bg-dark">
+    <div className="ui-shell">
       <Topbar />
-      <Sidebar isOpen={sidebarOpen} onToggle={toggle} />
-      <main className={`${sidebarOpen ? 'ml-64' : 'ml-12'} pt-14 min-h-screen transition-all duration-200`}>
-        <div className="p-6">
+      {!isProjectPage && <Sidebar isOpen={sidebarOpen} onToggle={toggle} />}
+      <main className={mainClass}>
+        {isProjectPage ? (
           <Outlet />
-        </div>
+        ) : (
+          <div className="ui-page-padding">
+            <Outlet />
+          </div>
+        )}
       </main>
     </div>
   );

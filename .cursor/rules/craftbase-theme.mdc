@@ -1,0 +1,18 @@
+---
+description: Preserve Pixel Blueprint UI theme, colours, and layout per canonical design reference
+alwaysApply: true
+---
+
+# Pixel Blueprint design preservation
+
+When changing layout, styling, the Tailwind setup, or shared UI components (shell, sidebar, cards, buttons, typography):
+
+1. **Follow** `docs/CRAFTBASE_THEME_REFERENCE.md` as the source of truth for colours, spacing, component patterns, and interaction behaviour. Do not remove or contradict those tokens without an explicit product decision.
+
+2. **Tailwind**: Stay on **Tailwind v3** (not v4). Prefer the documented semantic tokens (`neutral-*`, `accent`, `brand-*` where defined). Dark mode remains **class-based** (manual toggle).
+
+3. **Accent (brand)**: Canonical brand accent is `#35B4D3` (see `brand.orange` and `accent` in `tailwind.config.js`, sourced from `tokens.json`). Align new UI with this; avoid introducing a second accent colour unless the design reference doc is updated.
+
+4. **Refactors**: Preserve behaviour described in the reference (sticky top bar, sidebar width, card grid, hover/selected states, transitions `transition-all duration-200`).
+
+If a change would diverge from the reference, call that out in the PR/summary and update `docs/CRAFTBASE_THEME_REFERENCE.md` only when the design team approves a deliberate change.

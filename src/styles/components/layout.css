@@ -1,0 +1,81 @@
+@layer components {
+  .ui-shell {
+    @apply min-h-screen bg-dark;
+  }
+
+  .ui-topbar {
+    @apply fixed top-0 left-0 right-0 z-50 h-14 bg-dark border-b border-dark-border flex items-center justify-between px-6;
+  }
+
+  .ui-brand-wordmark {
+    @apply text-lg font-bold text-accent tracking-tight;
+  }
+
+  .ui-nav-pill {
+    @apply px-3 py-1.5 rounded-md text-sm font-medium transition-colors;
+  }
+
+  .ui-nav-pill:not(.ui-nav-pill--active) {
+    @apply text-light/60 hover:text-light hover:bg-dark-card;
+  }
+
+  .ui-nav-pill--active {
+    @apply bg-accent/10 text-accent;
+  }
+
+  .ui-icon-button {
+    @apply p-2 rounded-lg text-light/50 hover:text-light hover:bg-dark-card transition-colors cursor-pointer;
+  }
+
+  .ui-topbar-user {
+    @apply flex items-center gap-2 text-sm text-light/70;
+  }
+
+  .ui-sidebar {
+    @apply fixed left-0 top-14 bottom-0 bg-dark border-r border-dark-border transition-all duration-200 overflow-hidden flex flex-col;
+  }
+
+  .ui-sidebar--open {
+    @apply w-64;
+  }
+
+  .ui-sidebar--collapsed {
+    @apply w-12;
+  }
+
+  .ui-sidebar-toggle {
+    @apply shrink-0 flex items-center justify-center h-10 w-full border-b border-dark-border text-light/40 hover:text-light hover:bg-dark-card transition-colors cursor-pointer;
+  }
+
+  .ui-sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2 mx-2 rounded-lg text-sm transition-all duration-200;
+  }
+
+  .ui-sidebar-link:not(.ui-sidebar-link--active) {
+    @apply text-light/60 hover:text-light hover:bg-dark-card;
+  }
+
+  .ui-sidebar-link--active {
+    @apply bg-accent/10 text-accent;
+  }
+
+  .ui-shell-main {
+    @apply pt-14 min-h-screen transition-all duration-200;
+  }
+
+  .ui-shell-main--sidebar-open {
+    @apply ml-64;
+  }
+
+  .ui-shell-main--sidebar-collapsed {
+    @apply ml-12;
+  }
+
+  .ui-shell-main--flush {
+    @apply ml-0;
+  }
+
+  .ui-page-padding {
+    @apply p-6;
+  }
+}

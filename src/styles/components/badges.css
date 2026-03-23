@@ -1,0 +1,25 @@
+@layer components {
+  .ui-badge {
+    @apply inline-flex items-center shrink-0 text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+
+  .ui-badge--neutral {
+    @apply bg-light/10 text-light/60;
+  }
+
+  .ui-badge--accent {
+    @apply bg-accent/15 text-accent;
+  }
+
+  .ui-badge--success {
+    @apply bg-green-500/15 text-green-400;
+  }
+
+  .ui-badge--warning {
+    @apply bg-amber-500/15 text-amber-400;
+  }
+
+  .ui-badge--muted {
+    @apply bg-light/5 text-light/40;
+  }
+}

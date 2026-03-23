@@ -1,21 +1,21 @@
-import React from 'react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 const variantClasses: Record<string, string> = {
-  primary: 'bg-accent hover:bg-accent/90 text-white',
-  secondary: 'bg-dark-card hover:bg-dark-hover text-light border border-dark-border',
-  ghost: 'bg-transparent hover:bg-dark-card text-light',
+  primary: 'ui-btn--primary',
+  secondary: 'ui-btn--secondary',
+  ghost: 'ui-btn--ghost',
 };
 
 const sizeClasses: Record<string, string> = {
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-6 py-3 text-base',
+  sm: 'ui-btn--sm',
+  md: 'ui-btn--md',
+  lg: 'ui-btn--lg',
 };
 
 export default function Button({
@@ -27,14 +27,7 @@ export default function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`
-        inline-flex items-center justify-center rounded-lg font-medium
-        transition-colors duration-150 focus:outline-none focus:ring-2
-        focus:ring-accent/50 disabled:opacity-50 disabled:cursor-not-allowed
-        ${variantClasses[variant]}
-        ${sizeClasses[size]}
-        ${className}
-      `}
+      className={`ui-btn ${variantClasses[variant]} ${sizeClasses[size]} ${className}`.trim()}
       {...props}
     >
       {children}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -12,7 +12,7 @@ export default function Login() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -20,8 +20,8 @@ export default function Login() {
     try {
       await signIn(email, password);
       navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Inloggen mislukt. Controleer je gegevens.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Inloggen mislukt. Controleer je gegevens.');
     } finally {
       setLoading(false);
     }
@@ -31,7 +31,7 @@ export default function Login() {
     <div className="min-h-screen bg-dark flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-accent mb-2">Craftbase</h1>
+          <h1 className="text-2xl font-bold text-accent mb-2">Pixel Blueprint</h1>
           <p className="text-light/50 text-sm">
             Log in om verder te gaan
           </p>
