@@ -5,7 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import type { Project } from '../../lib/database.types';
-import { projectStatusBadgeClass } from '../../lib/projectStatusUi';
+import ProjectStatusSelect from '../../components/project/ProjectStatusSelect';
 
 const TABS = [
   { value: 'blauwdruk', label: 'Blauwdruk' },
@@ -80,11 +80,15 @@ export default function ProjectSidePanel({
 
       {/* Project info */}
       <div className="px-4 py-4 border-b border-dark-border space-y-3">
-        <div>
-          <h1 className="text-base font-bold text-light leading-tight">{project.name}</h1>
-          <span className={`ui-badge mt-1.5 text-xs ${projectStatusBadgeClass[project.status]}`}>
-            {project.status}
-          </span>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="min-w-0 flex-1 truncate text-base font-bold leading-tight text-light">
+            {project.name}
+          </h1>
+          <ProjectStatusSelect
+            value={project.status}
+            onChange={status => void onUpdate({ status })}
+            id="project-status-sidebar"
+          />
         </div>
 
         <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>

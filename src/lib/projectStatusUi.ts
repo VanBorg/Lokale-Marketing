@@ -1,5 +1,14 @@
 import type { ProjectStatus } from './database.types';
 
+/** Volgorde in status-dropdowns (workflow). */
+export const PROJECT_STATUS_DROPDOWN_ORDER: ProjectStatus[] = [
+  'Concept',
+  'Offerte Verstuurd',
+  'Akkoord',
+  'In Uitvoering',
+  'Afgerond',
+];
+
 /** Volgorde van de stat-tellers na Totaal (projectenpagina). */
 export const PROJECT_STATUS_STATS_ORDER: ProjectStatus[] = [
   'Afgerond',

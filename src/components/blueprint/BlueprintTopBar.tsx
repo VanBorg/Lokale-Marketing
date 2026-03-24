@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Undo2, Redo2, RotateCcw, User, HelpCircle, ArrowLeft } from 'lucide-react'
 import { useBlueprintStore, blueprintStore } from '../../store/blueprintStore'
-import { Button, Badge } from '../ui'
+import { Button } from '../ui'
 import KlantgegevensModal from './KlantgegevensModal'
 import ShortcutsModal from './ShortcutsModal'
+import ProjectStatusSelect from '../project/ProjectStatusSelect'
 import type { Project } from '../../lib/database.types'
-import { projectStatusBadgeClass } from '../../lib/projectStatusUi'
 
 interface BlueprintTopBarProps {
   project: Project
@@ -59,13 +59,16 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
           <ArrowLeft size={15} />
         </button>
 
-        {/* Project name + status */}
-        <span className="text-sm font-bold text-light truncate max-w-[160px] shrink-0">
-          {project.name}
-        </span>
-        <Badge className={`text-[10px] px-2 py-0.5 shrink-0 ${projectStatusBadgeClass[project.status]}`}>
-          {project.status}
-        </Badge>
+        {/* Project name + status (dropdown direct naast de naam) */}
+        <div className="flex min-w-0 max-w-[min(100%,24rem)] shrink items-center gap-2">
+          <span className="min-w-0 truncate text-sm font-bold text-light">{project.name}</span>
+          <ProjectStatusSelect
+            size="sm"
+            value={project.status}
+            onChange={status => onUpdateProject({ status })}
+            id="project-status-topbar"
+          />
+        </div>
 
         <div className="flex-1" />
 

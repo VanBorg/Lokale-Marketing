@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { RotateCw } from 'lucide-react'
 import {
   blueprintStore,
@@ -30,6 +30,8 @@ function WallMetricCell({
   onSelect,
   onLengthChange,
   lockSlot,
+  onHoverStart,
+  locked = false,
 }: {
   wallIndex: number
   lenRounded: number
@@ -37,44 +39,108 @@ function WallMetricCell({
   onSelect: () => void
   onLengthChange: (value: number) => void
   lockSlot?: ReactNode
+  onHoverStart?: () => void
+  /** When true, length cannot be edited (vergrendelde wand). */
+  locked?: boolean
 }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) {
+      setDraft(null)
+    }
+  }, [lenRounded])
+
+  const commitDraft = () => {
+    if (locked) return
+    const raw = (draft ?? '').trim()
+    if (raw === '') {
+      setDraft(null)
+      return
+    }
+    const n = parseFloat(raw.replace(',', '.'))
+    if (Number.isNaN(n) || n < 10) {
+      setDraft(null)
+      return
+    }
+    onLengthChange(Math.round(n))
+    setDraft(null)
+  }
+
+  const displayValue = draft !== null ? draft : String(lenRounded)
+
   return (
     <div
       role="button"
       tabIndex={0}
+      aria-label={`Wand ${wallIndex + 1}, lengte in centimeters${locked ? ', vergrendeld' : ''}`}
       onClick={onSelect}
+      onMouseEnter={onHoverStart}
       onKeyDown={e => {
+        if (e.target === inputRef.current) return
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           onSelect()
         }
       }}
       className={[
-        'bg-dark px-1.5 py-1 min-h-[2rem] flex items-center gap-1 min-w-0 transition-all duration-200 cursor-pointer',
-        isActive ? 'ring-1 ring-inset ring-accent/45 bg-accent/5' : 'hover:bg-dark-hover/70',
+        'bg-dark px-1.5 py-1.5 min-h-[2rem] flex items-center justify-center gap-1.5 min-w-0 transition-all duration-200 cursor-pointer border border-transparent',
+        locked ? 'opacity-90' : '',
+        isActive
+          ? 'ring-1 ring-inset ring-light/20 bg-light/[0.05]'
+          : 'hover:bg-light/[0.06] hover:border-light/15',
       ].join(' ')}
     >
-      <span className="text-[9px] text-light/50 shrink-0">Muur {wallIndex + 1}</span>
       {lockSlot}
-      <div className="flex items-center gap-0.5 ml-auto min-w-0">
+      <div className="flex items-center gap-0.5 shrink-0">
         <input
-          type="number"
-          className="ui-input text-[10px] py-0 h-6 w-11 text-center tabular-nums px-0.5 min-w-0"
-          value={lenRounded}
-          min={10}
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          readOnly={locked}
+          title={locked ? undefined : 'Typ een lengte en druk Enter om toe te passen'}
+          className={[
+            'ui-input text-[10px] py-0 h-6 w-12 text-center tabular-nums px-0.5 min-w-0',
+            locked ? 'cursor-not-allowed opacity-70' : '',
+          ].join(' ')}
+          value={displayValue}
           onClick={e => e.stopPropagation()}
-          onChange={e => onLengthChange(Number(e.target.value))}
+          onFocus={() => {
+            if (!locked) setDraft(String(lenRounded))
+          }}
+          onChange={e => {
+            if (locked) return
+            setDraft(e.target.value)
+          }}
+          onBlur={() => {
+            setDraft(null)
+          }}
           onKeyDown={e => {
-            if (e.key === 'ArrowUp') {
+            if (locked) return
+            e.stopPropagation()
+            if (e.key === 'Enter') {
               e.preventDefault()
-              onLengthChange(lenRounded + 5)
+              commitDraft()
+              inputRef.current?.blur()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setDraft(null)
+              inputRef.current?.blur()
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              const base = draft !== null ? parseFloat(draft) : lenRounded
+              const cur = Number.isNaN(base) ? lenRounded : base
+              setDraft(String(Math.max(10, Math.round(cur + 5))))
             } else if (e.key === 'ArrowDown') {
               e.preventDefault()
-              onLengthChange(lenRounded - 5)
+              const base = draft !== null ? parseFloat(draft) : lenRounded
+              const cur = Number.isNaN(base) ? lenRounded : base
+              setDraft(String(Math.max(10, Math.round(cur - 5))))
             }
           }}
         />
-        <span className="text-[9px] text-light/40 shrink-0">cm</span>
+        <span className="text-[9px] text-light/45 shrink-0">cm</span>
       </div>
     </div>
   )
@@ -88,6 +154,7 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   useBlueprintKeyboard()
 
   const [previewVertices, setPreviewVertices] = useState<Point[]>([])
+  const [previewLockedWalls, setPreviewLockedWalls] = useState<number[]>([])
   const [previewWidth, setPreviewWidth]       = useState(400)
   const [previewDepth, setPreviewDepth]       = useState(300)
 
@@ -98,9 +165,13 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const rooms          = useBlueprintStore(s => s.rooms)
 
   const [selectedWallIndex, setSelectedWallIndex] = useState<number | null>(null)
+  const [hoveredWall, setHoveredWall] = useState<{ roomKey: string; wallIndex: number } | null>(null)
+
+  const previewRoomKey = 'preview'
 
   useEffect(() => {
     setSelectedWallIndex(null)
+    setHoveredWall(null)
   }, [selectedRoomId])
 
   const handleDelete = () => {
@@ -116,14 +187,24 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   }
 
   const handleWallLengthChange = useCallback((roomId: string, wallIndex: number, value: number) => {
+    const r = blueprintStore.getState().rooms[roomId]
+    if (r?.lockedWalls?.includes(wallIndex)) return
     const clamped = Math.max(10, value)
     blueprintStore.getState().setWallLength(roomId, wallIndex, clamped)
   }, [])
 
+  const togglePreviewWallLock = useCallback((wallIndex: number) => {
+    setPreviewLockedWalls(prev => {
+      if (prev.includes(wallIndex)) return prev.filter(i => i !== wallIndex)
+      return [...prev, wallIndex].sort((a, b) => a - b)
+    })
+  }, [])
+
   const handlePreviewWallLengthChange = useCallback((wallIndex: number, value: number) => {
+    if (previewLockedWalls.includes(wallIndex)) return
     const clamped = Math.max(10, value)
     setPreviewVertices(prev => applyWallLength(prev, wallIndex, clamped))
-  }, [])
+  }, [previewLockedWalls])
 
   const selectRoomWall = useCallback((roomId: string, wallIndex: number) => {
     blueprintStore.getState().select([roomId])
@@ -132,6 +213,10 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
 
   const showMuren =
     (previewVertices.length >= 3 && !selectedRoom) || roomOrder.length > 0
+
+  const displayedRoomKey = selectedRoomId ?? previewRoomKey
+  const listHoverWallIndex =
+    hoveredWall && hoveredWall.roomKey === displayedRoomKey ? hoveredWall.wallIndex : null
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden">
@@ -202,6 +287,8 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
                 ? (wallIndex) => blueprintStore.getState().toggleWallLock(selectedRoom.id, wallIndex)
                 : undefined
               }
+              draftLockedWalls={selectedRoom ? undefined : previewLockedWalls}
+              onDraftToggleWallLock={selectedRoom ? undefined : togglePreviewWallLock}
               selectedWallIndex={
                 selectedRoom
                   ? selectedWallIndex
@@ -213,6 +300,7 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
                   : (previewVertices.length >= 3 ? setSelectedWallIndex : undefined)
               }
               hideWallDetailPanel={!!selectedRoom || (previewVertices.length >= 3 && !selectedRoom)}
+              listHoverWallIndex={listHoverWallIndex}
             />
           </div>
 
@@ -225,28 +313,49 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
                 </span>
               </div>
               <div className="divide-y divide-dark-border/40">
-                {/* Concept / voorbeeld — zelfde vorm als de kaart wanneer nog geen kamer geselecteerd is */}
+                {/* Builder preview walls (geen geplaatste kamer geselecteerd) */}
                 {previewVertices.length >= 3 && !selectedRoom && (
                   <div className="py-1.5">
-                    <div className="px-3 pb-1">
-                      <span className="text-[10px] font-semibold text-light/50">
-                        Kamer (voorbeeld)
-                      </span>
-                    </div>
                     <div className="px-2 pb-1">
-                      <div className={WALL_GRID}>
+                      <div
+                        className={WALL_GRID}
+                        onMouseLeave={() => setHoveredWall(null)}
+                      >
                         {previewVertices.map((_, i) => {
                           const a = previewVertices[i]
                           const b = previewVertices[(i + 1) % previewVertices.length]
                           const lenRounded = Math.round(wallLength(a, b))
+                          const locked = previewLockedWalls.includes(i)
                           return (
                             <WallMetricCell
                               key={`preview-w-${i}`}
                               wallIndex={i}
                               lenRounded={lenRounded}
                               isActive={selectedWallIndex === i}
+                              locked={locked}
                               onSelect={() => setSelectedWallIndex(i)}
                               onLengthChange={v => handlePreviewWallLengthChange(i, v)}
+                              onHoverStart={() =>
+                                setHoveredWall({ roomKey: previewRoomKey, wallIndex: i })
+                              }
+                              lockSlot={
+                                <button
+                                  type="button"
+                                  title={locked ? 'Ontgrendelen — lengte aanpasbaar' : 'Vergrendelen — lengte vast'}
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    togglePreviewWallLock(i)
+                                  }}
+                                  className={[
+                                    'shrink-0 text-[9px] leading-none px-1 py-0.5 rounded border transition-colors',
+                                    locked
+                                      ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                                      : 'border-dark-border text-light/35 hover:text-light',
+                                  ].join(' ')}
+                                >
+                                  {locked ? '🔒' : '🔓'}
+                                </button>
+                              }
                             />
                           )
                         })}
@@ -269,7 +378,10 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
                         </span>
                       </div>
                       <div className="px-2 pb-1">
-                        <div className={WALL_GRID}>
+                        <div
+                          className={WALL_GRID}
+                          onMouseLeave={() => setHoveredWall(null)}
+                        >
                           {room.vertices.map((_, i) => {
                             const a = room.vertices[i]
                             const b = room.vertices[(i + 1) % room.vertices.length]
@@ -283,8 +395,12 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
                                 wallIndex={i}
                                 lenRounded={lenRounded}
                                 isActive={isActive}
+                                locked={locked}
                                 onSelect={() => selectRoomWall(roomId, i)}
                                 onLengthChange={v => handleWallLengthChange(roomId, i, v)}
+                                onHoverStart={() =>
+                                  setHoveredWall({ roomKey: roomId, wallIndex: i })
+                                }
                                 lockSlot={
                                   <button
                                     type="button"

@@ -20,6 +20,10 @@ interface RoomPreviewCanvasProps {
   hideWallDetailPanel?: boolean
   /** Wall index highlighted from the list (hover); thicker inner stroke on the map. */
   listHoverWallIndex?: number | null
+  /** When `room` is absent (draft preview), locked wall indices from parent. */
+  draftLockedWalls?: number[]
+  /** Toggle lock for draft preview (no room in store yet). */
+  onDraftToggleWallLock?: (wallIndex: number) => void
 }
 
 /** Extra inset so the room polygon does not sit flush against the preview edges (map size unchanged). */
@@ -39,6 +43,8 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   onSelectWall,
   hideWallDetailPanel = false,
   listHoverWallIndex = null,
+  draftLockedWalls = [],
+  onDraftToggleWallLock,
 }: RoomPreviewCanvasProps) {
   const [localVerts, setLocalVerts] = useState<Point[]>(vertices)
   const [internalWall, setInternalWall] = useState<number | null>(null)
@@ -121,11 +127,39 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
     ]
   }
 
+  /** Shorten segment by `edgeTrim` fraction from each end (e.g. 0.13 → keep middle 74%). */
+  const trimSegmentEnds = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    edgeTrim: number,
+  ): [number, number, number, number] => {
+    const dx = x2 - x1
+    const dy = y2 - y1
+    const len = Math.hypot(dx, dy) || 1
+    const ux = dx / len
+    const uy = dy / len
+    const t0 = edgeTrim
+    const t1 = 1 - edgeTrim
+    return [x1 + ux * len * t0, y1 + uy * len * t0, x1 + ux * len * t1, y1 + uy * len * t1]
+  }
+
+  const INNER_LINE_INSET_PX = 4
+  /** List-hover line: leave 13% of wall length empty at each end. */
+  const HOVER_LINE_EDGE_TRIM = 0.13
+
   // ── Corner drag — free angle / skew ─────────────────────────────────────
+
+  const isWallLocked = (i: number) =>
+    room ? (room.lockedWalls?.includes(i) ?? false) : draftLockedWalls.includes(i)
 
   const startCornerDrag = (e: Konva.KonvaEventObject<MouseEvent>, cornerIdx: number) => {
     e.evt.preventDefault()
     e.evt.stopPropagation()
+
+    const prevWall = (cornerIdx - 1 + n) % n
+    if (isWallLocked(prevWall) || isWallLocked(cornerIdx)) return
 
     const origVerts = localVertsRef.current.map(v => ({ ...v }))
     const startClientX = e.evt.clientX
@@ -155,6 +189,8 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   const startWallDrag = (e: Konva.KonvaEventObject<MouseEvent>, wallIdx: number) => {
     e.evt.preventDefault()
     e.evt.stopPropagation()
+
+    if (isWallLocked(wallIdx)) return
 
     const vA = localVerts[wallIdx]
     const vB = localVerts[(wallIdx + 1) % n]
@@ -218,6 +254,7 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
 
   const handleLengthBlur = () => {
     if (selectedWall === null || hideWallDetailPanel) return
+    if (isWallLocked(selectedWall)) return
     const len = parseFloat(editingLength)
     if (!isNaN(len) && len > 0) {
       const newVerts = applyWallLength(localVerts, selectedWall, len)
@@ -226,7 +263,10 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
     }
   }
 
-  const isWallLocked = (i: number) => room?.lockedWalls?.includes(i) ?? false
+  const draftOrRoomToggleLock = (i: number) => {
+    if (room && onToggleWallLock) onToggleWallLock(i)
+    else onDraftToggleWallLock?.(i)
+  }
 
   return (
     <div className="rounded-lg border border-dark-border overflow-hidden bg-dark">
@@ -258,21 +298,22 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
             )
           })}
 
-          {/* Inner wall highlight (list hover / click) — thin line inside the room; thicker on hover */}
-          {screenVerts.map((sv, i) => {
+          {/* Inner wall highlight — same stroke for hover & select; list-hover line is shortened (13% margin each end) */}
+          {screenVerts.map((_, i) => {
             const isListHover = listHoverWallIndex === i
             const isSelected = selectedWall === i
             if (!isListHover && !isSelected) return null
-            const inset = isListHover ? 5 : 4
-            const [x1, y1, x2, y2] = innerWallPoints(i, inset)
-            const thick = isListHover
+            const [fx1, fy1, fx2, fy2] = innerWallPoints(i, INNER_LINE_INSET_PX)
+            const [x1, y1, x2, y2] = isListHover
+              ? trimSegmentEnds(fx1, fy1, fx2, fy2, HOVER_LINE_EDGE_TRIM)
+              : [fx1, fy1, fx2, fy2]
             return (
               <Line
                 key={`inner-hl-${i}`}
                 points={[x1, y1, x2, y2]}
                 stroke={ACCENT}
-                strokeWidth={thick ? 2.75 : 1.35}
-                opacity={thick ? 1 : 0.92}
+                strokeWidth={1.5}
+                opacity={0.95}
                 lineCap="round"
                 listening={false}
               />
@@ -329,33 +370,38 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
           {/* Mid-wall handles — push/pull for width/depth resize */}
           {onChange && screenVerts.map((sv, i) => {
             const next = screenVerts[(i + 1) % n]
+            const locked = isWallLocked(i)
             return (
               <Circle
                 key={`mid-${i}`}
                 x={(sv.x + next.x) / 2}
                 y={(sv.y + next.y) / 2}
                 radius={4}
-                fill="#0c0c12"
-                stroke="#00cece"
+                fill={locked ? '#1a1a22' : '#0c0c12'}
+                stroke={locked ? LOCKED_COLOUR : '#00cece'}
                 strokeWidth={1.5}
-                onMouseDown={e => startWallDrag(e, i)}
+                onMouseDown={locked ? undefined : e => startWallDrag(e, i)}
               />
             )
           })}
 
           {/* Corner handles — free angle / skew */}
-          {onChange && screenVerts.map((sv, i) => (
-            <Circle
-              key={`corner-${i}`}
-              x={sv.x}
-              y={sv.y}
-              radius={6}
-              fill="#0c0c12"
-              stroke="#00cece"
-              strokeWidth={2}
-              onMouseDown={e => startCornerDrag(e, i)}
-            />
-          ))}
+          {onChange && screenVerts.map((sv, i) => {
+            const prevWall = (i - 1 + n) % n
+            const cornerLocked = isWallLocked(prevWall) || isWallLocked(i)
+            return (
+              <Circle
+                key={`corner-${i}`}
+                x={sv.x}
+                y={sv.y}
+                radius={6}
+                fill={cornerLocked ? '#1a1a22' : '#0c0c12'}
+                stroke={cornerLocked ? LOCKED_COLOUR : '#00cece'}
+                strokeWidth={2}
+                onMouseDown={cornerLocked ? undefined : e => startCornerDrag(e, i)}
+              />
+            )
+          })}
         </Layer>
       </Stage>
 
@@ -389,9 +435,9 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
             <span className="text-xs text-light/40">cm</span>
           </div>
 
-          {onToggleWallLock && (
+          {(onToggleWallLock || onDraftToggleWallLock) && (
             <button
-              onClick={() => onToggleWallLock(selectedWall)}
+              onClick={() => draftOrRoomToggleLock(selectedWall)}
               className={[
                 'w-full text-xs py-1.5 rounded-lg border transition-colors flex items-center justify-center gap-1.5',
                 isWallLocked(selectedWall)

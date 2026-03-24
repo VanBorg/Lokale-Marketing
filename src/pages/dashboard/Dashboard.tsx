@@ -22,9 +22,9 @@ export default function Dashboard() {
           <div className="relative flex items-start gap-3">
             <BlauwdrukMarkIcon size={24} />
             <div className="min-w-0 flex-1">
-              <h2 className="ui-project-card__title mb-1">Blauwdruk maken</h2>
+              <h2 className="ui-project-card__title mb-1">Maak een blauwdruk</h2>
               <p className="text-xs text-light/50 leading-relaxed">
-                Open je projecten, kies een project en teken of bewerk plattegronden in de maker.
+                Ga naar je projecten, open er een en werk in de maker verder aan plattegronden, kamers en muren.
               </p>
             </div>
           </div>
