@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { RotateCw } from 'lucide-react'
 import {
   blueprintStore,
   useBlueprintStore,
   useSelectedIds,
 } from '../../store/blueprintStore'
-import { polygonArea, wallLength } from '../../utils/blueprintGeometry'
+import { applyWallLength, polygonArea, wallLength } from '../../utils/blueprintGeometry'
 import type { Point } from '../../utils/blueprintGeometry'
 import { useBlueprintKeyboard } from '../../hooks/useBlueprintKeyboard'
 import BlueprintTopBar from './BlueprintTopBar'
@@ -18,6 +18,66 @@ interface BlueprintPageProps {
   project: Project
   onUpdateProject: (updates: Partial<Project>) => void
   onTabChange: (tab: string) => void
+}
+
+const WALL_GRID =
+  'grid w-full grid-cols-3 gap-px rounded-md border border-dark-border bg-dark-border/80 overflow-hidden'
+
+function WallMetricCell({
+  wallIndex,
+  lenRounded,
+  isActive,
+  onSelect,
+  onLengthChange,
+  lockSlot,
+}: {
+  wallIndex: number
+  lenRounded: number
+  isActive: boolean
+  onSelect: () => void
+  onLengthChange: (value: number) => void
+  lockSlot?: ReactNode
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      className={[
+        'bg-dark px-1.5 py-1 min-h-[2rem] flex items-center gap-1 min-w-0 transition-all duration-200 cursor-pointer',
+        isActive ? 'ring-1 ring-inset ring-accent/45 bg-accent/5' : 'hover:bg-dark-hover/70',
+      ].join(' ')}
+    >
+      <span className="text-[9px] text-light/50 shrink-0">Muur {wallIndex + 1}</span>
+      {lockSlot}
+      <div className="flex items-center gap-0.5 ml-auto min-w-0">
+        <input
+          type="number"
+          className="ui-input text-[10px] py-0 h-6 w-11 text-center tabular-nums px-0.5 min-w-0"
+          value={lenRounded}
+          min={10}
+          onClick={e => e.stopPropagation()}
+          onChange={e => onLengthChange(Number(e.target.value))}
+          onKeyDown={e => {
+            if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              onLengthChange(lenRounded + 5)
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              onLengthChange(lenRounded - 5)
+            }
+          }}
+        />
+        <span className="text-[9px] text-light/40 shrink-0">cm</span>
+      </div>
+    </div>
+  )
 }
 
 export default function BlueprintPage({ project, onUpdateProject, onTabChange }: BlueprintPageProps) {
@@ -34,6 +94,14 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const selectedIds    = useSelectedIds()
   const selectedRoomId = selectedIds.length === 1 ? selectedIds[0] : null
   const selectedRoom   = useBlueprintStore(s => selectedRoomId ? s.rooms[selectedRoomId] : null)
+  const roomOrder      = useBlueprintStore(s => s.roomOrder)
+  const rooms          = useBlueprintStore(s => s.rooms)
+
+  const [selectedWallIndex, setSelectedWallIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    setSelectedWallIndex(null)
+  }, [selectedRoomId])
 
   const handleDelete = () => {
     if (!selectedRoomId) return
@@ -47,11 +115,23 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
     blueprintStore.getState().updateRoomVertices(selectedRoom.id, rotated)
   }
 
-  const handleWallLengthChange = (wallIndex: number, value: number) => {
-    if (!selectedRoom) return
+  const handleWallLengthChange = useCallback((roomId: string, wallIndex: number, value: number) => {
     const clamped = Math.max(10, value)
-    blueprintStore.getState().setWallLength(selectedRoom.id, wallIndex, clamped)
-  }
+    blueprintStore.getState().setWallLength(roomId, wallIndex, clamped)
+  }, [])
+
+  const handlePreviewWallLengthChange = useCallback((wallIndex: number, value: number) => {
+    const clamped = Math.max(10, value)
+    setPreviewVertices(prev => applyWallLength(prev, wallIndex, clamped))
+  }, [])
+
+  const selectRoomWall = useCallback((roomId: string, wallIndex: number) => {
+    blueprintStore.getState().select([roomId])
+    setSelectedWallIndex(wallIndex)
+  }, [])
+
+  const showMuren =
+    (previewVertices.length >= 3 && !selectedRoom) || roomOrder.length > 0
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden">
@@ -93,18 +173,18 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
           )}
         </div>
 
-        {/* Column 2 — Live preview panel (340px) */}
-        <div className="w-[340px] shrink-0 border-l border-dark-border bg-dark flex flex-col overflow-y-auto">
+        {/* Column 2 — Kamer Overview preview panel (340px) */}
+        <div className="w-[340px] shrink-0 min-h-0 border-l border-dark-border bg-dark flex flex-col overflow-y-auto">
 
-          {/* Header */}
+          {/* 1. Header */}
           <div className="px-3 py-2 border-b border-dark-border shrink-0">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40">
-              Kamer
+              Kamer Overview
             </span>
           </div>
 
-          {/* Preview canvas */}
-          <div className="flex items-center justify-center p-3 shrink-0">
+          {/* 2. RoomPreviewCanvas — centered, 12px padding */}
+          <div className="flex items-center justify-center p-3 border-b border-dark-border shrink-0">
             <RoomPreviewCanvas
               vertices={selectedRoom ? selectedRoom.vertices : previewVertices}
               onChange={selectedRoom
@@ -122,121 +202,136 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
                 ? (wallIndex) => blueprintStore.getState().toggleWallLock(selectedRoom.id, wallIndex)
                 : undefined
               }
+              selectedWallIndex={
+                selectedRoom
+                  ? selectedWallIndex
+                  : (previewVertices.length >= 3 ? selectedWallIndex : undefined)
+              }
+              onSelectWall={
+                selectedRoom
+                  ? setSelectedWallIndex
+                  : (previewVertices.length >= 3 ? setSelectedWallIndex : undefined)
+              }
+              hideWallDetailPanel={!!selectedRoom || (previewVertices.length >= 3 && !selectedRoom)}
             />
           </div>
 
-          {/* Walls section */}
-          <div className="border-t border-dark-border shrink-0">
-            <div className="px-3 py-1.5 border-b border-dark-border/50">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-light/30">
-                Wanden
-              </span>
-            </div>
-
-            {selectedRoom ? (
+          {/* 3. Muren — concept (builder preview) + alle geplaatste kamers */}
+          {showMuren ? (
+            <div className="shrink-0 border-t border-dark-border/50">
+              <div className="px-3 py-1.5 border-b border-dark-border/50">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-light/30">
+                  Muren
+                </span>
+              </div>
               <div className="divide-y divide-dark-border/40">
-                {selectedRoom.vertices.map((_, i) => {
-                  const a = selectedRoom.vertices[i]
-                  const b = selectedRoom.vertices[(i + 1) % selectedRoom.vertices.length]
-                  const len = Math.round(wallLength(a, b))
+                {/* Concept / voorbeeld — zelfde vorm als de kaart wanneer nog geen kamer geselecteerd is */}
+                {previewVertices.length >= 3 && !selectedRoom && (
+                  <div className="py-1.5">
+                    <div className="px-3 pb-1">
+                      <span className="text-[10px] font-semibold text-light/50">
+                        Kamer (voorbeeld)
+                      </span>
+                    </div>
+                    <div className="px-2 pb-1">
+                      <div className={WALL_GRID}>
+                        {previewVertices.map((_, i) => {
+                          const a = previewVertices[i]
+                          const b = previewVertices[(i + 1) % previewVertices.length]
+                          const lenRounded = Math.round(wallLength(a, b))
+                          return (
+                            <WallMetricCell
+                              key={`preview-w-${i}`}
+                              wallIndex={i}
+                              lenRounded={lenRounded}
+                              isActive={selectedWallIndex === i}
+                              onSelect={() => setSelectedWallIndex(i)}
+                              onLengthChange={v => handlePreviewWallLengthChange(i, v)}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {roomOrder.map((roomId, roomIdx) => {
+                  const room = rooms[roomId]
+                  if (!room) return null
                   return (
-                    <div key={i} className="flex items-center gap-1.5 px-3 py-1">
-                      <span className="text-[10px] text-light/40 w-8 shrink-0">W {i + 1}</span>
-                      <input
-                        type="number"
-                        className="ui-input text-xs py-0.5 flex-1 min-w-0"
-                        value={len}
-                        min={10}
-                        onChange={e => handleWallLengthChange(i, Number(e.target.value))}
-                        onKeyDown={e => {
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault()
-                            handleWallLengthChange(i, len + 5)
-                          } else if (e.key === 'ArrowDown') {
-                            e.preventDefault()
-                            handleWallLengthChange(i, len - 5)
-                          }
-                        }}
-                      />
-                      <span className="text-[10px] text-light/40 shrink-0">cm</span>
-                      <div className="flex flex-col gap-px shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleWallLengthChange(i, len + 5)}
-                          className="text-light/40 hover:text-light leading-none text-[10px] transition-colors"
-                          title="+ 5 cm"
-                        >
-                          ▲
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleWallLengthChange(i, len - 5)}
-                          className="text-light/40 hover:text-light leading-none text-[10px] transition-colors"
-                          title="- 5 cm"
-                        >
-                          ▼
-                        </button>
+                    <div key={roomId} className="py-1.5">
+                      <div className="px-3 pb-1">
+                        <span className="text-[10px] font-semibold text-light/50">
+                          Kamer {roomIdx + 1}
+                          {room.name ? (
+                            <span className="font-normal text-light/35"> · {room.name}</span>
+                          ) : null}
+                        </span>
+                      </div>
+                      <div className="px-2 pb-1">
+                        <div className={WALL_GRID}>
+                          {room.vertices.map((_, i) => {
+                            const a = room.vertices[i]
+                            const b = room.vertices[(i + 1) % room.vertices.length]
+                            const lenRounded = Math.round(wallLength(a, b))
+                            const isActive =
+                              selectedRoomId === roomId && selectedWallIndex === i
+                            const locked = room.lockedWalls?.includes(i) ?? false
+                            return (
+                              <WallMetricCell
+                                key={`${roomId}-w-${i}`}
+                                wallIndex={i}
+                                lenRounded={lenRounded}
+                                isActive={isActive}
+                                onSelect={() => selectRoomWall(roomId, i)}
+                                onLengthChange={v => handleWallLengthChange(roomId, i, v)}
+                                lockSlot={
+                                  <button
+                                    type="button"
+                                    title={locked ? 'Ontgrendelen' : 'Vergrendelen'}
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      blueprintStore.getState().toggleWallLock(roomId, i)
+                                      if (selectedRoomId !== roomId) {
+                                        blueprintStore.getState().select([roomId])
+                                        setSelectedWallIndex(i)
+                                      }
+                                    }}
+                                    className={[
+                                      'shrink-0 text-[9px] leading-none px-1 py-0.5 rounded border transition-colors',
+                                      locked
+                                        ? 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                                        : 'border-dark-border text-light/35 hover:text-light',
+                                    ].join(' ')}
+                                  >
+                                    {locked ? '🔒' : '🔓'}
+                                  </button>
+                                }
+                              />
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
                   )
                 })}
-
-                {/* Rotate button */}
-                <div className="px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={rotateRoom90}
-                    className="flex items-center gap-1.5 text-xs text-light/50 hover:text-light border border-dark-border hover:border-accent/40 rounded-lg px-3 py-1.5 transition-all duration-150"
-                  >
-                    <RotateCw size={12} />
-                    Roteer 90°
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="px-3 py-4 text-[10px] text-light/30 text-center leading-relaxed">
-                Selecteer een kamer om wanden te bewerken
-              </p>
-            )}
-          </div>
-
-          {/* Breedte / Diepte inputs */}
-          {previewVertices.length >= 3 && (
-            <div className="px-3 pb-3 pt-2 border-t border-dark-border shrink-0">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="ui-label">Breedte (cm)</span>
-                  <input
-                    type="number"
-                    className="ui-input text-xs py-1"
-                    value={previewWidth}
-                    min={50}
-                    max={5000}
-                    onChange={e => setPreviewWidth(Number(e.target.value))}
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="ui-label">Diepte (cm)</span>
-                  <input
-                    type="number"
-                    className="ui-input text-xs py-1"
-                    value={previewDepth}
-                    min={50}
-                    max={5000}
-                    onChange={e => setPreviewDepth(Number(e.target.value))}
-                  />
-                </label>
               </div>
             </div>
-          )}
+          ) : null}
 
-          {previewVertices.length < 3 && (
-            <div className="px-3 pb-3 pt-2 border-t border-dark-border shrink-0">
-              <p className="text-[10px] text-light/30 text-center leading-relaxed">
-                Kies een kamer in de Bouwer
-              </p>
+          {selectedRoom ? (
+            <div className="px-3 py-2 border-t border-dark-border shrink-0">
+              <button
+                type="button"
+                onClick={rotateRoom90}
+                className="flex items-center gap-1.5 text-xs text-light/50 hover:text-light border border-dark-border hover:border-accent/40 rounded-lg px-3 py-1.5 transition-all duration-150"
+              >
+                <RotateCw size={12} />
+                Roteer 90°
+              </button>
             </div>
-          )}
+          ) : null}
+
         </div>
 
         {/* Column 3 — Builder panel (280px) */}

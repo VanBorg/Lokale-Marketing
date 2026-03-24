@@ -185,6 +185,8 @@ export const useBlueprintStore = create<BlueprintState>()(
             lockedWalls: meta.lockedWalls ?? [],
             roofType: meta.roofType ?? 'plat',
             roofPeakHeight: meta.roofPeakHeight,
+            wallHeights: meta.wallHeights,
+            ceiling: meta.ceiling,
           }
           state.roomOrder.push(id)
         })

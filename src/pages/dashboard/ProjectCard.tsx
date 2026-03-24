@@ -1,14 +1,7 @@
 import { MapPin, Calendar, Star } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import type { Project, ProjectStatus } from '../../lib/database.types';
-
-const statusBadgeClass: Record<ProjectStatus, string> = {
-  Concept: 'ui-badge--neutral',
-  'Offerte Verstuurd': 'ui-badge--accent',
-  Akkoord: 'ui-badge--success',
-  'In Uitvoering': 'ui-badge--warning',
-  Afgerond: 'ui-badge--muted',
-};
+import { projectStatusBadgeClass } from '../../lib/projectStatusUi';
 
 const statusLabel: Record<ProjectStatus, string> = {
   Concept: 'Concept',
@@ -59,7 +52,7 @@ export default function ProjectCard({ project, onClick, onToggleFavorite }: Proj
 
       <div className="flex items-start justify-between gap-3 pr-9">
         <h3 className="ui-project-card__title">{project.name}</h3>
-        <span className={`ui-badge shrink-0 ${statusBadgeClass[project.status]}`}>
+        <span className={`ui-badge shrink-0 ${projectStatusBadgeClass[project.status]}`}>
           {statusLabel[project.status]}
         </span>
       </div>

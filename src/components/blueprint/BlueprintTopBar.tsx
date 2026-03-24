@@ -6,6 +6,7 @@ import { Button, Badge } from '../ui'
 import KlantgegevensModal from './KlantgegevensModal'
 import ShortcutsModal from './ShortcutsModal'
 import type { Project } from '../../lib/database.types'
+import { projectStatusBadgeClass } from '../../lib/projectStatusUi'
 
 interface BlueprintTopBarProps {
   project: Project
@@ -62,7 +63,7 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
         <span className="text-sm font-bold text-light truncate max-w-[160px] shrink-0">
           {project.name}
         </span>
-        <Badge className="text-[10px] px-2 py-0.5 bg-accent/15 text-accent border border-accent/30 shrink-0">
+        <Badge className={`text-[10px] px-2 py-0.5 shrink-0 ${projectStatusBadgeClass[project.status]}`}>
           {project.status}
         </Badge>
 

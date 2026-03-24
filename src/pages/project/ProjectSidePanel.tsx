@@ -4,15 +4,8 @@ import { ArrowLeft, RotateCcw, Pencil, Check } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import type { Project, ProjectStatus } from '../../lib/database.types';
-
-const statusStyles: Record<ProjectStatus, string> = {
-  Concept: 'bg-light/10 text-light/60',
-  'Offerte Verstuurd': 'bg-accent/15 text-accent',
-  Akkoord: 'bg-green-500/15 text-green-400',
-  'In Uitvoering': 'bg-amber-500/15 text-amber-400',
-  Afgerond: 'bg-light/5 text-light/40',
-};
+import type { Project } from '../../lib/database.types';
+import { projectStatusBadgeClass } from '../../lib/projectStatusUi';
 
 const TABS = [
   { value: 'blauwdruk', label: 'Blauwdruk' },
@@ -89,7 +82,7 @@ export default function ProjectSidePanel({
       <div className="px-4 py-4 border-b border-dark-border space-y-3">
         <div>
           <h1 className="text-base font-bold text-light leading-tight">{project.name}</h1>
-          <span className={`inline-block mt-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${statusStyles[project.status]}`}>
+          <span className={`ui-badge mt-1.5 text-xs ${projectStatusBadgeClass[project.status]}`}>
             {project.status}
           </span>
         </div>

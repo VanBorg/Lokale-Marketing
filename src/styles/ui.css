@@ -76,12 +76,149 @@
   @apply flex min-w-0 flex-1 flex-wrap items-stretch justify-start gap-2 lg:flex-nowrap lg:justify-end;
 }
 
+.ui-projects-summary__search {
+  @apply flex w-full min-w-0 flex-col gap-1.5 border-t border-accent/25 pt-4;
+}
+
+.ui-projects-search {
+  @apply relative flex w-full min-w-0 items-center;
+}
+
+.ui-projects-search__icon {
+  @apply pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-accent/70;
+}
+
+.ui-projects-search__clear {
+  @apply absolute right-2 top-1/2 z-[1] -translate-y-1/2 rounded-md p-1.5 text-light/40 transition-colors duration-200 hover:bg-dark-hover hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50;
+}
+
 .ui-stat-chip {
   @apply min-w-[4.5rem] flex-1 rounded-lg border border-accent/35 bg-accent/[0.06] px-3 py-2 transition-all duration-200 hover:border-accent/55 hover:bg-accent/10 hover:shadow-sm sm:min-w-[5.5rem] sm:flex-none sm:px-3.5 sm:py-2.5 lg:max-w-[6.5rem] lg:flex-1;
 }
 
 .ui-stat-chip.ui-stat-chip--primary {
   @apply border-accent/50 bg-accent/10 shadow-sm ring-1 ring-accent/20 hover:border-accent/70 hover:bg-accent/[0.14];
+}
+
+/* Stat chips — projectstatus (aligned with .ui-badge--status-* on project cards) */
+.ui-stat-chip.ui-stat-chip--status-afgerond {
+  @apply border-amber-400/45 bg-amber-400/10 hover:border-amber-400/60 hover:bg-amber-400/[0.14] hover:shadow-sm;
+}
+
+.ui-stat-chip.ui-stat-chip--status-afgerond .ui-stat-chip__value {
+  @apply text-amber-300;
+}
+
+.ui-stat-chip.ui-stat-chip--status-afgerond .ui-stat-chip__label {
+  @apply text-amber-300/80;
+}
+
+.ui-stat-chip.ui-stat-chip--status-akkoord {
+  @apply border-green-500/35 bg-green-500/10 hover:border-green-500/50 hover:bg-green-500/[0.14] hover:shadow-sm;
+}
+
+.ui-stat-chip.ui-stat-chip--status-akkoord .ui-stat-chip__value {
+  @apply text-green-400;
+}
+
+.ui-stat-chip.ui-stat-chip--status-akkoord .ui-stat-chip__label {
+  @apply text-green-400/80;
+}
+
+.ui-stat-chip.ui-stat-chip--status-offerte {
+  @apply border-orange-500/40 bg-orange-500/10 hover:border-orange-500/55 hover:bg-orange-500/[0.14] hover:shadow-sm;
+}
+
+.ui-stat-chip.ui-stat-chip--status-offerte .ui-stat-chip__value {
+  @apply text-orange-400;
+}
+
+.ui-stat-chip.ui-stat-chip--status-offerte .ui-stat-chip__label {
+  @apply text-orange-400/80;
+}
+
+.ui-stat-chip.ui-stat-chip--status-uitvoering {
+  @apply border-sky-500/40 bg-sky-500/10 hover:border-sky-500/55 hover:bg-sky-500/[0.14] hover:shadow-sm;
+}
+
+.ui-stat-chip.ui-stat-chip--status-uitvoering .ui-stat-chip__value {
+  @apply text-sky-400;
+}
+
+.ui-stat-chip.ui-stat-chip--status-uitvoering .ui-stat-chip__label {
+  @apply text-sky-400/80;
+}
+
+.ui-stat-chip.ui-stat-chip--status-concept {
+  @apply border-red-500/40 bg-red-500/10 hover:border-red-500/55 hover:bg-red-500/[0.14] hover:shadow-sm;
+}
+
+.ui-stat-chip.ui-stat-chip--status-concept .ui-stat-chip__value {
+  @apply text-red-400;
+}
+
+.ui-stat-chip.ui-stat-chip--status-concept .ui-stat-chip__label {
+  @apply text-red-400/80;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-afgerond {
+  @apply border-amber-400/70 bg-amber-50 hover:border-amber-500 hover:bg-amber-100/90;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-afgerond .ui-stat-chip__value {
+  @apply text-amber-900;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-afgerond .ui-stat-chip__label {
+  @apply text-amber-900/85;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-akkoord {
+  @apply border-emerald-300/80 bg-emerald-50 hover:border-emerald-400 hover:bg-emerald-100/80;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-akkoord .ui-stat-chip__value {
+  @apply text-emerald-800;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-akkoord .ui-stat-chip__label {
+  @apply text-emerald-800/85;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-offerte {
+  @apply border-orange-300/90 bg-orange-50 hover:border-orange-400 hover:bg-orange-100/80;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-offerte .ui-stat-chip__value {
+  @apply text-orange-900;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-offerte .ui-stat-chip__label {
+  @apply text-orange-900/85;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-uitvoering {
+  @apply border-sky-300/90 bg-sky-50 hover:border-sky-400 hover:bg-sky-100/80;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-uitvoering .ui-stat-chip__value {
+  @apply text-sky-900;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-uitvoering .ui-stat-chip__label {
+  @apply text-sky-900/85;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-concept {
+  @apply border-red-300/90 bg-red-50 hover:border-red-400 hover:bg-red-100/80;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-concept .ui-stat-chip__value {
+  @apply text-red-900;
+}
+
+.theme-light .ui-stat-chip.ui-stat-chip--status-concept .ui-stat-chip__label {
+  @apply text-red-900/85;
 }
 
 .ui-stat-chip__value {
@@ -180,6 +317,47 @@
 
 .theme-light .ui-badge--muted {
   @apply bg-neutral-100 text-neutral-600;
+}
+
+/* Project status tags — goud / groen / oranje / blauw / rood */
+.ui-badge--status-afgerond {
+  @apply bg-amber-500/15 text-amber-300;
+}
+
+.ui-badge--status-akkoord {
+  @apply bg-green-500/15 text-green-400;
+}
+
+.ui-badge--status-offerte {
+  @apply bg-orange-500/15 text-orange-400;
+}
+
+.ui-badge--status-uitvoering {
+  @apply bg-sky-500/15 text-sky-400;
+}
+
+.ui-badge--status-concept {
+  @apply bg-red-500/15 text-red-400;
+}
+
+.theme-light .ui-badge--status-afgerond {
+  @apply bg-amber-100 text-amber-900 border border-amber-300/80;
+}
+
+.theme-light .ui-badge--status-akkoord {
+  @apply bg-emerald-100 text-emerald-900;
+}
+
+.theme-light .ui-badge--status-offerte {
+  @apply bg-orange-100 text-orange-950 border border-orange-300/80;
+}
+
+.theme-light .ui-badge--status-uitvoering {
+  @apply bg-sky-100 text-sky-950 border border-sky-300/80;
+}
+
+.theme-light .ui-badge--status-concept {
+  @apply bg-red-100 text-red-950 border border-red-300/80;
 }
 
 /* --- App shell / layout --- */

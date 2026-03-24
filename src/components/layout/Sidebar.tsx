@@ -1,17 +1,11 @@
 import { Link, useMatch, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { useProjects } from '../../hooks/useProjects';
 import type { Project, ProjectStatus } from '../../lib/database.types';
+import { projectStatusSidebarDotClass } from '../../lib/projectStatusUi';
 
 function statusDotClass(status: ProjectStatus): string {
-  const map: Record<ProjectStatus, string> = {
-    Concept: 'bg-light/30',
-    'Offerte Verstuurd': 'bg-accent',
-    Akkoord: 'bg-green-400',
-    'In Uitvoering': 'bg-amber-400',
-    Afgerond: 'bg-light/20',
-  };
-  return map[status];
+  return projectStatusSidebarDotClass[status];
 }
 
 function sortByUpdatedDesc(a: Project, b: Project) {
@@ -76,7 +70,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const { projects, loading } = useProjects();
   const match = useMatch('/project/:id');
   const activeId = match?.params?.id;
-  const isDashboard = !!useMatch('/');
+  const isDashboardRoute = !!useMatch('/dashboard');
   const navigate = useNavigate();
 
   const favorites = projects.filter(p => p.is_favorite).sort(sortByUpdatedDesc);
@@ -90,15 +84,28 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     <aside
       className={`ui-sidebar ${isOpen ? 'ui-sidebar--open' : 'ui-sidebar--collapsed'}`}
     >
-      {/* Dashboard: no button. All other pages: back-to-dashboard navigation. */}
-      {!isDashboard && (
+      {/* Dashboard: collapse/expand sidebar. Other routes: back to dashboard. */}
+      {isDashboardRoute ? (
         <button
           type="button"
-          onClick={() => navigate('/')}
-          title="Terug naar Dashboard"
+          onClick={onToggle}
+          title={isOpen ? 'Zijbalk inklappen' : 'Zijbalk uitklappen'}
+          aria-expanded={isOpen}
+          aria-label={isOpen ? 'Zijbalk inklappen' : 'Zijbalk uitklappen'}
           className="ui-sidebar-toggle"
         >
+          {isOpen ? <ArrowLeft size={16} /> : <ArrowRight size={16} />}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => navigate('/dashboard')}
+          title="Terug naar Dashboard"
+          aria-label="Terug naar Dashboard"
+          className={`ui-sidebar-toggle ${isOpen ? 'justify-start gap-2 px-3' : ''}`}
+        >
           <ArrowLeft size={16} />
+          {isOpen ? <span className="text-sm font-medium text-light/70">Terug</span> : null}
         </button>
       )}
 

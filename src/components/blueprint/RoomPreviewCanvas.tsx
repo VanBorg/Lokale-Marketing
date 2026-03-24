@@ -13,9 +13,17 @@ interface RoomPreviewCanvasProps {
   height?: number
   room?: Room | null
   onToggleWallLock?: (wallIndex: number) => void
+  /** With `onSelectWall`, wall highlight is controlled by the parent (wall list ↔ canvas). */
+  selectedWallIndex?: number | null
+  onSelectWall?: (wallIndex: number | null) => void
+  /** Hide the inline length/lock block under the stage when the parent shows a wall list. */
+  hideWallDetailPanel?: boolean
+  /** Wall index highlighted from the list (hover); thicker inner stroke on the map. */
+  listHoverWallIndex?: number | null
 }
 
-const PADDING = 20
+/** Extra inset so the room polygon does not sit flush against the preview edges (map size unchanged). */
+const PADDING = 40
 const ACCENT = '#35B4D3'
 const LOCKED_COLOUR = '#f59e0b'
 
@@ -27,10 +35,17 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   height = 200,
   room,
   onToggleWallLock,
+  selectedWallIndex: selectedWallIndexProp,
+  onSelectWall,
+  hideWallDetailPanel = false,
+  listHoverWallIndex = null,
 }: RoomPreviewCanvasProps) {
   const [localVerts, setLocalVerts] = useState<Point[]>(vertices)
-  const [selectedWall, setSelectedWall] = useState<number | null>(null)
+  const [internalWall, setInternalWall] = useState<number | null>(null)
   const [editingLength, setEditingLength] = useState<string>('')
+
+  const controlled = onSelectWall != null
+  const selectedWall = controlled ? (selectedWallIndexProp ?? null) : internalWall
 
   const stageRef = useRef<Konva.Stage>(null)
 
@@ -40,7 +55,6 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
 
   useEffect(() => {
     setLocalVerts(vertices)
-    setSelectedWall(null)
   }, [vertices])
 
   if (!vertices || vertices.length < 3) {
@@ -81,6 +95,31 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   const screenVerts = localVerts.map(toScreen)
   const flatPoints  = screenVerts.flatMap(v => [v.x, v.y])
   const n = localVerts.length
+
+  /** Segment parallel to wall i, offset toward polygon interior (screen px). */
+  const innerWallPoints = (i: number, insetPx: number): [number, number, number, number] => {
+    const sv = screenVerts[i]
+    const next = screenVerts[(i + 1) % n]
+    const cx = screenVerts.reduce((s, v) => s + v.x, 0) / n
+    const cy = screenVerts.reduce((s, v) => s + v.y, 0) / n
+    const mid = { x: (sv.x + next.x) / 2, y: (sv.y + next.y) / 2 }
+    const dx = next.x - sv.x
+    const dy = next.y - sv.y
+    const len = Math.hypot(dx, dy) || 1
+    let nx = -dy / len
+    let ny = dx / len
+    const toC = { x: cx - mid.x, y: cy - mid.y }
+    if (nx * toC.x + ny * toC.y < 0) {
+      nx = -nx
+      ny = -ny
+    }
+    return [
+      sv.x + nx * insetPx,
+      sv.y + ny * insetPx,
+      next.x + nx * insetPx,
+      next.y + ny * insetPx,
+    ]
+  }
 
   // ── Corner drag — free angle / skew ─────────────────────────────────────
 
@@ -164,8 +203,13 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
 
   const handleWallClick = (i: number) => {
     const isAlreadySelected = selectedWall === i
-    setSelectedWall(isAlreadySelected ? null : i)
-    if (!isAlreadySelected) {
+    const next = isAlreadySelected ? null : i
+    if (controlled) {
+      onSelectWall?.(next)
+    } else {
+      setInternalWall(next)
+    }
+    if (next !== null && !hideWallDetailPanel) {
       const a = localVerts[i]
       const b = localVerts[(i + 1) % n]
       setEditingLength(String(Math.round(wallLength(a, b))))
@@ -173,7 +217,7 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   }
 
   const handleLengthBlur = () => {
-    if (selectedWall === null) return
+    if (selectedWall === null || hideWallDetailPanel) return
     const len = parseFloat(editingLength)
     if (!isNaN(len) && len > 0) {
       const newVerts = applyWallLength(localVerts, selectedWall, len)
@@ -198,19 +242,39 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
             listening={false}
           />
 
-          {/* Clickable wall hit zones */}
+          {/* Clickable wall hit zones — outer stroke only for locked; selection = inner line below */}
           {screenVerts.map((sv, i) => {
             const next = screenVerts[(i + 1) % n]
-            const locked   = isWallLocked(i)
-            const selected = selectedWall === i
+            const locked = isWallLocked(i)
             return (
               <Line
                 key={`wall-hit-${i}`}
                 points={[sv.x, sv.y, next.x, next.y]}
-                stroke={selected ? ACCENT : locked ? LOCKED_COLOUR : 'transparent'}
-                strokeWidth={selected ? 3 : locked ? 2 : 1}
+                stroke={locked ? LOCKED_COLOUR : 'transparent'}
+                strokeWidth={locked ? 1.5 : 1}
                 hitStrokeWidth={14}
                 onClick={() => handleWallClick(i)}
+              />
+            )
+          })}
+
+          {/* Inner wall highlight (list hover / click) — thin line inside the room; thicker on hover */}
+          {screenVerts.map((sv, i) => {
+            const isListHover = listHoverWallIndex === i
+            const isSelected = selectedWall === i
+            if (!isListHover && !isSelected) return null
+            const inset = isListHover ? 5 : 4
+            const [x1, y1, x2, y2] = innerWallPoints(i, inset)
+            const thick = isListHover
+            return (
+              <Line
+                key={`inner-hl-${i}`}
+                points={[x1, y1, x2, y2]}
+                stroke={ACCENT}
+                strokeWidth={thick ? 2.75 : 1.35}
+                opacity={thick ? 1 : 0.92}
+                lineCap="round"
+                listening={false}
               />
             )
           })}
@@ -295,15 +359,15 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
         </Layer>
       </Stage>
 
-      {/* Wall control panel */}
-      {selectedWall !== null && (
+      {/* Wall control panel — hidden when parent shows the unified wall list */}
+      {selectedWall !== null && !hideWallDetailPanel && (
         <div className="p-2 border-t border-dark-border space-y-2 bg-dark">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold text-light/50 uppercase tracking-wider">
               Muur {selectedWall + 1}
             </span>
             <button
-              onClick={() => setSelectedWall(null)}
+              onClick={() => (controlled ? onSelectWall?.(null) : setInternalWall(null))}
               className="text-light/30 hover:text-light text-xs leading-none"
             >
               ✕
