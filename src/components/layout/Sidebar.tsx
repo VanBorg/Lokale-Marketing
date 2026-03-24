@@ -1,5 +1,5 @@
-import { Link, useMatch } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Link, useMatch, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { useProjects } from '../../hooks/useProjects';
 import type { Project, ProjectStatus } from '../../lib/database.types';
 
@@ -76,6 +76,8 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const { projects, loading } = useProjects();
   const match = useMatch('/project/:id');
   const activeId = match?.params?.id;
+  const isDashboard = !!useMatch('/');
+  const navigate = useNavigate();
 
   const favorites = projects.filter(p => p.is_favorite).sort(sortByUpdatedDesc);
   const recent = projects
@@ -88,14 +90,17 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
     <aside
       className={`ui-sidebar ${isOpen ? 'ui-sidebar--open' : 'ui-sidebar--collapsed'}`}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        title={isOpen ? 'Sidebar verbergen' : 'Sidebar tonen'}
-        className="ui-sidebar-toggle"
-      >
-        {isOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-      </button>
+      {/* Dashboard: no button. All other pages: back-to-dashboard navigation. */}
+      {!isDashboard && (
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          title="Terug naar Dashboard"
+          className="ui-sidebar-toggle"
+        >
+          <ArrowLeft size={16} />
+        </button>
+      )}
 
       {isOpen && (
         <Link
