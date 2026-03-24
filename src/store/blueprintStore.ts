@@ -92,13 +92,49 @@ interface BlueprintState extends BlueprintDoc {
   setActiveRoomDraft: (draft: Partial<Room> | null) => void
   setSnapGuides: (guides: SnapGuide[]) => void
   setCanvasSize: (size: { width: number; height: number }) => void
+  /** World (0,0) centred; scale fits ~12 minor squares vertically (same as S / project open). */
+  recenterViewportToOrigin: () => void
 }
 
 // ─── Default values ────────────────────────────────────────────────────────
 
 const DEFAULT_FILL = 'rgba(53,180,211,0.08)'
 const DEFAULT_WALL_HEIGHT = 250
-const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, scale: 1 }
+
+/** Same as `MINOR_GRID` in BlueprintCanvas — one minor square = 2 m in world space (cm). */
+export const BLUEPRINT_MINOR_GRID_CM = 200
+
+/**
+ * Vertically: aim for this many minor grid squares visible (10–14 ⇒ 20–28 m).
+ * 12 ⇒ 24 m visible height — middle of the range.
+ */
+export const TARGET_VISIBLE_MINOR_SQUARES_VERTICAL = 12
+
+const TARGET_VISIBLE_WORLD_HEIGHT_CM =
+  TARGET_VISIBLE_MINOR_SQUARES_VERTICAL * BLUEPRINT_MINOR_GRID_CM
+
+const VIEW_SCALE_MIN = 0.1
+const VIEW_SCALE_MAX = 8
+
+function clampViewScale(n: number): number {
+  return Math.min(VIEW_SCALE_MAX, Math.max(VIEW_SCALE_MIN, n))
+}
+
+/**
+ * Scale so that the canvas shows ~`TARGET_VISIBLE_MINOR_SQUARES_VERTICAL` minor squares
+ * top-to-bottom (world Y), i.e. visible height ≈ 20–28 m at 10–14 squares.
+ * `visibleWorldHeight ≈ canvasHeightPx / scale`.
+ */
+export function getDefaultBlueprintScaleForCanvasHeight(heightPx: number): number {
+  if (heightPx <= 0) return clampViewScale(600 / TARGET_VISIBLE_WORLD_HEIGHT_CM)
+  return clampViewScale(heightPx / TARGET_VISIBLE_WORLD_HEIGHT_CM)
+}
+
+const DEFAULT_VIEWPORT: Viewport = {
+  x: 0,
+  y: 0,
+  scale: getDefaultBlueprintScaleForCanvasHeight(600),
+}
 
 const emptyDoc = (): BlueprintDoc => ({
   rooms: {},
@@ -245,7 +281,8 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.selectedIds = []
           state.activeTool = 'select'
           state.drawingVertices = []
-          state.viewport = DEFAULT_VIEWPORT
+          // Viewport is owned by BlueprintCanvas (centre on world 0,0). Do not reset to 0,0 here —
+          // parent useEffect runs after child ResizeObserver and would wipe a correct centre.
           state.activeRoomDraft = null
           state.snapGuides = []
         })
@@ -303,6 +340,16 @@ export const useBlueprintStore = create<BlueprintState>()(
 
       setCanvasSize: (size) => {
         set(state => { state.canvasSize = size })
+      },
+
+      recenterViewportToOrigin: () => {
+        set(state => {
+          const { width, height } = state.canvasSize
+          if (width <= 0 || height <= 0) return
+          state.viewport.x = width / 2
+          state.viewport.y = height / 2
+          state.viewport.scale = getDefaultBlueprintScaleForCanvasHeight(height)
+        })
       },
     })),
     {

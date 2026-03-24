@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from 'react'
+import { memo, useState, useEffect, useRef } from 'react'
 import { Stage, Layer, Line, Circle, Text } from 'react-konva'
 import type Konva from 'konva'
 import type { Point } from '../../utils/blueprintGeometry'
@@ -8,6 +8,7 @@ import { wallLength, wallAngle, innerAngle, formatLength, applyWallLength } from
 interface RoomPreviewCanvasProps {
   vertices: Point[]
   onChange?: (vertices: Point[]) => void
+  onDimensionChange?: (width: number, depth: number) => void
   width?: number
   height?: number
   room?: Room | null
@@ -15,13 +16,13 @@ interface RoomPreviewCanvasProps {
 }
 
 const PADDING = 20
-const VERTEX_RADIUS = 4
 const ACCENT = '#35B4D3'
 const LOCKED_COLOUR = '#f59e0b'
 
 const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   vertices,
   onChange,
+  onDimensionChange,
   width = 280,
   height = 200,
   room,
@@ -30,6 +31,12 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   const [localVerts, setLocalVerts] = useState<Point[]>(vertices)
   const [selectedWall, setSelectedWall] = useState<number | null>(null)
   const [editingLength, setEditingLength] = useState<string>('')
+
+  const stageRef = useRef<Konva.Stage>(null)
+
+  // These refs let drag callbacks always see current values without stale closures
+  const scaleRef       = useRef(1)
+  const localVertsRef  = useRef(localVerts)
 
   useEffect(() => {
     setLocalVerts(vertices)
@@ -65,26 +72,95 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   const offsetX = (width  - roomW * scale) / 2 - minX * scale
   const offsetY = (height - roomH * scale) / 2 - minY * scale
 
-  const toScreen = (p: Point) => ({
-    x: p.x * scale + offsetX,
-    y: p.y * scale + offsetY,
-  })
+  // Always-current values for drag callbacks
+  scaleRef.current      = scale
+  localVertsRef.current = localVerts
 
-  const toWorld = (sx: number, sy: number): Point => ({
-    x: (sx - offsetX) / scale,
-    y: (sy - offsetY) / scale,
-  })
+  const toScreen = (p: Point) => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY })
 
   const screenVerts = localVerts.map(toScreen)
   const flatPoints  = screenVerts.flatMap(v => [v.x, v.y])
   const n = localVerts.length
 
-  const handleDragEnd = (index: number, e: Konva.KonvaEventObject<DragEvent>) => {
-    const worldPt = toWorld(e.target.x(), e.target.y())
-    const updated = localVerts.map((v, i) => (i === index ? worldPt : v))
-    setLocalVerts(updated)
-    onChange?.(updated)
+  // ── Corner drag — free angle / skew ─────────────────────────────────────
+
+  const startCornerDrag = (e: Konva.KonvaEventObject<MouseEvent>, cornerIdx: number) => {
+    e.evt.preventDefault()
+    e.evt.stopPropagation()
+
+    const origVerts = localVertsRef.current.map(v => ({ ...v }))
+    const startClientX = e.evt.clientX
+    const startClientY = e.evt.clientY
+
+    const onMove = (me: MouseEvent) => {
+      const deltaWorldX = (me.clientX - startClientX) / scaleRef.current
+      const deltaWorldY = (me.clientY - startClientY) / scaleRef.current
+      const newVerts = origVerts.map((v, i) =>
+        i === cornerIdx ? { x: v.x + deltaWorldX, y: v.y + deltaWorldY } : { ...v }
+      )
+      setLocalVerts(newVerts)
+      onChange?.(newVerts)
+    }
+
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
   }
+
+  // ── Mid-wall drag — push / pull to resize ────────────────────────────────
+
+  const startWallDrag = (e: Konva.KonvaEventObject<MouseEvent>, wallIdx: number) => {
+    e.evt.preventDefault()
+    e.evt.stopPropagation()
+
+    const vA = localVerts[wallIdx]
+    const vB = localVerts[(wallIdx + 1) % n]
+    const isHorizontal = Math.abs(vA.y - vB.y) < 1
+    const wallCoord = isHorizontal ? vA.y : vA.x
+
+    const origVerts = localVertsRef.current.map(v => ({ ...v }))
+    const startClientX = e.evt.clientX
+    const startClientY = e.evt.clientY
+
+    const onMove = (me: MouseEvent) => {
+      let newVerts: Point[]
+      if (isHorizontal) {
+        const deltaWorldY = (me.clientY - startClientY) / scaleRef.current
+        newVerts = origVerts.map(v =>
+          Math.abs(v.y - wallCoord) < 1 ? { ...v, y: v.y + deltaWorldY } : { ...v }
+        )
+      } else {
+        const deltaWorldX = (me.clientX - startClientX) / scaleRef.current
+        newVerts = origVerts.map(v =>
+          Math.abs(v.x - wallCoord) < 1 ? { ...v, x: v.x + deltaWorldX } : { ...v }
+        )
+      }
+      setLocalVerts(newVerts)
+      onChange?.(newVerts)
+    }
+
+    const onUp = () => {
+      // Snap final dimensions to 5 cm and notify parent
+      const cur = localVertsRef.current
+      const cxs = cur.map(v => v.x)
+      const cys = cur.map(v => v.y)
+      const newW = Math.max(50, Math.round((Math.max(...cxs) - Math.min(...cxs)) / 5) * 5)
+      const newD = Math.max(50, Math.round((Math.max(...cys) - Math.min(...cys)) / 5) * 5)
+      onDimensionChange?.(newW, newD)
+
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  // ── Wall click — select for length edit ──────────────────────────────────
 
   const handleWallClick = (i: number) => {
     const isAlreadySelected = selectedWall === i
@@ -110,7 +186,7 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
 
   return (
     <div className="rounded-lg border border-dark-border overflow-hidden bg-dark">
-      <Stage width={width} height={height}>
+      <Stage ref={stageRef} width={width} height={height}>
         <Layer>
           {/* Room polygon fill + outline */}
           <Line
@@ -186,18 +262,34 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
             )
           })}
 
-          {/* Draggable vertex handles */}
-          {screenVerts.map((sv, i) => (
+          {/* Mid-wall handles — push/pull for width/depth resize */}
+          {onChange && screenVerts.map((sv, i) => {
+            const next = screenVerts[(i + 1) % n]
+            return (
+              <Circle
+                key={`mid-${i}`}
+                x={(sv.x + next.x) / 2}
+                y={(sv.y + next.y) / 2}
+                radius={4}
+                fill="#0c0c12"
+                stroke="#00cece"
+                strokeWidth={1.5}
+                onMouseDown={e => startWallDrag(e, i)}
+              />
+            )
+          })}
+
+          {/* Corner handles — free angle / skew */}
+          {onChange && screenVerts.map((sv, i) => (
             <Circle
-              key={`v-${i}`}
+              key={`corner-${i}`}
               x={sv.x}
               y={sv.y}
-              radius={VERTEX_RADIUS}
-              fill={ACCENT}
-              stroke="#ffffff"
-              strokeWidth={1.5}
-              draggable={!!onChange}
-              onDragEnd={e => handleDragEnd(i, e)}
+              radius={6}
+              fill="#0c0c12"
+              stroke="#00cece"
+              strokeWidth={2}
+              onMouseDown={e => startCornerDrag(e, i)}
             />
           ))}
         </Layer>

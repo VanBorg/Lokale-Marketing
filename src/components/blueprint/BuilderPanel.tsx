@@ -29,12 +29,22 @@ const ROOF_OPTIONS: { id: RoofType; label: string; icon: string }[] = [
 interface StepKamerProps {
   onNext: (roomId: string) => void
   onPreviewChange?: (vertices: Point[]) => void
+  controlledWidth?: number
+  controlledDepth?: number
+  onWidthChange?: (w: number) => void
+  onDepthChange?: (d: number) => void
 }
 
-function StepKamer({ onNext, onPreviewChange }: StepKamerProps) {
+function StepKamer({ onNext, onPreviewChange, controlledWidth, controlledDepth, onWidthChange, onDepthChange }: StepKamerProps) {
   const [shape, setShape] = useState<ShapeType>('rechthoek')
-  const [roomWidth, setRoomWidth] = useState(400)
-  const [roomDepth, setRoomDepth] = useState(300)
+  const [localWidth, setLocalWidth]   = useState(controlledWidth ?? 400)
+  const [localDepth, setLocalDepth]   = useState(controlledDepth ?? 300)
+
+  const roomWidth = controlledWidth ?? localWidth
+  const roomDepth = controlledDepth ?? localDepth
+
+  const setRoomWidth = (w: number) => { setLocalWidth(w); onWidthChange?.(w) }
+  const setRoomDepth = (d: number) => { setLocalDepth(d); onDepthChange?.(d) }
   const [roomName, setRoomName] = useState('')
   const [wallHeight, setWallHeight] = useState(250)
   const [roofType, setRoofType] = useState<RoofType>('plat')
@@ -348,9 +358,13 @@ function AccordionHeader({ index, label, isActive, isCompleted, isLocked, onClic
 
 interface BuilderPanelProps {
   onPreviewChange?: (vertices: Point[]) => void
+  previewWidth?: number
+  previewDepth?: number
+  onWidthChange?: (w: number) => void
+  onDepthChange?: (d: number) => void
 }
 
-export default function BuilderPanel({ onPreviewChange }: BuilderPanelProps) {
+export default function BuilderPanel({ onPreviewChange, previewWidth, previewDepth, onWidthChange, onDepthChange }: BuilderPanelProps) {
   const [activeStep, setActiveStep] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
   const [lastRoomId, setLastRoomId] = useState<string | null>(null)
@@ -409,7 +423,14 @@ export default function BuilderPanel({ onPreviewChange }: BuilderPanelProps) {
             >
               <div className="px-3 pb-3 pt-1.5">
                 {index === 0 && (
-                  <StepKamer onNext={handleStepKamerNext} onPreviewChange={onPreviewChange} />
+                  <StepKamer
+                    onNext={handleStepKamerNext}
+                    onPreviewChange={onPreviewChange}
+                    controlledWidth={previewWidth}
+                    controlledDepth={previewDepth}
+                    onWidthChange={onWidthChange}
+                    onDepthChange={onDepthChange}
+                  />
                 )}
                 {index === 1 && <StepElementen />}
                 {index === 2 && (

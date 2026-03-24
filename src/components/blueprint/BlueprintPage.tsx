@@ -27,6 +27,8 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   useBlueprintKeyboard()
 
   const [previewVertices, setPreviewVertices] = useState<Point[]>([])
+  const [previewWidth, setPreviewWidth]       = useState(400)
+  const [previewDepth, setPreviewDepth]       = useState(300)
 
   const selectedIds    = useSelectedIds()
   const selectedRoomId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -82,12 +84,14 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
         <div className="w-[280px] shrink-0 border-l border-dark-border bg-dark flex flex-col">
           <div className="px-3 py-2 border-b border-dark-border">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40">
-              Voorvertoning
+              Kamer
             </span>
           </div>
           <div className="flex-1 flex items-center justify-center p-3">
             <RoomPreviewCanvas
               vertices={previewVertices}
+              onChange={setPreviewVertices}
+              onDimensionChange={(w, d) => { setPreviewWidth(w); setPreviewDepth(d) }}
               width={252}
               height={252}
               room={selectedRoom}
@@ -97,19 +101,52 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
               }
             />
           </div>
-          <div className="px-3 pb-3 pt-2 border-t border-dark-border">
-            <p className="text-[10px] text-light/30 text-center leading-relaxed">
-              {previewVertices.length >= 3
-                ? 'Pas maten aan in de Bouwer'
-                : 'Kies een kamer in de Bouwer'
-              }
-            </p>
-          </div>
+          {previewVertices.length >= 3 && (
+            <div className="px-3 pb-3 pt-2 border-t border-dark-border">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="ui-label">Breedte (cm)</span>
+                  <input
+                    type="number"
+                    className="ui-input text-xs py-1"
+                    value={previewWidth}
+                    min={50}
+                    max={5000}
+                    onChange={e => setPreviewWidth(Number(e.target.value))}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="ui-label">Diepte (cm)</span>
+                  <input
+                    type="number"
+                    className="ui-input text-xs py-1"
+                    value={previewDepth}
+                    min={50}
+                    max={5000}
+                    onChange={e => setPreviewDepth(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+          {previewVertices.length < 3 && (
+            <div className="px-3 pb-3 pt-2 border-t border-dark-border">
+              <p className="text-[10px] text-light/30 text-center leading-relaxed">
+                Kies een kamer in de Bouwer
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Column 3 — Builder panel (280px) */}
         <div className="w-[280px] shrink-0 border-l border-dark-border overflow-y-auto">
-          <BuilderPanel onPreviewChange={setPreviewVertices} />
+          <BuilderPanel
+            onPreviewChange={setPreviewVertices}
+            previewWidth={previewWidth}
+            previewDepth={previewDepth}
+            onWidthChange={setPreviewWidth}
+            onDepthChange={setPreviewDepth}
+          />
         </div>
 
       </div>

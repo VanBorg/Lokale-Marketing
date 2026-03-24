@@ -54,26 +54,44 @@ export function useBlueprintKeyboard() {
         return
       }
 
-      // Zoom in
+      // Zoom in / out — keep world point under canvas centre fixed (same as wheel zoom)
       if (e.key === '+' || e.key === '=') {
-        const { viewport } = store
-        store.setViewport({ scale: Math.min(MAX_SCALE, viewport.scale + ZOOM_STEP) })
+        const { viewport, canvasSize } = store
+        const cx = canvasSize.width / 2
+        const cy = canvasSize.height / 2
+        const oldScale = viewport.scale
+        const newScale = Math.min(MAX_SCALE, oldScale + ZOOM_STEP)
+        const worldX = (cx - viewport.x) / oldScale
+        const worldY = (cy - viewport.y) / oldScale
+        store.setViewport({
+          scale: newScale,
+          x: cx - worldX * newScale,
+          y: cy - worldY * newScale,
+        })
         return
       }
 
-      // Zoom out
       if (e.key === '-') {
-        const { viewport } = store
-        store.setViewport({ scale: Math.max(MIN_SCALE, viewport.scale - ZOOM_STEP) })
+        const { viewport, canvasSize } = store
+        const cx = canvasSize.width / 2
+        const cy = canvasSize.height / 2
+        const oldScale = viewport.scale
+        const newScale = Math.max(MIN_SCALE, oldScale - ZOOM_STEP)
+        const worldX = (cx - viewport.x) / oldScale
+        const worldY = (cy - viewport.y) / oldScale
+        store.setViewport({
+          scale: newScale,
+          x: cx - worldX * newScale,
+          y: cy - worldY * newScale,
+        })
         return
       }
 
-      // S — reset viewport so world (0,0) is centred on screen at scale 1
+      // S — same as recenterViewportToOrigin (canvasSize from store)
       if (e.key === 's' || e.key === 'S') {
         if (!e.ctrlKey && !e.metaKey) {
           e.preventDefault()
-          const { canvasSize } = store
-          store.setViewport({ x: canvasSize.width / 2, y: canvasSize.height / 2, scale: 1 })
+          store.recenterViewportToOrigin()
           return
         }
       }
