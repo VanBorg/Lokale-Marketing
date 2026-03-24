@@ -83,6 +83,25 @@ export function snapPointToGrid(p: Point, gridSize: number = GRID_SIZE): Point {
   return { x: snapToGrid(p.x, gridSize), y: snapToGrid(p.y, gridSize) }
 }
 
+/** Indices van wanden waarvan de lengte vast moet blijven (muur-slot + lengte-slot). */
+export function mergeWallLockIndices(geometryLocked: number[], lengthLocked: number[]): number[] {
+  return Array.from(new Set([...geometryLocked, ...lengthLocked])).sort((a, b) => a - b)
+}
+
+/**
+ * Wand `k` verbindt hoek `k` met hoek `k+1`. Bij muur-geometrie-slot (lockedWalls) moeten die
+ * hoekpunten in de wereld vaststaan: hoek `i` is eindpunt van wand `i-1` en start van wand `i`.
+ */
+export function isVertexPinnedByGeometryWallLock(
+  vertexIndex: number,
+  n: number,
+  lockedWalls: readonly number[],
+): boolean {
+  if (n < 1 || lockedWalls.length === 0) return false
+  const set = new Set(lockedWalls)
+  return set.has((vertexIndex - 1 + n) % n) || set.has(vertexIndex)
+}
+
 interface SnapRoom {
   vertices: Point[]
 }
@@ -156,11 +175,21 @@ export function findEdgeSnap(
 
 // ─── Display formatting ───────────────────────────────────────────────────────
 
+/** Decimaal met komma (NL), geen punt als decimaalteken. */
+export function formatNlDecimal(n: number, fractionDigits: number): string {
+  return n.toFixed(fractionDigits).replace('.', ',')
+}
+
 export function formatLength(cm: number): string {
   if (cm >= 100) {
-    return `${(cm / 100).toFixed(2).replace('.', ',')} m`
+    return `${formatNlDecimal(cm / 100, 2)} m`
   }
   return `${Math.round(cm)} cm`
+}
+
+/** Plattegrond: lengte in meters, twee decimalen (bijv. "4,00"). */
+export function formatWallLengthMetersLabel(cm: number): string {
+  return formatNlDecimal(cm / 100, 2)
 }
 
 // ─── Wall length adjustment ────────────────────────────────────────────────────
@@ -184,6 +213,192 @@ export function applyWallLength(vertices: Point[], wallIndex: number, newLengthC
     y: a.y + dy * ratio,
   }
   return newVerts
+}
+
+/**
+ * Zelfde als `applyWallLength`, maar kiest welk eindpunt van de wand verschuift zodat
+ * vergrendelde buurmuren (die `v_k` of `v_{k+1}` delen) hun lengte behouden.
+ *
+ * - Wand `k-1` eindigt in `v_k`: die lengte mag niet wijzigen als die wand vergrendeld is
+ *   → gebruik kandidaat die `v_k` niet verplaatst (alleen `v_{k+1}` verschuiven).
+ * - Wand `k+1` start in `v_{k+1}`: idem → `v_{k+1}` niet verplaatsen (alleen `v_k` verschuiven).
+ * - Als beide buren vergrendeld zijn: geen exacte oplossing mogelijk; kleinste fout op locks.
+ */
+export function applyWallLengthRespectingLocks(
+  vertices: Point[],
+  wallIndex: number,
+  newLengthCm: number,
+  lockedWallIndices: number[],
+): Point[] {
+  const n = vertices.length
+  if (n < 2) return vertices
+
+  const locked = new Set(lockedWallIndices.filter(i => i >= 0 && i < n && i !== wallIndex))
+  if (locked.size === 0) {
+    return applyWallLength(vertices, wallIndex, newLengthCm)
+  }
+
+  const k = wallIndex
+  const a = vertices[k]
+  const b = vertices[(k + 1) % n]
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const curLen = Math.hypot(dx, dy)
+  if (curLen < 1e-9) return vertices
+
+  const ux = dx / curLen
+  const uy = dy / curLen
+
+  /** Alleen `v_{k+1}` verschuiven (zelfde als `applyWallLength`). */
+  const cand1 = vertices.map(v => ({ ...v }))
+  cand1[(k + 1) % n] = { x: a.x + ux * newLengthCm, y: a.y + uy * newLengthCm }
+
+  /** Alleen `v_k` verschuiven. */
+  const cand2 = vertices.map(v => ({ ...v }))
+  cand2[k] = { x: b.x - ux * newLengthCm, y: b.y - uy * newLengthCm }
+
+  const oldLens: number[] = []
+  for (let i = 0; i < n; i++) {
+    oldLens[i] = wallLength(vertices[i], vertices[(i + 1) % n])
+  }
+
+  const maxLockedErr = (verts: Point[]) => {
+    let m = 0
+    locked.forEach(i => {
+      const cur = wallLength(verts[i], verts[(i + 1) % n])
+      m = Math.max(m, Math.abs(cur - oldLens[i]))
+    })
+    return m
+  }
+
+  const wallPrev = (k - 1 + n) % n
+  const wallNext = (k + 1) % n
+  const lockPrev = locked.has(wallPrev)
+  const lockNext = locked.has(wallNext)
+
+  if (lockPrev && lockNext) {
+    const e1 = maxLockedErr(cand1)
+    const e2 = maxLockedErr(cand2)
+    return e1 <= e2 ? cand1 : cand2
+  }
+  if (lockPrev) {
+    return cand1
+  }
+  if (lockNext) {
+    return cand2
+  }
+  return cand1
+}
+
+/** Closest point on circle (centre `c`, radius `r`) to point `p`. */
+export function projectPointOntoCircle(p: Point, c: Point, r: number): Point {
+  const dx = p.x - c.x
+  const dy = p.y - c.y
+  const d = Math.sqrt(dx * dx + dy * dy)
+  if (d < 1e-12) {
+    return { x: c.x + r, y: c.y }
+  }
+  const s = r / d
+  return { x: c.x + dx * s, y: c.y + dy * s }
+}
+
+/**
+ * Intersection of two circles (0–2 points). Empty if no real intersection.
+ * Lengths are in the same units as coordinates (e.g. cm in blueprint space).
+ */
+export function intersectTwoCircles(c0: Point, r0: number, c1: Point, r1: number): Point[] {
+  const dx = c1.x - c0.x
+  const dy = c1.y - c0.y
+  const d = Math.sqrt(dx * dx + dy * dy)
+  if (d < 1e-10) return []
+  if (d > r0 + r1 + 1e-4) return []
+  if (d < Math.abs(r0 - r1) - 1e-4) return []
+  const a = (r0 * r0 - r1 * r1 + d * d) / (2 * d)
+  const hSq = r0 * r0 - a * a
+  if (hSq < -1e-6) return []
+  const h = Math.sqrt(Math.max(0, hSq))
+  const mx = c0.x + (dx * a) / d
+  const my = c0.y + (dy * a) / d
+  const rx = (-dy * h) / d
+  const ry = (dx * h) / d
+  return [
+    { x: mx + rx, y: my + ry },
+    { x: mx - rx, y: my - ry },
+  ]
+}
+
+/**
+ * Hoek `cornerIdx` slepen terwijl vergrendelde wanden hun lengte uit `lockedLengths` behouden.
+ * Wand i loopt van vertex i naar (i+1)%n. Alleen de twee wanden die in deze hoek samenkomen
+ * kunnen vergrendeld zijn.
+ */
+export function constrainCornerDragPoint(
+  naive: Point,
+  cornerIdx: number,
+  n: number,
+  fixedNeighborVerts: Point[],
+  isWallLocked: (wallIndex: number) => boolean,
+  lockedLengths: number[],
+): Point {
+  const k = cornerIdx
+  const prevWall = (k - 1 + n) % n
+  const wallK = k
+  const vPrev = fixedNeighborVerts[(k - 1 + n) % n]
+  const vNext = fixedNeighborVerts[(k + 1) % n]
+
+  const lockPrev = isWallLocked(prevWall)
+  const lockK = isWallLocked(wallK)
+
+  if (!lockPrev && !lockK) return naive
+
+  if (lockPrev && lockK) {
+    const Lp = lockedLengths[prevWall]
+    const Lk = lockedLengths[wallK]
+    const pts = intersectTwoCircles(vPrev, Lp, vNext, Lk)
+    if (pts.length >= 2) {
+      const d0 = (naive.x - pts[0].x) ** 2 + (naive.y - pts[0].y) ** 2
+      const d1 = (naive.x - pts[1].x) ** 2 + (naive.y - pts[1].y) ** 2
+      return d0 <= d1 ? pts[0] : pts[1]
+    }
+    if (pts.length === 1) return pts[0]
+    return projectPointOntoCircle(naive, vPrev, Lp)
+  }
+
+  if (lockPrev) {
+    return projectPointOntoCircle(naive, vPrev, lockedLengths[prevWall])
+  }
+  return projectPointOntoCircle(naive, vNext, lockedLengths[wallK])
+}
+
+/**
+ * Na een ruwe vertexbeweging (bijv. hele rij bij wand-slepen): iteratief wandlengtes
+ * terugzetten voor vergrendelde wanden. `lockedLengths[i]` is de doellengte als wand i
+ * vergrendeld is (anders ongebruikt).
+ */
+export function restoreLockedWallLengths(
+  vertices: Point[],
+  n: number,
+  isWallLocked: (wallIndex: number) => boolean,
+  lockedLengths: number[],
+): Point[] {
+  let v = vertices.map(p => ({ ...p }))
+  const tol = 0.4
+  for (let iter = 0; iter < 24; iter++) {
+    let maxErr = 0
+    let any = false
+    for (let i = 0; i < n; i++) {
+      if (!isWallLocked(i)) continue
+      const target = lockedLengths[i]
+      if (target <= 0) continue
+      const cur = wallLength(v[i], v[(i + 1) % n])
+      maxErr = Math.max(maxErr, Math.abs(cur - target))
+      if (Math.abs(cur - target) < tol) continue
+      v = applyWallLength(v, i, target)
+      any = true
+    }
+    if (!any || maxErr < tol) break
+  }
+  return v
 }
 
 // ─── Shape types ──────────────────────────────────────────────────────────────

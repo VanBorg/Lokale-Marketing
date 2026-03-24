@@ -3,6 +3,7 @@ import { blueprintStore, useRoom } from '../../store/blueprintStore'
 import {
   polygonArea,
   formatLength,
+  formatNlDecimal,
   getPerimeter,
   calculateRoof,
   wallLength,
@@ -56,13 +57,13 @@ function StepDefinitiefMaken({ roomId, onPrev, onFinalize }: StepDefinitiefProps
   )
 
   const summaryRows = [
-    { label: 'Vloeroppervlak',  value: `${floorAreaM2.toFixed(2)} m²`,               accent: true },
-    { label: 'Omtrek',          value: `${perimeterM.toFixed(2)} m` },
+    { label: 'Vloeroppervlak',  value: `${formatNlDecimal(floorAreaM2, 2)} m²`,               accent: true },
+    { label: 'Omtrek',          value: `${formatNlDecimal(perimeterM, 2)} m` },
     { label: 'Wandhoogte',      value: formatLength(room.wallHeight) },
-    { label: 'Geveloppervlak',  value: `${roofCalc.gevelAreaM2.toFixed(2)} m²` },
-    { label: 'Dakoppervlak',    value: `${roofCalc.roofAreaM2.toFixed(2)} m²` },
+    { label: 'Geveloppervlak',  value: `${formatNlDecimal(roofCalc.gevelAreaM2, 2)} m²` },
+    { label: 'Dakoppervlak',    value: `${formatNlDecimal(roofCalc.roofAreaM2, 2)} m²` },
     { label: 'Daktype',         value: room.roofType ?? 'plat' },
-    { label: 'Volume ruimte',   value: `${roofCalc.totalVolumeM3.toFixed(2)} m³` },
+    { label: 'Volume ruimte',   value: `${formatNlDecimal(roofCalc.totalVolumeM3, 2)} m³` },
     { label: 'Hoogste punt',    value: formatLength(roofCalc.peakHeight) },
     { label: 'Aantal wanden',   value: `${room.vertices.length}` },
   ]
@@ -100,15 +101,21 @@ function StepDefinitiefMaken({ roomId, onPrev, onFinalize }: StepDefinitiefProps
             const next = room.vertices[(i + 1) % room.vertices.length]
             const len     = wallLength(v, next)
             const ang     = wallAngle(v, next)
-            const isLocked = room.lockedWalls?.includes(i)
+            const geomLock = room.lockedWalls?.includes(i)
+            const lenLock = room.lengthLockedWalls?.includes(i)
             const wandM2  = (len / 100) * (room.wallHeight / 100)
             return (
               <div key={i} className="flex items-center px-3 py-1.5 text-xs gap-2">
                 <span className="text-light/30 w-12 shrink-0">Wand {i + 1}</span>
                 <span className="text-light flex-1">{formatLength(len)}</span>
                 <span className="text-light/40">{ang.toFixed(0)}°</span>
-                <span className="text-light/40">{wandM2.toFixed(2)} m²</span>
-                {isLocked && <span className="text-amber-400 text-[9px]">🔒</span>}
+                <span className="text-light/40">{formatNlDecimal(wandM2, 2)} m²</span>
+                {lenLock && !geomLock && (
+                  <span className="text-orange-400 text-[9px]" title="Lengte vergrendeld">
+                    L
+                  </span>
+                )}
+                {geomLock && <span className="text-amber-400 text-[9px]">🔒</span>}
               </div>
             )
           })}

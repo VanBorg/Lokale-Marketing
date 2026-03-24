@@ -1,9 +1,20 @@
 import { memo, useState, useEffect, useRef } from 'react'
-import { Stage, Layer, Line, Circle, Text } from 'react-konva'
+import { Stage, Layer, Line, Circle, Text, Group, Rect } from 'react-konva'
 import type Konva from 'konva'
 import type { Point } from '../../utils/blueprintGeometry'
 import type { Room } from '../../store/blueprintStore'
-import { wallLength, wallAngle, innerAngle, formatLength, applyWallLength } from '../../utils/blueprintGeometry'
+import {
+  wallLength,
+  wallAngle,
+  innerAngle,
+  formatWallLengthMetersLabel,
+  applyWallLengthRespectingLocks,
+  constrainCornerDragPoint,
+  mergeWallLockIndices,
+  restoreLockedWallLengths,
+  isVertexPinnedByGeometryWallLock,
+} from '../../utils/blueprintGeometry'
+import { useTheme } from '../../hooks/useTheme'
 
 interface RoomPreviewCanvasProps {
   vertices: Point[]
@@ -13,6 +24,7 @@ interface RoomPreviewCanvasProps {
   height?: number
   room?: Room | null
   onToggleWallLock?: (wallIndex: number) => void
+  onToggleWallLengthLock?: (wallIndex: number) => void
   /** With `onSelectWall`, wall highlight is controlled by the parent (wall list ↔ canvas). */
   selectedWallIndex?: number | null
   onSelectWall?: (wallIndex: number | null) => void
@@ -20,16 +32,37 @@ interface RoomPreviewCanvasProps {
   hideWallDetailPanel?: boolean
   /** Wall index highlighted from the list (hover); thicker inner stroke on the map. */
   listHoverWallIndex?: number | null
-  /** When `room` is absent (draft preview), locked wall indices from parent. */
-  draftLockedWalls?: number[]
-  /** Toggle lock for draft preview (no room in store yet). */
-  onDraftToggleWallLock?: (wallIndex: number) => void
+  /** Canvas wall hover → parent can sync highlight on the wall list. */
+  onHoverWall?: (wallIndex: number | null) => void
+  /** Draft: muur-slot (geometrie). */
+  draftGeometryLockedWalls?: number[]
+  /** Draft: lengte-slot. */
+  draftLengthLockedWalls?: number[]
+  onDraftToggleGeometryLock?: (wallIndex: number) => void
+  onDraftToggleLengthLock?: (wallIndex: number) => void
+  /**
+   * Marge rond de tekening (px). Hogere waarde = kamer visueel kleiner in hetzelfde stage, zonder vertices te wijzigen.
+   */
+  edgePaddingPx?: number
 }
 
-/** Extra inset so the room polygon does not sit flush against the preview edges (map size unchanged). */
-const PADDING = 40
+/** Standaard inset voor labels; Kamer Overview kan `edgePaddingPx` verhogen voor meer lucht. */
+const DEFAULT_EDGE_PADDING = 48
 const ACCENT = '#35B4D3'
-const LOCKED_COLOUR = '#f59e0b'
+/** Muur-slot (geometrie): oranje wandlijn op canvas. */
+const ORANGE_WALL = '#f97316'
+/** Lengte-slot: oranje meter-tekst (alleen bij expliciet lengte-slot). */
+const ORANGE_LENGTH_LABEL = '#fb923c'
+
+/** Leesbaar op donkere achtergrond; dunne outline i.p.v. dikke stroke. */
+const MAP_LEN_FILL = '#e8eef4'
+const MAP_LEN_STROKE = 'rgba(6, 8, 14, 0.42)'
+const MAP_LEN_STROKE_SEL = 'rgba(6, 8, 14, 0.55)'
+const MAP_LEN_FONT_SIZE = 12
+/** Meters net buiten de wand (schermpx langs normaal), goed leesbaar i.p.v. op de lijn. */
+const MAP_LEN_OUTWARD_PX = 16
+const ANG_PILL_W = 30
+const ANG_PILL_H = 15
 
 const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   vertices,
@@ -39,13 +72,21 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   height = 200,
   room,
   onToggleWallLock,
+  onToggleWallLengthLock,
   selectedWallIndex: selectedWallIndexProp,
   onSelectWall,
   hideWallDetailPanel = false,
   listHoverWallIndex = null,
-  draftLockedWalls = [],
-  onDraftToggleWallLock,
+  onHoverWall,
+  draftGeometryLockedWalls = [],
+  draftLengthLockedWalls = [],
+  onDraftToggleGeometryLock,
+  onDraftToggleLengthLock,
+  edgePaddingPx = DEFAULT_EDGE_PADDING,
 }: RoomPreviewCanvasProps) {
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
+
   const [localVerts, setLocalVerts] = useState<Point[]>(vertices)
   const [internalWall, setInternalWall] = useState<number | null>(null)
   const [editingLength, setEditingLength] = useState<string>('')
@@ -84,8 +125,8 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   const roomH = maxY - minY || 1
 
   const scale = Math.min(
-    (width  - PADDING * 2) / roomW,
-    (height - PADDING * 2) / roomH,
+    (width - edgePaddingPx * 2) / roomW,
+    (height - edgePaddingPx * 2) / roomH,
     2,
   )
 
@@ -101,6 +142,38 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   const screenVerts = localVerts.map(toScreen)
   const flatPoints  = screenVerts.flatMap(v => [v.x, v.y])
   const n = localVerts.length
+
+  const centroidScreen = {
+    x: screenVerts.reduce((s, v) => s + v.x, 0) / n,
+    y: screenVerts.reduce((s, v) => s + v.y, 0) / n,
+  }
+
+  /** Wandmidden, langs normaal naar buiten (binnen → buiten plattegrond) — voor meterlabels buiten de wand. */
+  const outwardFromWallMid = (i: number, distPx: number) => {
+    const sv = screenVerts[i]
+    const next = screenVerts[(i + 1) % n]
+    const mid = { x: (sv.x + next.x) / 2, y: (sv.y + next.y) / 2 }
+    const dx = next.x - sv.x
+    const dy = next.y - sv.y
+    const elen = Math.hypot(dx, dy) || 1
+    let nx = -dy / elen
+    let ny = dx / elen
+    const toC = { x: centroidScreen.x - mid.x, y: centroidScreen.y - mid.y }
+    if (nx * toC.x + ny * toC.y < 0) {
+      nx = -nx
+      ny = -ny
+    }
+    return { x: mid.x - nx * distPx, y: mid.y - ny * distPx }
+  }
+
+  /** Corner i, offset toward interior (toward centroid). */
+  const inwardFromCorner = (i: number, distPx: number) => {
+    const sv = screenVerts[i]
+    const vx = centroidScreen.x - sv.x
+    const vy = centroidScreen.y - sv.y
+    const vlen = Math.hypot(vx, vy) || 1
+    return { x: sv.x + (vx / vlen) * distPx, y: sv.y + (vy / vlen) * distPx }
+  }
 
   /** Segment parallel to wall i, offset toward polygon interior (screen px). */
   const innerWallPoints = (i: number, insetPx: number): [number, number, number, number] => {
@@ -151,26 +224,42 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
 
   // ── Corner drag — free angle / skew ─────────────────────────────────────
 
-  const isWallLocked = (i: number) =>
-    room ? (room.lockedWalls?.includes(i) ?? false) : draftLockedWalls.includes(i)
+  const isGeometryLocked = (i: number) =>
+    room ? (room.lockedWalls?.includes(i) ?? false) : draftGeometryLockedWalls.includes(i)
+
+  const isLengthLockedOnly = (i: number) =>
+    room ? (room.lengthLockedWalls?.includes(i) ?? false) : draftLengthLockedWalls.includes(i)
+
+  /** Lengte mag niet wijzigen (invoer of geometrie). */
+  const isLengthFixed = (i: number) => isGeometryLocked(i) || isLengthLockedOnly(i)
 
   const startCornerDrag = (e: Konva.KonvaEventObject<MouseEvent>, cornerIdx: number) => {
     e.evt.preventDefault()
     e.evt.stopPropagation()
 
-    const prevWall = (cornerIdx - 1 + n) % n
-    if (isWallLocked(prevWall) || isWallLocked(cornerIdx)) return
+    /** Muur-locatie-slot: hoek is vast als minstens één aansluitende wand geometrie-vergrendeld is. */
+    const geoLocks = room ? (room.lockedWalls ?? []) : draftGeometryLockedWalls
+    if (isVertexPinnedByGeometryWallLock(cornerIdx, n, geoLocks)) return
 
     const origVerts = localVertsRef.current.map(v => ({ ...v }))
+    const lockedLens = new Array(n).fill(0)
+    for (let i = 0; i < n; i++) {
+      if (isLengthFixed(i)) {
+        lockedLens[i] = wallLength(origVerts[i], origVerts[(i + 1) % n])
+      }
+    }
     const startClientX = e.evt.clientX
     const startClientY = e.evt.clientY
 
     const onMove = (me: MouseEvent) => {
       const deltaWorldX = (me.clientX - startClientX) / scaleRef.current
       const deltaWorldY = (me.clientY - startClientY) / scaleRef.current
-      const newVerts = origVerts.map((v, i) =>
-        i === cornerIdx ? { x: v.x + deltaWorldX, y: v.y + deltaWorldY } : { ...v }
-      )
+      const naive = {
+        x: origVerts[cornerIdx].x + deltaWorldX,
+        y: origVerts[cornerIdx].y + deltaWorldY,
+      }
+      const pk = constrainCornerDragPoint(naive, cornerIdx, n, origVerts, isLengthFixed, lockedLens)
+      const newVerts = origVerts.map((v, i) => (i === cornerIdx ? pk : { ...v }))
       setLocalVerts(newVerts)
       onChange?.(newVerts)
     }
@@ -190,7 +279,7 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
     e.evt.preventDefault()
     e.evt.stopPropagation()
 
-    if (isWallLocked(wallIdx)) return
+    if (isLengthLockedOnly(wallIdx)) return
 
     const vA = localVerts[wallIdx]
     const vB = localVerts[(wallIdx + 1) % n]
@@ -198,6 +287,15 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
     const wallCoord = isHorizontal ? vA.y : vA.x
 
     const origVerts = localVertsRef.current.map(v => ({ ...v }))
+    const geoLocks = room ? (room.lockedWalls ?? []) : draftGeometryLockedWalls
+    const lockedLensLenOnly = new Array(n).fill(0)
+    let anyLenOnly = false
+    for (let i = 0; i < n; i++) {
+      if (isLengthLockedOnly(i)) {
+        anyLenOnly = true
+        lockedLensLenOnly[i] = wallLength(origVerts[i], origVerts[(i + 1) % n])
+      }
+    }
     const startClientX = e.evt.clientX
     const startClientY = e.evt.clientY
 
@@ -205,14 +303,28 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
       let newVerts: Point[]
       if (isHorizontal) {
         const deltaWorldY = (me.clientY - startClientY) / scaleRef.current
-        newVerts = origVerts.map(v =>
-          Math.abs(v.y - wallCoord) < 1 ? { ...v, y: v.y + deltaWorldY } : { ...v }
-        )
+        newVerts = origVerts.map((v, i) => {
+          const onLine = Math.abs(v.y - wallCoord) < 1
+          if (!onLine) return { ...v }
+          if (isVertexPinnedByGeometryWallLock(i, n, geoLocks)) return { ...v }
+          return { ...v, y: v.y + deltaWorldY }
+        })
       } else {
         const deltaWorldX = (me.clientX - startClientX) / scaleRef.current
-        newVerts = origVerts.map(v =>
-          Math.abs(v.x - wallCoord) < 1 ? { ...v, x: v.x + deltaWorldX } : { ...v }
-        )
+        newVerts = origVerts.map((v, i) => {
+          const onLine = Math.abs(v.x - wallCoord) < 1
+          if (!onLine) return { ...v }
+          if (isVertexPinnedByGeometryWallLock(i, n, geoLocks)) return { ...v }
+          return { ...v, x: v.x + deltaWorldX }
+        })
+      }
+      if (anyLenOnly) {
+        newVerts = restoreLockedWallLengths(newVerts, n, isLengthLockedOnly, lockedLensLenOnly)
+      }
+      for (let i = 0; i < n; i++) {
+        if (isVertexPinnedByGeometryWallLock(i, n, geoLocks)) {
+          newVerts[i] = { ...origVerts[i] }
+        }
       }
       setLocalVerts(newVerts)
       onChange?.(newVerts)
@@ -254,23 +366,41 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
 
   const handleLengthBlur = () => {
     if (selectedWall === null || hideWallDetailPanel) return
-    if (isWallLocked(selectedWall)) return
+    if (isLengthLockedOnly(selectedWall)) return
     const len = parseFloat(editingLength)
     if (!isNaN(len) && len > 0) {
-      const newVerts = applyWallLength(localVerts, selectedWall, len)
+      const locks = room
+        ? mergeWallLockIndices(room.lockedWalls ?? [], room.lengthLockedWalls ?? [])
+        : mergeWallLockIndices(draftGeometryLockedWalls, draftLengthLockedWalls)
+      const newVerts = applyWallLengthRespectingLocks(localVerts, selectedWall, len, locks)
       setLocalVerts(newVerts)
       onChange?.(newVerts)
     }
   }
 
-  const draftOrRoomToggleLock = (i: number) => {
+  const draftOrRoomToggleGeometry = (i: number) => {
     if (room && onToggleWallLock) onToggleWallLock(i)
-    else onDraftToggleWallLock?.(i)
+    else onDraftToggleGeometryLock?.(i)
   }
+
+  const draftOrRoomToggleLength = (i: number) => {
+    if (room && onToggleWallLengthLock) onToggleWallLengthLock(i)
+    else onDraftToggleLengthLock?.(i)
+  }
+
+  /** Konva heeft geen CSS-variabelen: aparte paletten voor light/dark. */
+  const mapLenFillDefault = isLight ? '#0f172a' : MAP_LEN_FILL
+  const mapLenStrokeDefault = isLight ? 'rgba(255,255,255,0.45)' : MAP_LEN_STROKE
+  const mapLenStrokeSel = isLight ? 'rgba(15,23,42,0.5)' : MAP_LEN_STROKE_SEL
+  const previewGeoLocks = room ? (room.lockedWalls ?? []) : draftGeometryLockedWalls
+  const angPillFill = isLight ? 'rgba(53, 180, 211, 0.28)' : 'rgba(53, 180, 211, 0.12)'
+  const angPillStroke = isLight ? 'rgba(15, 100, 120, 0.55)' : 'rgba(53, 180, 211, 0.42)'
+  const angTextFill = isLight ? '#0c4a5c' : 'rgba(255, 255, 255, 0.9)'
 
   return (
     <div className="rounded-lg border border-dark-border overflow-hidden bg-dark">
-      <Stage ref={stageRef} width={width} height={height}>
+      <div onMouseLeave={() => onHoverWall?.(null)}>
+        <Stage ref={stageRef} width={width} height={height}>
         <Layer>
           {/* Room polygon fill + outline */}
           <Line
@@ -285,15 +415,18 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
           {/* Clickable wall hit zones — outer stroke only for locked; selection = inner line below */}
           {screenVerts.map((sv, i) => {
             const next = screenVerts[(i + 1) % n]
-            const locked = isWallLocked(i)
+            const geo = isGeometryLocked(i)
+            const strokeCol = geo ? ORANGE_WALL : 'transparent'
             return (
               <Line
                 key={`wall-hit-${i}`}
                 points={[sv.x, sv.y, next.x, next.y]}
-                stroke={locked ? LOCKED_COLOUR : 'transparent'}
-                strokeWidth={locked ? 1.5 : 1}
+                stroke={strokeCol}
+                strokeWidth={geo ? 2 : 1}
                 hitStrokeWidth={14}
                 onClick={() => handleWallClick(i)}
+                onMouseEnter={() => onHoverWall?.(i)}
+                onMouseLeave={() => onHoverWall?.(null)}
               />
             )
           })}
@@ -320,57 +453,11 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
             )
           })}
 
-          {/* Wall-length labels */}
-          {screenVerts.map((sv, i) => {
-            const next = screenVerts[(i + 1) % n]
-            const cx = (sv.x + next.x) / 2
-            const cy = (sv.y + next.y) / 2
-            const len = wallLength(localVerts[i], localVerts[(i + 1) % n])
-            const angle = wallAngle(sv, next)
-            const perp = angle - 90
-            const ox = Math.cos((perp * Math.PI) / 180) * 13
-            const oy = Math.sin((perp * Math.PI) / 180) * 13
-            const label = formatLength(len)
-            return (
-              <Text
-                key={`len-${i}`}
-                x={cx + ox}
-                y={cy + oy}
-                text={label}
-                fontSize={8}
-                fill="rgba(255,255,255,0.55)"
-                rotation={angle > 90 || angle < -90 ? angle + 180 : angle}
-                align="center"
-                offsetX={label.length * 2.8}
-                offsetY={4.5}
-                listening={false}
-              />
-            )
-          })}
-
-          {/* Inner-angle labels */}
-          {screenVerts.map((sv, i) => {
-            const prev = localVerts[(i - 1 + n) % n]
-            const curr = localVerts[i]
-            const next = localVerts[(i + 1) % n]
-            const deg = innerAngle(prev, curr, next)
-            return (
-              <Text
-                key={`ang-${i}`}
-                x={sv.x + 6}
-                y={sv.y - 14}
-                text={`${deg}°`}
-                fontSize={7}
-                fill={ACCENT}
-                listening={false}
-              />
-            )
-          })}
-
-          {/* Mid-wall handles — push/pull for width/depth resize */}
+          {/* Mid-wall handles — push/pull (onder lengtelabels getekend, zie hieronder) */}
           {onChange && screenVerts.map((sv, i) => {
             const next = screenVerts[(i + 1) % n]
-            const locked = isWallLocked(i)
+            const locked = isLengthLockedOnly(i)
+            const strokeCol = isGeometryLocked(i) ? ORANGE_WALL : '#00cece'
             return (
               <Circle
                 key={`mid-${i}`}
@@ -378,32 +465,117 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
                 y={(sv.y + next.y) / 2}
                 radius={4}
                 fill={locked ? '#1a1a22' : '#0c0c12'}
-                stroke={locked ? LOCKED_COLOUR : '#00cece'}
+                stroke={locked ? strokeCol : '#00cece'}
                 strokeWidth={1.5}
                 onMouseDown={locked ? undefined : e => startWallDrag(e, i)}
               />
             )
           })}
 
-          {/* Corner handles — free angle / skew */}
+          {/* Muurlengtes: buiten de wand (normaal), gecentreerd op dat punt */}
+          {screenVerts.map((sv, i) => {
+            const next = screenVerts[(i + 1) % n]
+            const len = wallLength(localVerts[i], localVerts[(i + 1) % n])
+            const angle = wallAngle(sv, next)
+            const pos = outwardFromWallMid(i, MAP_LEN_OUTWARD_PX)
+            const label = `${formatWallLengthMetersLabel(len)} m`
+            const isWallSelected = selectedWall === i
+            const isWallListHover = listHoverWallIndex === i
+            const rot = angle > 90 || angle < -90 ? angle + 180 : angle
+            const lenStroke = isWallSelected || isWallListHover ? mapLenStrokeSel : mapLenStrokeDefault
+            const lenSw = isWallSelected || isWallListHover ? 0.85 : 0.65
+            const labelW = Math.max(44, label.length * MAP_LEN_FONT_SIZE * 0.32)
+            const labelH = MAP_LEN_FONT_SIZE * 1.25
+            const lengthLabelOrange = room
+              ? (room.lengthLockedWalls?.includes(i) ?? false)
+              : draftLengthLockedWalls.includes(i)
+            const labelFill = lengthLabelOrange
+              ? ORANGE_LENGTH_LABEL
+              : isWallSelected
+                ? ACCENT
+                : mapLenFillDefault
+            return (
+              <Group key={`len-${i}`} x={pos.x} y={pos.y} rotation={rot}>
+                <Text
+                  x={0}
+                  y={0}
+                  offsetX={labelW / 2}
+                  offsetY={labelH / 2}
+                  width={labelW}
+                  height={labelH}
+                  text={label}
+                  fontSize={MAP_LEN_FONT_SIZE}
+                  fontStyle="normal"
+                  fontFamily="system-ui, Segoe UI, sans-serif"
+                  fill={labelFill}
+                  stroke={lengthLabelOrange ? ORANGE_LENGTH_LABEL : lenStroke}
+                  strokeWidth={lengthLabelOrange ? 0.5 : lenSw}
+                  lineJoin="round"
+                  align="center"
+                  verticalAlign="middle"
+                  listening={false}
+                />
+              </Group>
+            )
+          })}
+
+          {/* Hoekgraden: compacte pill i.p.v. losse tekst op de hoek */}
+          {screenVerts.map((sv, i) => {
+            const prev = localVerts[(i - 1 + n) % n]
+            const curr = localVerts[i]
+            const next = localVerts[(i + 1) % n]
+            const deg = innerAngle(prev, curr, next)
+            const inset = 22
+            const p = inwardFromCorner(i, inset)
+            return (
+              <Group key={`ang-${i}`} x={p.x} y={p.y} listening={false}>
+                <Rect
+                  x={-ANG_PILL_W / 2}
+                  y={-ANG_PILL_H / 2}
+                  width={ANG_PILL_W}
+                  height={ANG_PILL_H}
+                  cornerRadius={6}
+                  fill={angPillFill}
+                  stroke={angPillStroke}
+                  strokeWidth={1}
+                />
+                <Text
+                  x={-ANG_PILL_W / 2}
+                  y={-ANG_PILL_H / 2}
+                  width={ANG_PILL_W}
+                  height={ANG_PILL_H}
+                  text={`${deg}°`}
+                  fontSize={8}
+                  fontStyle="bold"
+                  fontFamily="system-ui, Segoe UI, sans-serif"
+                  fill={angTextFill}
+                  align="center"
+                  verticalAlign="middle"
+                  listening={false}
+                />
+              </Group>
+            )
+          })}
+
+          {/* Corner handles — oranje = hoek vast door muur-geometrie-slot (eindpunt van oranje wand) */}
           {onChange && screenVerts.map((sv, i) => {
-            const prevWall = (i - 1 + n) % n
-            const cornerLocked = isWallLocked(prevWall) || isWallLocked(i)
+            const vertexPinned = isVertexPinnedByGeometryWallLock(i, n, previewGeoLocks)
             return (
               <Circle
                 key={`corner-${i}`}
                 x={sv.x}
                 y={sv.y}
                 radius={6}
-                fill={cornerLocked ? '#1a1a22' : '#0c0c12'}
-                stroke={cornerLocked ? LOCKED_COLOUR : '#00cece'}
+                fill={vertexPinned ? '#1a1a22' : '#0c0c12'}
+                stroke={vertexPinned ? ORANGE_WALL : '#00cece'}
                 strokeWidth={2}
-                onMouseDown={cornerLocked ? undefined : e => startCornerDrag(e, i)}
+                onMouseDown={vertexPinned ? undefined : e => startCornerDrag(e, i)}
               />
             )
           })}
         </Layer>
       </Stage>
+      </div>
 
       {/* Wall control panel — hidden when parent shows the unified wall list */}
       {selectedWall !== null && !hideWallDetailPanel && (
@@ -435,18 +607,33 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
             <span className="text-xs text-light/40">cm</span>
           </div>
 
-          {(onToggleWallLock || onDraftToggleWallLock) && (
-            <button
-              onClick={() => draftOrRoomToggleLock(selectedWall)}
-              className={[
-                'w-full text-xs py-1.5 rounded-lg border transition-colors flex items-center justify-center gap-1.5',
-                isWallLocked(selectedWall)
-                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                  : 'border-dark-border text-light/50 hover:text-light hover:border-accent/50',
-              ].join(' ')}
-            >
-              {isWallLocked(selectedWall) ? '🔒 Vergrendeld' : '🔓 Vergrendelen'}
-            </button>
+          {(onToggleWallLock || onDraftToggleGeometryLock) && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => draftOrRoomToggleLength(selectedWall)}
+                className={[
+                  'text-[11px] py-1.5 rounded-lg border transition-all duration-200 flex items-center justify-center gap-1',
+                  isLengthLockedOnly(selectedWall)
+                    ? 'border-orange-500/50 bg-orange-500/10 text-orange-400'
+                    : 'border-dark-border text-light/50 hover:border-orange-500/40 hover:text-orange-400/90',
+                ].join(' ')}
+              >
+                {isLengthLockedOnly(selectedWall) ? '🔒' : '🔓'} Lengte
+              </button>
+              <button
+                type="button"
+                onClick={() => draftOrRoomToggleGeometry(selectedWall)}
+                className={[
+                  'text-[11px] py-1.5 rounded-lg border transition-all duration-200 flex items-center justify-center gap-1',
+                  isGeometryLocked(selectedWall)
+                    ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                    : 'border-dark-border text-light/50 hover:border-amber-500/45 hover:text-amber-400/90',
+                ].join(' ')}
+              >
+                {isGeometryLocked(selectedWall) ? '🔒' : '🔓'} Muur
+              </button>
+            </div>
           )}
         </div>
       )}

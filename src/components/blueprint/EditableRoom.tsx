@@ -2,7 +2,11 @@ import { memo, useRef, useCallback } from 'react'
 import { Group, Line, Circle } from 'react-konva'
 import type Konva from 'konva'
 import { useBlueprintStore, useSelectedIds, blueprintStore } from '../../store/blueprintStore'
-import { snapPointToGrid, findVertexSnap } from '../../utils/blueprintGeometry'
+import {
+  snapPointToGrid,
+  findVertexSnap,
+  isVertexPinnedByGeometryWallLock,
+} from '../../utils/blueprintGeometry'
 import WallLabels from './WallLabels'
 
 interface EditableRoomProps {
@@ -12,6 +16,8 @@ interface EditableRoomProps {
 
 const VERTEX_RADIUS = 5
 const VERTEX_FILL = '#35B4D3'
+/** Zelfde als Kamer Overview: muur-geometrie-slot. */
+const ORANGE_GEOM_PIN = '#f97316'
 const STROKE_SELECTED = '#35B4D3'
 const STROKE_IDLE = 'rgba(255,255,255,0.3)'
 const FILL_SELECTED = 'rgba(53,180,211,0.08)'
@@ -106,11 +112,15 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
   if (!room) return null
 
   const flatPoints = room.vertices.flatMap(v => [v.x, v.y])
+  const n = room.vertices.length
+  const geometryLockedWalls = room.lockedWalls ?? []
+  /** Hele kamer slepen verplaatst alle wanden — conflicteert met muur-locatie-slot. */
+  const allowRoomDrag = isSelected && geometryLockedWalls.length === 0
 
   return (
     <Group
       ref={groupRef}
-      draggable={isSelected}
+      draggable={allowRoomDrag}
       onMouseDown={handleSelect}
       onTap={handleSelect}
       onDragStart={handleGroupDragStart}
@@ -133,21 +143,24 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
 
       {/* Vertex handles — only when selected */}
       {isSelected &&
-        room.vertices.map((v, i) => (
-          <Circle
-            key={i}
-            x={v.x}
-            y={v.y}
-            radius={VERTEX_RADIUS}
-            fill={VERTEX_FILL}
-            stroke="#fff"
-            strokeWidth={1.5}
-            draggable
-            onDragStart={handleVertexDragStart}
-            onDragMove={e => handleVertexDragMove(i, e)}
-            onDragEnd={e => handleVertexDragEnd(i, e)}
-          />
-        ))}
+        room.vertices.map((v, i) => {
+          const geomPinned = isVertexPinnedByGeometryWallLock(i, n, geometryLockedWalls)
+          return (
+            <Circle
+              key={i}
+              x={v.x}
+              y={v.y}
+              radius={VERTEX_RADIUS}
+              fill={geomPinned ? '#1a1a22' : VERTEX_FILL}
+              stroke={geomPinned ? ORANGE_GEOM_PIN : '#fff'}
+              strokeWidth={1.5}
+              draggable={!geomPinned}
+              onDragStart={handleVertexDragStart}
+              onDragMove={e => handleVertexDragMove(i, e)}
+              onDragEnd={e => handleVertexDragEnd(i, e)}
+            />
+          )
+        })}
     </Group>
   )
 })

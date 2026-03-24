@@ -72,7 +72,30 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
 
         <div className="flex-1" />
 
-        {/* Klantgegevens */}
+        {/* Undo / Redo — editing sneltoetsen grouped first */}
+        <button
+          onClick={handleUndo}
+          disabled={!canUndo}
+          className="ui-icon-button disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Ongedaan maken (Ctrl+Z)"
+          aria-label="Undo"
+        >
+          <Undo2 size={15} />
+        </button>
+        <button
+          onClick={handleRedo}
+          disabled={!canRedo}
+          className="ui-icon-button disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Opnieuw uitvoeren (Ctrl+Y)"
+          aria-label="Redo"
+        >
+          <Redo2 size={15} />
+        </button>
+
+        {/* Separator */}
+        <div className="w-px h-5 bg-dark-border mx-1 shrink-0" />
+
+        {/* Klantgegevens — project info */}
         <Button
           variant="ghost"
           size="sm"
@@ -83,7 +106,7 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
           Klantgegevens
         </Button>
 
-        {/* Opnieuw beginnen */}
+        {/* Opnieuw beginnen — destructive, last before help */}
         <Button
           variant="ghost"
           size="sm"
@@ -93,31 +116,6 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
           <RotateCcw size={13} />
           Opnieuw beginnen
         </Button>
-
-        {/* Separator */}
-        <div className="w-px h-5 bg-dark-border mx-1 shrink-0" />
-
-        {/* Undo */}
-        <button
-          onClick={handleUndo}
-          disabled={!canUndo}
-          className="ui-icon-button disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Ongedaan maken (Ctrl+Z)"
-          aria-label="Undo"
-        >
-          <Undo2 size={15} />
-        </button>
-
-        {/* Redo */}
-        <button
-          onClick={handleRedo}
-          disabled={!canRedo}
-          className="ui-icon-button disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Opnieuw uitvoeren (Ctrl+Y)"
-          aria-label="Redo"
-        >
-          <Redo2 size={15} />
-        </button>
 
         {/* Separator */}
         <div className="w-px h-5 bg-dark-border mx-1 shrink-0" />

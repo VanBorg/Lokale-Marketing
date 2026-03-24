@@ -2,7 +2,13 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
-import type { Point, ShapeType, RoofType } from '../utils/blueprintGeometry'
+import {
+  applyWallLengthRespectingLocks,
+  mergeWallLockIndices,
+  type Point,
+  type ShapeType,
+  type RoofType,
+} from '../utils/blueprintGeometry'
 
 export type { Point }
 
@@ -23,7 +29,10 @@ export interface Room {
   wallHeight: number
   label?: string
   shape?: ShapeType
+  /** Muur (geometrie): geen slepen op deze wand; amber op canvas. */
   lockedWalls: number[]
+  /** Alleen lengte vast (invoer + behoud bij andere wijzigingen); oranje in UI. */
+  lengthLockedWalls?: number[]
   roofType: RoofType
   roofPeakHeight?: number
   wallHeights?: number[]
@@ -86,6 +95,7 @@ interface BlueprintState extends BlueprintDoc {
   updateElement: (id: string, updates: Partial<FloorElement>) => void
   deleteElement: (id: string) => void
   toggleWallLock: (roomId: string, wallIndex: number) => void
+  toggleWallLengthLock: (roomId: string, wallIndex: number) => void
   setWallLength: (roomId: string, wallIndex: number, lengthCm: number) => void
   setRoofType: (roomId: string, type: RoofType, peakHeight?: number) => void
 
@@ -183,6 +193,7 @@ export const useBlueprintStore = create<BlueprintState>()(
             label: meta.label,
             shape: meta.shape,
             lockedWalls: meta.lockedWalls ?? [],
+            lengthLockedWalls: meta.lengthLockedWalls ?? [],
             roofType: meta.roofType ?? 'plat',
             roofPeakHeight: meta.roofPeakHeight,
             wallHeights: meta.wallHeights,
@@ -254,22 +265,33 @@ export const useBlueprintStore = create<BlueprintState>()(
         })
       },
 
+      toggleWallLengthLock: (roomId, wallIndex) => {
+        set(state => {
+          const room = state.rooms[roomId]
+          if (!room) return
+          if (!room.lengthLockedWalls) room.lengthLockedWalls = []
+          const arr = room.lengthLockedWalls
+          const j = arr.indexOf(wallIndex)
+          if (j >= 0) arr.splice(j, 1)
+          else arr.push(wallIndex)
+        })
+      },
+
       setWallLength: (roomId, wallIndex, lengthCm) => {
         set(state => {
           const room = state.rooms[roomId]
           if (!room) return
-          const n = room.vertices.length
-          const a = room.vertices[wallIndex]
-          const b = room.vertices[(wallIndex + 1) % n]
-          const dx = b.x - a.x
-          const dy = b.y - a.y
-          const currentLen = Math.sqrt(dx * dx + dy * dy)
-          if (currentLen === 0) return
-          const ratio = lengthCm / currentLen
-          room.vertices[(wallIndex + 1) % n] = {
-            x: a.x + dx * ratio,
-            y: a.y + dy * ratio,
+          /** Alleen L-slot blokkeert numerieke lengte; M-slot (geometrie) niet — dan mag streep mee groeien. */
+          if ((room.lengthLockedWalls ?? []).includes(wallIndex)) {
+            return
           }
+          const locked = mergeWallLockIndices(room.lockedWalls ?? [], room.lengthLockedWalls ?? [])
+          room.vertices = applyWallLengthRespectingLocks(
+            room.vertices.map(v => ({ ...v })),
+            wallIndex,
+            lengthCm,
+            locked,
+          )
         })
       },
 
