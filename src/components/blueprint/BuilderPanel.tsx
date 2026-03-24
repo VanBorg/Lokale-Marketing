@@ -1,7 +1,6 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { blueprintStore, useRoom } from '../../store/blueprintStore'
 import {
-  generateShapeVertices,
   polygonArea,
   formatLength,
   getPerimeter,
@@ -9,164 +8,11 @@ import {
   wallLength,
   wallAngle,
 } from '../../utils/blueprintGeometry'
-import type { Point, ShapeType, RoofType } from '../../utils/blueprintGeometry'
-import RoomShapePicker from './RoomShapePicker'
+import type { Point } from '../../utils/blueprintGeometry'
 import ElementPicker from './ElementPicker'
+import StepKamerForm from './StepKamerForm'
 
 const STEPS = ['Kamer', 'Elementen', 'Definitief maken'] as const
-
-const ROOF_OPTIONS: { id: RoofType; label: string; icon: string }[] = [
-  { id: 'plat',         label: 'Plat',     icon: '▬' },
-  { id: 'schuin-enkel', label: 'Schuin',   icon: '◺' },
-  { id: 'zadeldak',     label: 'Zadel',    icon: '⋀' },
-  { id: 'schilddak',    label: 'Schild',   icon: '◇' },
-  { id: 'mansardedak',  label: 'Mansarde', icon: '⌂' },
-  { id: 'platband',     label: 'Platband', icon: '▭' },
-]
-
-// ─── Step Kamer ───────────────────────────────────────────────────────────
-
-interface StepKamerProps {
-  onNext: (roomId: string) => void
-  onPreviewChange?: (vertices: Point[]) => void
-  controlledWidth?: number
-  controlledDepth?: number
-  onWidthChange?: (w: number) => void
-  onDepthChange?: (d: number) => void
-}
-
-function StepKamer({ onNext, onPreviewChange, controlledWidth, controlledDepth, onWidthChange, onDepthChange }: StepKamerProps) {
-  const [shape, setShape] = useState<ShapeType>('rechthoek')
-  const [localWidth, setLocalWidth]   = useState(controlledWidth ?? 400)
-  const [localDepth, setLocalDepth]   = useState(controlledDepth ?? 300)
-
-  const roomWidth = controlledWidth ?? localWidth
-  const roomDepth = controlledDepth ?? localDepth
-
-  const setRoomWidth = (w: number) => { setLocalWidth(w); onWidthChange?.(w) }
-  const setRoomDepth = (d: number) => { setLocalDepth(d); onDepthChange?.(d) }
-  const [roomName, setRoomName] = useState('')
-  const [wallHeight, setWallHeight] = useState(250)
-  const [roofType, setRoofType] = useState<RoofType>('plat')
-  const [roofPeakHeight, setRoofPeakHeight] = useState(150)
-
-  const previewVertices = useMemo(
-    () => (shape === 'vrije-vorm' ? [] : generateShapeVertices(shape, roomWidth, roomDepth)),
-    [shape, roomWidth, roomDepth],
-  )
-
-  useEffect(() => {
-    onPreviewChange?.(previewVertices)
-  }, [previewVertices, onPreviewChange])
-
-  const handlePlace = useCallback(() => {
-    if (shape === 'vrije-vorm') {
-      blueprintStore.getState().setActiveTool('draw')
-      return
-    }
-    const vertices = generateShapeVertices(shape, roomWidth, roomDepth)
-    if (vertices.length < 3) return
-    const id = blueprintStore.getState().addRoom(vertices, {
-      name: roomName || 'Ruimte',
-      wallHeight,
-      shape,
-      roofType,
-      roofPeakHeight,
-    })
-    blueprintStore.getState().select([id])
-    onNext(id)
-  }, [shape, roomWidth, roomDepth, roomName, wallHeight, roofType, roofPeakHeight, onNext])
-
-  const showPeakHeight = roofType !== 'plat' && roofType !== 'platband'
-
-  return (
-    <div className="space-y-3">
-      <RoomShapePicker selected={shape} onSelect={setShape} />
-
-      {shape === 'vrije-vorm' ? (
-        <p className="text-[11px] text-accent/80 bg-accent/10 border border-accent/20 rounded-lg px-3 py-2">
-          Klik op de canvas om punten te plaatsen. Dubbelklik om de vorm te sluiten.
-        </p>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1">
-              <span className="ui-label">Breedte (cm)</span>
-              <input type="number" className="ui-input text-sm py-1.5" value={roomWidth} min={50} max={5000}
-                onChange={e => setRoomWidth(Number(e.target.value))} />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="ui-label">Diepte (cm)</span>
-              <input type="number" className="ui-input text-sm py-1.5" value={roomDepth} min={50} max={5000}
-                onChange={e => setRoomDepth(Number(e.target.value))} />
-            </label>
-          </div>
-
-          <label className="flex flex-col gap-1">
-            <span className="ui-label">Naam ruimte</span>
-            <input type="text" className="ui-input text-sm py-1.5" value={roomName} placeholder="bijv. Woonkamer"
-              onChange={e => setRoomName(e.target.value)} />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="ui-label">Wandhoogte (cm)</span>
-            <input type="number" className="ui-input text-sm py-1.5" value={wallHeight} min={100} max={600}
-              onChange={e => setWallHeight(Number(e.target.value))} />
-          </label>
-
-          {/* Roof type */}
-          <label className="flex flex-col gap-1">
-            <span className="ui-label">Daktype</span>
-            <div className="grid grid-cols-3 gap-1.5">
-              {ROOF_OPTIONS.map(roof => (
-                <button
-                  key={roof.id}
-                  type="button"
-                  onClick={() => setRoofType(roof.id)}
-                  className={[
-                    'flex flex-col items-center gap-0.5 p-2 rounded-lg border text-xs transition-all duration-150',
-                    roofType === roof.id
-                      ? 'border-accent bg-accent/10 text-accent'
-                      : 'border-dark-border bg-dark text-light/50 hover:text-light hover:border-accent/40',
-                  ].join(' ')}
-                >
-                  <span className="text-base leading-none">{roof.icon}</span>
-                  <span className="text-[9px]">{roof.label}</span>
-                </button>
-              ))}
-            </div>
-          </label>
-
-          {showPeakHeight && (
-            <label className="flex flex-col gap-1">
-              <span className="ui-label">Dakoverstijging (cm)</span>
-              <input
-                type="number"
-                className="ui-input text-sm py-1.5"
-                value={roofPeakHeight}
-                min={10}
-                max={1000}
-                onChange={e => setRoofPeakHeight(Number(e.target.value))}
-              />
-              <span className="text-[10px] text-light/30">
-                Hoogte boven de muren tot het hoogste punt
-              </span>
-            </label>
-          )}
-        </>
-      )}
-
-      <button
-        onClick={handlePlace}
-        disabled={shape === 'vrije-vorm'}
-        className="w-full mt-1 px-4 py-2 text-sm bg-accent text-white font-semibold rounded-lg
-          hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-      >
-        Plaatsen op plattegrond ↓
-      </button>
-    </div>
-  )
-}
 
 // ─── Step Elementen ───────────────────────────────────────────────────────
 
@@ -423,7 +269,7 @@ export default function BuilderPanel({ onPreviewChange, previewWidth, previewDep
             >
               <div className="px-3 pb-3 pt-1.5">
                 {index === 0 && (
-                  <StepKamer
+                  <StepKamerForm
                     onNext={handleStepKamerNext}
                     onPreviewChange={onPreviewChange}
                     controlledWidth={previewWidth}

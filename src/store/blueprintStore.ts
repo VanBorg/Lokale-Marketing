@@ -8,6 +8,13 @@ export type { Point }
 
 // ─── Domain types ──────────────────────────────────────────────────────────
 
+export interface RoomCeiling {
+  type: 'vlak' | 'schuin' | 'cassette' | 'gewelfd' | 'open-kap'
+  height: number
+  ridgeHeight?: number
+  cassetteGrid?: string
+}
+
 export interface Room {
   id: string
   name: string
@@ -19,6 +26,8 @@ export interface Room {
   lockedWalls: number[]
   roofType: RoofType
   roofPeakHeight?: number
+  wallHeights?: number[]
+  ceiling?: RoomCeiling
 }
 
 export type ElementType = 'deur' | 'raam' | 'trap' | 'kast' | 'overig'
