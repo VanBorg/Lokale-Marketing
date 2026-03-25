@@ -24,7 +24,6 @@ interface WallListProps {
   displayedRoomKey: string
 
   onSetHoveredWall: (state: { roomKey: string; wallIndex: number } | null) => void
-  onSelectRoomWall: (roomId: string, wallIndex: number) => void
   onSetSelectedWallIndex: (i: number) => void
   onRoomWallLengthChange: (roomId: string, wallIndex: number, valueCm: number) => void
 }
@@ -41,7 +40,6 @@ export default function WallList({
   canvasHoveredWallIndex,
   displayedRoomKey,
   onSetHoveredWall,
-  onSelectRoomWall,
   onSetSelectedWallIndex,
   onRoomWallLengthChange,
 }: WallListProps) {
@@ -85,7 +83,6 @@ export default function WallList({
                       isCanvasHovered={isCanvasHovered}
                       locked={locked}
                       onToggleLock={() => onTogglePreviewLock(i)}
-                      onSelect={() => onSetSelectedWallIndex(i)}
                       onLengthChange={v => onPreviewWallLengthChange(i, v)}
                       onHoverStart={() => onSetHoveredWall({ roomKey: previewRoomKey, wallIndex: i })}
                     />
@@ -134,7 +131,6 @@ export default function WallList({
                             onSetSelectedWallIndex(i)
                           }
                         }}
-                        onSelect={() => onSelectRoomWall(roomId, i)}
                         onLengthChange={v => handleRoomWallLengthChange(roomId, i, v)}
                         onHoverStart={() => onSetHoveredWall({ roomKey: roomId, wallIndex: i })}
                       />

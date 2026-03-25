@@ -2,10 +2,72 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import { blueprintStore } from '../../store/blueprintStore'
 import {
   generateShapeVertices,
+  formatNlDecimal,
 } from '../../utils/blueprintGeometry'
 import type { Point, ShapeType, RoofType } from '../../utils/blueprintGeometry'
 import type { RoomCeiling } from '../../store/blueprintStore'
 import RoomShapePicker from './RoomShapePicker'
+
+/** Zelfde stap als wandlengte in het metrische rooster (5 cm). */
+const METER_FIELD_NUDGE_CM = 5
+
+/** Inline SVG’s — voorkomt bundel/tree-shake issues met named Lucide-exports. */
+function MeterChevronUpIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M18 15 12 9 6 15" />
+    </svg>
+  )
+}
+
+function MeterChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M6 9 12 15 18 9" />
+    </svg>
+  )
+}
+
+function MeterArrowButtons({ onUp, onDown }: { onUp: () => void; onDown: () => void }) {
+  const btnClass =
+    'flex items-center justify-center py-0.5 text-light/50 hover:text-light hover:bg-light/[0.06] transition-colors'
+  return (
+    <div
+      className="flex flex-col shrink-0 w-7 border border-dark-border rounded-md overflow-hidden divide-y divide-dark-border"
+      role="group"
+      aria-label="Waarde aanpassen"
+    >
+      <button type="button" className={btnClass} onClick={onUp} aria-label="Verhogen">
+        <MeterChevronUpIcon className="shrink-0" />
+      </button>
+      <button type="button" className={btnClass} onClick={onDown} aria-label="Verlagen">
+        <MeterChevronDownIcon className="shrink-0" />
+      </button>
+    </div>
+  )
+}
 
 const ROOF_OPTIONS: { id: RoofType; label: string; icon: string }[] = [
   { id: 'plat',         label: 'Plat',     icon: '▬' },
@@ -68,6 +130,48 @@ export default function StepKamerForm({
   const [ceilingRidgeHeight, setCeilingRidgeHeight] = useState(350)
   const [cassetteGrid, setCassetteGrid]         = useState('60×60 cm')
 
+  /** Tekstvelden voor breedte/diepte in meters (NL), bron blijft cm. */
+  const [widthDraftM, setWidthDraftM] = useState<string | null>(null)
+  const [depthDraftM, setDepthDraftM] = useState<string | null>(null)
+
+  const cmFromMetersInput = (raw: string): number | null => {
+    const m = parseFloat(raw.trim().replace(',', '.'))
+    if (Number.isNaN(m)) return null
+    return Math.round(Math.min(5000, Math.max(50, m * 100)))
+  }
+
+  const commitWidthM = () => {
+    if (widthDraftM === null) return
+    const raw = widthDraftM.trim()
+    setWidthDraftM(null)
+    if (raw === '') return
+    const cm = cmFromMetersInput(raw)
+    if (cm !== null) setRoomWidth(cm)
+  }
+
+  const commitDepthM = () => {
+    if (depthDraftM === null) return
+    const raw = depthDraftM.trim()
+    setDepthDraftM(null)
+    if (raw === '') return
+    const cm = cmFromMetersInput(raw)
+    if (cm !== null) setRoomDepth(cm)
+  }
+
+  const nudgeWidthCm = (deltaCm: number) => {
+    setWidthDraftM(null)
+    const base =
+      widthDraftM !== null ? (cmFromMetersInput(widthDraftM) ?? roomWidth) : roomWidth
+    setRoomWidth(Math.min(5000, Math.max(50, base + deltaCm)))
+  }
+
+  const nudgeDepthCm = (deltaCm: number) => {
+    setDepthDraftM(null)
+    const base =
+      depthDraftM !== null ? (cmFromMetersInput(depthDraftM) ?? roomDepth) : roomDepth
+    setRoomDepth(Math.min(5000, Math.max(50, base + deltaCm)))
+  }
+
   const previewVertices = useMemo(
     () => generateShapeVertices(shape, roomWidth, roomDepth),
     [shape, roomWidth, roomDepth],
@@ -127,14 +231,70 @@ export default function StepKamerForm({
 
       <div className="grid grid-cols-2 gap-2">
         <label className="flex flex-col gap-1">
-          <span className="ui-label">Breedte (cm)</span>
-          <input type="number" className="ui-input text-sm py-1.5" value={roomWidth} min={50} max={5000}
-            onChange={e => setRoomWidth(Number(e.target.value))} />
+          <span className="ui-label">Breedte (m)</span>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              inputMode="decimal"
+              className="ui-input text-sm py-1.5 flex-1 min-w-0 tabular-nums"
+              title="Breedte in meters (bijv. 4,00); pijltjes omhoog/omlaag: ±5 cm"
+              value={widthDraftM !== null ? widthDraftM : formatNlDecimal(roomWidth / 100, 2)}
+              onFocus={() => setWidthDraftM(formatNlDecimal(roomWidth / 100, 2))}
+              onChange={e => setWidthDraftM(e.target.value)}
+              onBlur={commitWidthM}
+              onKeyDown={e => {
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  nudgeWidthCm(METER_FIELD_NUDGE_CM)
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  nudgeWidthCm(-METER_FIELD_NUDGE_CM)
+                } else if (e.key === 'Enter') {
+                  e.preventDefault()
+                  commitWidthM()
+                  ;(e.target as HTMLInputElement).blur()
+                }
+              }}
+            />
+            <MeterArrowButtons
+              onUp={() => nudgeWidthCm(METER_FIELD_NUDGE_CM)}
+              onDown={() => nudgeWidthCm(-METER_FIELD_NUDGE_CM)}
+            />
+            <span className="text-xs text-light/40 shrink-0">m</span>
+          </div>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="ui-label">Diepte (cm)</span>
-          <input type="number" className="ui-input text-sm py-1.5" value={roomDepth} min={50} max={5000}
-            onChange={e => setRoomDepth(Number(e.target.value))} />
+          <span className="ui-label">Diepte (m)</span>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              inputMode="decimal"
+              className="ui-input text-sm py-1.5 flex-1 min-w-0 tabular-nums"
+              title="Diepte in meters (bijv. 3,00); pijltjes omhoog/omlaag: ±5 cm"
+              value={depthDraftM !== null ? depthDraftM : formatNlDecimal(roomDepth / 100, 2)}
+              onFocus={() => setDepthDraftM(formatNlDecimal(roomDepth / 100, 2))}
+              onChange={e => setDepthDraftM(e.target.value)}
+              onBlur={commitDepthM}
+              onKeyDown={e => {
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  nudgeDepthCm(METER_FIELD_NUDGE_CM)
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  nudgeDepthCm(-METER_FIELD_NUDGE_CM)
+                } else if (e.key === 'Enter') {
+                  e.preventDefault()
+                  commitDepthM()
+                  ;(e.target as HTMLInputElement).blur()
+                }
+              }}
+            />
+            <MeterArrowButtons
+              onUp={() => nudgeDepthCm(METER_FIELD_NUDGE_CM)}
+              onDown={() => nudgeDepthCm(-METER_FIELD_NUDGE_CM)}
+            />
+            <span className="text-xs text-light/40 shrink-0">m</span>
+          </div>
         </label>
       </div>
 

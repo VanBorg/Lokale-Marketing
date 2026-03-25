@@ -107,11 +107,6 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
     )
   }, [previewLockedWalls])
 
-  const selectRoomWall = useCallback((roomId: string, wallIndex: number) => {
-    blueprintStore.getState().select([roomId])
-    setSelectedWallIndex(wallIndex)
-  }, [])
-
   const displayedRoomKey = selectedRoomId ?? previewRoomKey
   const listHoverWallIndex =
     hoveredWall && hoveredWall.roomKey === displayedRoomKey ? hoveredWall.wallIndex : null
@@ -258,7 +253,6 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
               canvasHoveredWallIndex={canvasHoveredWallIndex}
               displayedRoomKey={displayedRoomKey}
               onSetHoveredWall={setHoveredWall}
-              onSelectRoomWall={selectRoomWall}
               onSetSelectedWallIndex={setSelectedWallIndex}
               onRoomWallLengthChange={handleWallLengthChange}
             />

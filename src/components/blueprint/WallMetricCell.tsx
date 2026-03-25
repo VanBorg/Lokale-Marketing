@@ -8,7 +8,6 @@ interface WallMetricCellProps {
   isActive: boolean
   /** Softer highlight when this wall is hovered on the preview canvas. */
   isCanvasHovered?: boolean
-  onSelect: () => void
   /** Teruggeven in centimeters (store blijft cm). */
   onLengthChange: (valueCm: number) => void
   onHoverStart?: () => void
@@ -22,7 +21,6 @@ export default function WallMetricCell({
   lengthCm,
   isActive,
   isCanvasHovered = false,
-  onSelect,
   onLengthChange,
   onHoverStart,
   locked,
@@ -59,17 +57,11 @@ export default function WallMetricCell({
   return (
     <div
       ref={cellRef}
-      role="button"
-      tabIndex={0}
+      role="group"
       aria-label={`Wand ${wallIndex + 1}, ${metersDisplay} m${locked ? ' (vergrendeld)' : ''}`}
-      onClick={onSelect}
       onMouseEnter={onHoverStart}
-      onKeyDown={e => {
-        if (e.target === inputRef.current) return
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() }
-      }}
       className={[
-        'bg-dark px-1.5 py-0.5 min-h-0 flex flex-nowrap items-center justify-center gap-1 min-w-0 transition-all duration-200 cursor-pointer border border-transparent',
+        'bg-dark px-1.5 py-0.5 min-h-0 flex flex-nowrap items-center justify-center gap-1 min-w-0 transition-all duration-200 cursor-default border border-transparent',
         locked ? 'opacity-90' : '',
         isActive
           ? 'ring-1 ring-inset ring-accent/40 bg-accent/[0.06]'
