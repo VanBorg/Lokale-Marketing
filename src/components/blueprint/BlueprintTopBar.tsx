@@ -6,6 +6,7 @@ import { Button } from '../ui'
 import KlantgegevensModal from './KlantgegevensModal'
 import ShortcutsModal from './ShortcutsModal'
 import ProjectStatusSelect from '../project/ProjectStatusSelect'
+import { useBlueprintSave } from '../../hooks/useBlueprintSave'
 import type { Project } from '../../lib/database.types'
 
 interface BlueprintTopBarProps {
@@ -18,6 +19,7 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
   const navigate = useNavigate()
   const [showKlant, setShowKlant] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const { isSaving, lastSaved, isDirty, saveNow } = useBlueprintSave(project.id)
 
   // Manual subscription to the zundo temporal store.
   // useStore(temporal, selector) can trigger sync re-render loops during
@@ -34,6 +36,17 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
     sync()
     return blueprintStore.temporal.subscribe(sync)
   }, [])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault()
+        saveNow()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [saveNow])
 
   const handleUndo = () => blueprintStore.temporal.getState().undo()
   const handleRedo = () => blueprintStore.temporal.getState().redo()
@@ -94,6 +107,34 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
 
         {/* Separator */}
         <div className="w-px h-5 bg-dark-border mx-1 shrink-0" />
+
+        {/* Opslaan status */}
+        <div className="flex items-center gap-2 shrink-0">
+          {isDirty && !isSaving && (
+            <span className="text-[10px] text-light/40">Niet opgeslagen</span>
+          )}
+          {lastSaved && !isDirty && (
+            <span className="text-[10px] text-light/30">
+              Opgeslagen {lastSaved.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={saveNow}
+            disabled={isSaving || !isDirty}
+            className="ui-icon-button disabled:opacity-30 disabled:cursor-not-allowed text-xs px-2 flex items-center gap-1"
+            title="Opslaan (Ctrl+S)"
+          >
+            {isSaving ? (
+              <div className="h-3 w-3 rounded-full border border-accent border-t-transparent animate-spin" />
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+              </svg>
+            )}
+          </button>
+        </div>
 
         {/* Klantgegevens — project info */}
         <Button

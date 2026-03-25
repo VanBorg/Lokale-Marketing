@@ -169,6 +169,7 @@ export interface StepKamerFormProps {
   controlledDepth?: number
   onWidthChange?: (w: number) => void
   onDepthChange?: (d: number) => void
+  currentPreviewVertices?: Point[]
 }
 
 export default function StepKamerForm({
@@ -178,6 +179,7 @@ export default function StepKamerForm({
   controlledDepth,
   onWidthChange,
   onDepthChange,
+  currentPreviewVertices,
 }: StepKamerFormProps) {
   const [shape, setShape] = useState<ShapeType>('rechthoek')
   const [localWidth, setLocalWidth] = useState(controlledWidth ?? 400)
@@ -265,7 +267,10 @@ export default function StepKamerForm({
   }
 
   const handlePlace = useCallback(() => {
-    const vertices = generateShapeVertices(shape, roomWidth, roomDepth)
+    const vertices =
+      (currentPreviewVertices && currentPreviewVertices.length >= 3)
+        ? currentPreviewVertices
+        : generateShapeVertices(shape, roomWidth, roomDepth)
     if (vertices.length < 3) return
 
     const ceiling: RoomCeiling = {
@@ -291,7 +296,7 @@ export default function StepKamerForm({
     blueprintStore.getState().select([id])
     onNext(id)
   }, [
-    shape, roomWidth, roomDepth, roomName, wallHeight, roofType, roofPeakHeight,
+    currentPreviewVertices, shape, roomWidth, roomDepth, roomName, wallHeight, roofType, roofPeakHeight,
     wallHeightMode, perWallHeights, ceilingType, ceilingHeight, ceilingRidgeHeight,
     cassetteGrid, onNext,
   ])

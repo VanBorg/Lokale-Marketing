@@ -7,6 +7,7 @@ import {
   findVertexSnap,
   isVertexPinnedByGeometryWallLock,
 } from '../../utils/blueprintGeometry'
+import { useTheme } from '../../hooks/useTheme'
 import WallLabels from './WallLabels'
 
 interface EditableRoomProps {
@@ -18,15 +19,19 @@ const VERTEX_RADIUS = 5
 const VERTEX_FILL = '#35B4D3'
 /** Zelfde als Kamer Overview: muur-geometrie-slot. */
 const ORANGE_GEOM_PIN = '#f97316'
-const STROKE_SELECTED = '#35B4D3'
-const STROKE_IDLE = 'rgba(255,255,255,0.3)'
-const FILL_SELECTED = 'rgba(53,180,211,0.08)'
-const FILL_IDLE = 'rgba(255,255,255,0.04)'
 
 const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRoomProps) {
   const room = useBlueprintStore(s => s.rooms[roomId])
   const selectedIds = useSelectedIds()
   const isSelected = selectedIds.includes(roomId)
+
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
+
+  const strokeIdle     = isLight ? '#0e7490' : '#35B4D3'
+  const fillIdle       = isLight ? 'rgba(14,116,144,0.08)' : 'rgba(53,180,211,0.07)'
+  const strokeSelected = isLight ? '#0891b2' : '#5ecde8'
+  const fillSelected   = isLight ? 'rgba(14,116,144,0.18)' : 'rgba(53,180,211,0.18)'
 
   const lineRef = useRef<Konva.Line>(null)
   const groupRef = useRef<Konva.Group>(null)
@@ -130,9 +135,9 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         ref={lineRef}
         points={flatPoints}
         closed
-        fill={isSelected ? FILL_SELECTED : FILL_IDLE}
-        stroke={isSelected ? STROKE_SELECTED : STROKE_IDLE}
-        strokeWidth={isSelected ? 2 : 1.5}
+        fill={isSelected ? fillSelected : fillIdle}
+        stroke={isSelected ? strokeSelected : strokeIdle}
+        strokeWidth={isSelected ? 2.5 : 1.5}
         shadowColor={isSelected ? '#35B4D3' : undefined}
         shadowBlur={isSelected ? 6 : 0}
         shadowOpacity={0.3}

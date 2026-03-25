@@ -85,6 +85,12 @@ export default function BuilderPanel({ onPreviewChange, previewWidth, previewDep
   const [activeStep, setActiveStep] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
   const [lastRoomId, setLastRoomId] = useState<string | null>(null)
+  const [currentPreviewVertices, setCurrentPreviewVertices] = useState<Point[]>([])
+
+  const handlePreviewChange = useCallback((vertices: Point[]) => {
+    setCurrentPreviewVertices(vertices)
+    onPreviewChange?.(vertices)
+  }, [onPreviewChange])
 
   const goPrev = useCallback(() => {
     setActiveStep(prev => Math.max(prev - 1, 0))
@@ -116,6 +122,7 @@ export default function BuilderPanel({ onPreviewChange, previewWidth, previewDep
       if (!next.includes(LAST_STEP_INDEX)) next.push(LAST_STEP_INDEX)
       return next
     })
+    setCurrentPreviewVertices([])
   }, [])
 
   const handleWandenNext = useCallback(() => {
@@ -163,11 +170,12 @@ export default function BuilderPanel({ onPreviewChange, previewWidth, previewDep
                   <div data-last-room-id={lastRoomId ?? undefined}>
                     <StepKamerForm
                       onNext={handleStepKamerNext}
-                      onPreviewChange={onPreviewChange}
+                      onPreviewChange={handlePreviewChange}
                       controlledWidth={previewWidth}
                       controlledDepth={previewDepth}
                       onWidthChange={onWidthChange}
                       onDepthChange={onDepthChange}
+                      currentPreviewVertices={currentPreviewVertices}
                     />
                   </div>
                 )}

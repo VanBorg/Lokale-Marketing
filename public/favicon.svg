@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#1a1f2e"/>
+  <!-- Compass legs -->
+  <g stroke="#35B4D3" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Left leg -->
+    <line x1="256" y1="185" x2="168" y2="390"/>
+    <!-- Right leg -->
+    <line x1="256" y1="185" x2="344" y2="390"/>
+    <!-- Cross bar -->
+    <line x1="200" y1="290" x2="312" y2="290"/>
+    <!-- Pivot circle -->
+    <circle cx="256" cy="172" r="28"/>
+    <!-- Top pin -->
+    <line x1="256" y1="144" x2="256" y2="105"/>
+    <!-- Left tip arrow -->
+    <polyline points="158,378 168,390 178,370"/>
+    <!-- Right tip arrow -->
+    <polyline points="334,370 344,390 354,378"/>
+  </g>
+</svg>

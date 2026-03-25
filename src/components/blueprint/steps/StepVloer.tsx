@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useRoom } from '../../../store/blueprintStore'
+import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
 import { polygonArea, formatNlDecimal } from '../../../utils/blueprintGeometry'
 
 type Vloertype = 'Betonvloer' | 'Houten vloer' | 'Systeemvloer' | 'Zandcement dekvloer' | 'Overig'
@@ -39,15 +40,27 @@ interface Props {
 
 export default function StepVloer({ roomId, onNext, onPrev }: Props) {
   const room = useRoom(roomId ?? '')
+  const storedVloer = useRoomDetailsStore(s => (roomId ? s.details[roomId]?.vloer : undefined))
 
-  const [data, setData] = useState<VloerData>({
-    vloertype: 'Betonvloer',
-    afwerking: 'Tegels',
-    dikte: 10,
-    vloerverwarming: false,
-    vochtkeringNodig: false,
-    bijzonderheden: '',
-  })
+  const [data, setData] = useState<VloerData>(() =>
+    storedVloer
+      ? {
+          vloertype: storedVloer.vloertype as Vloertype,
+          afwerking: storedVloer.afwerking as Afwerking,
+          dikte: storedVloer.dikte,
+          vloerverwarming: storedVloer.vloerverwarming,
+          vochtkeringNodig: storedVloer.vochtkeringNodig,
+          bijzonderheden: storedVloer.bijzonderheden,
+        }
+      : {
+          vloertype: 'Betonvloer',
+          afwerking: 'Tegels',
+          dikte: 10,
+          vloerverwarming: false,
+          vochtkeringNodig: false,
+          bijzonderheden: '',
+        },
+  )
 
   function patch(update: Partial<VloerData>) {
     setData(prev => ({ ...prev, ...update }))
@@ -166,7 +179,12 @@ export default function StepVloer({ roomId, onNext, onPrev }: Props) {
       <div className="flex flex-col gap-2 pt-1">
         <button
           type="button"
-          onClick={onNext}
+          onClick={() => {
+            if (roomId) {
+              useRoomDetailsStore.getState().setVloer(roomId, data)
+            }
+            onNext()
+          }}
           className="w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 bg-accent text-white hover:bg-accent/90"
         >
           Volgende →

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useRoom } from '../../../store/blueprintStore'
+import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
 import { formatNlDecimal } from '../../../utils/blueprintGeometry'
 
 type WallMaterial = 'Beton' | 'Kalkzandsteen' | 'Houtskelet' | 'Gipsblok' | 'Overig'
@@ -36,12 +37,22 @@ interface Props {
 
 export default function StepWanden({ roomId, onNext, onPrev }: Props) {
   const room = useRoom(roomId ?? '')
+  const storedWanden = useRoomDetailsStore(s => (roomId ? s.details[roomId]?.wanden : undefined))
 
   const wallCount = room?.vertices?.length ?? 0
 
-  const [walls, setWalls] = useState<WallData[]>(() =>
-    Array.from({ length: wallCount }, () => ({ ...DEFAULT_WALL }))
-  )
+  const [walls, setWalls] = useState<WallData[]>(() => {
+    if (storedWanden && storedWanden.length > 0) {
+      return storedWanden.map(w => ({
+        material: w.material as WallMaterial,
+        thickness: w.thickness,
+        loadBearing: w.loadBearing,
+        exterior: w.exterior,
+        wetRoom: w.wetRoom,
+      }))
+    }
+    return Array.from({ length: wallCount }, () => ({ ...DEFAULT_WALL }))
+  })
 
   // Sync state when wallCount changes (e.g. room shape changed)
   const syncedWalls = useMemo(() => {
@@ -183,7 +194,15 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
       <div className="flex flex-col gap-2 pt-1">
         <button
           type="button"
-          onClick={onNext}
+          onClick={() => {
+            if (roomId) {
+              useRoomDetailsStore.getState().setWanden(
+                roomId,
+                syncedWalls.map((w, i) => ({ wallIndex: i, ...w })),
+              )
+            }
+            onNext()
+          }}
           className="w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 bg-accent text-white hover:bg-accent/90"
         >
           Volgende →

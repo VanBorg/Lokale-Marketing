@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { nanoid } from 'nanoid'
+import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
 
 type OpeningType = 'deur' | 'raam' | 'schuifdeur' | 'dakraam' | 'overig'
 
@@ -100,8 +101,22 @@ function makeOpening(type: OpeningType): OpeningItem {
   }
 }
 
-export default function StepOpeningen({ onNext, onPrev }: StepOpeningenProps) {
-  const [items, setItems] = useState<OpeningItem[]>([])
+export default function StepOpeningen({ roomId, onNext, onPrev }: StepOpeningenProps) {
+  const storedOpeningen = useRoomDetailsStore(s => (roomId ? s.details[roomId]?.openingen : undefined))
+
+  const [items, setItems] = useState<OpeningItem[]>(() =>
+    storedOpeningen && storedOpeningen.length > 0
+      ? storedOpeningen.map(o => ({
+          id: o.id,
+          type: o.type as OpeningType,
+          breedte: o.breedte,
+          hoogte: o.hoogte,
+          aantal: o.aantal,
+          wandIndex: o.wandIndex,
+          bijzonderheid: o.bijzonderheid,
+        }))
+      : [],
+  )
 
   const addItem = (type: OpeningType) =>
     setItems(prev => [...prev, makeOpening(type)])
@@ -184,7 +199,12 @@ export default function StepOpeningen({ onNext, onPrev }: StepOpeningenProps) {
       <div className="flex flex-col gap-2 pt-1">
         <button
           type="button"
-          onClick={onNext}
+          onClick={() => {
+            if (roomId) {
+              useRoomDetailsStore.getState().setOpeningen(roomId, items)
+            }
+            onNext()
+          }}
           className="w-full px-4 py-2.5 text-sm font-medium rounded-lg bg-accent text-white hover:bg-accent/90 transition-colors duration-200"
         >
           Volgende →

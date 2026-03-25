@@ -14,6 +14,7 @@ import {
 } from '../../utils/blueprintGeometry'
 import type { Point } from '../../utils/blueprintGeometry'
 import { useBlueprintKeyboard } from '../../hooks/useBlueprintKeyboard'
+import { useBlueprintSave } from '../../hooks/useBlueprintSave'
 import BlueprintTopBar from './BlueprintTopBar'
 import BlueprintCanvas from './BlueprintCanvas'
 import BuilderPanel from './BuilderPanel'
@@ -33,6 +34,12 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   useEffect(() => {
     blueprintStore.getState().initProject(project.id)
   }, [project.id])
+
+  const { loadProject } = useBlueprintSave(project.id)
+
+  useEffect(() => {
+    loadProject()
+  }, [project.id, loadProject])
 
   useBlueprintKeyboard()
 

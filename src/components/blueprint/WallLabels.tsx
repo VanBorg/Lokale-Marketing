@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Text, Group } from 'react-konva'
 import { useBlueprintStore } from '../../store/blueprintStore'
 import { wallLength, wallAngle, innerAngle, formatWallLengthMetersLabel } from '../../utils/blueprintGeometry'
+import { useTheme } from '../../hooks/useTheme'
 
 interface WallLabelsProps {
   roomId: string
@@ -13,14 +14,18 @@ const LABEL_OFFSET_OUT_CM = 48
 const ANGLE_INSET_CM = 46
 const FONT_SIZE = 11
 const FONT_FAMILY = 'DM Sans'
-const LABEL_FILL = '#e8eef4'
-const LABEL_STROKE = 'rgba(6, 8, 14, 0.42)'
 const LENGTH_LOCK = '#fb923c'
-const ANGLE_FILL = 'rgba(200, 235, 245, 0.98)'
-const ANGLE_STROKE = 'rgba(6, 8, 14, 0.35)'
 
 const WallLabels = memo(function WallLabels({ roomId, isSelected }: WallLabelsProps) {
   const room = useBlueprintStore(s => s.rooms[roomId])
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
+
+  const labelFill   = isLight ? '#0f172a'                    : '#e8eef4'
+  const labelStroke = isLight ? 'rgba(255,255,255,0.7)'      : 'rgba(6,8,14,0.42)'
+  const angleFill   = isLight ? 'rgba(15,23,42,0.92)'        : 'rgba(200,235,245,0.98)'
+  const angleStroke = isLight ? 'rgba(255,255,255,0.55)'     : 'rgba(6,8,14,0.35)'
+
   if (!room || !isSelected) return null
 
   const verts = room.vertices
@@ -83,8 +88,8 @@ const WallLabels = memo(function WallLabels({ roomId, isSelected }: WallLabelsPr
               fontSize={FONT_SIZE}
               fontStyle="normal"
               fontFamily={FONT_FAMILY}
-              fill={locked ? LENGTH_LOCK : LABEL_FILL}
-              stroke={locked ? LENGTH_LOCK : LABEL_STROKE}
+              fill={locked ? LENGTH_LOCK : labelFill}
+              stroke={locked ? LENGTH_LOCK : labelStroke}
               strokeWidth={locked ? 0.45 : 0.65}
               lineJoin="round"
               align="center"
@@ -111,8 +116,8 @@ const WallLabels = memo(function WallLabels({ roomId, isSelected }: WallLabelsPr
               fontSize={10}
               fontStyle="normal"
               fontFamily={FONT_FAMILY}
-              fill={ANGLE_FILL}
-              stroke={ANGLE_STROKE}
+              fill={angleFill}
+              stroke={angleStroke}
               strokeWidth={0.55}
               lineJoin="round"
               align="center"

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useRoom } from '../../../store/blueprintStore'
+import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
 import { polygonArea } from '../../../utils/blueprintGeometry'
 
 const AFWERKING_OPTIONS = [
@@ -19,13 +20,14 @@ interface StepPlafondProps {
 
 export default function StepPlafond({ roomId, onNext, onPrev }: StepPlafondProps) {
   const room = useRoom(roomId ?? '')
+  const stored = useRoomDetailsStore(s => (roomId ? s.details[roomId]?.plafond : undefined))
 
-  const [afwerking, setAfwerking] = useState(AFWERKING_OPTIONS[0])
-  const [systeemplafond, setSysteemplafond] = useState(false)
-  const [verlaagdeHoogte, setVerlaagdeHoogte] = useState(240)
-  const [spotjes, setSpotjes] = useState(false)
-  const [aantalSpots, setAantalSpots] = useState(4)
-  const [bijzonderheden, setBijzonderheden] = useState('')
+  const [afwerking, setAfwerking] = useState(stored?.afwerking ?? AFWERKING_OPTIONS[0])
+  const [systeemplafond, setSysteemplafond] = useState(stored?.systeemplafond ?? false)
+  const [verlaagdeHoogte, setVerlaagdeHoogte] = useState(stored?.verlaagdeHoogte ?? 240)
+  const [spotjes, setSpotjes] = useState(stored?.spotjes ?? false)
+  const [aantalSpots, setAantalSpots] = useState(stored?.aantalSpots ?? 4)
+  const [bijzonderheden, setBijzonderheden] = useState(stored?.bijzonderheden ?? '')
 
   const plafondM2 = room ? (polygonArea(room.vertices) / 10000).toFixed(2) : '—'
 
@@ -133,7 +135,19 @@ export default function StepPlafond({ roomId, onNext, onPrev }: StepPlafondProps
       <div className="flex flex-col gap-2 pt-1">
         <button
           type="button"
-          onClick={onNext}
+          onClick={() => {
+            if (roomId) {
+              useRoomDetailsStore.getState().setPlafond(roomId, {
+                afwerking,
+                systeemplafond,
+                verlaagdeHoogte,
+                spotjes,
+                aantalSpots,
+                bijzonderheden,
+              })
+            }
+            onNext()
+          }}
           className="w-full px-4 py-2.5 text-sm font-medium rounded-lg bg-accent text-white hover:bg-accent/90 transition-colors duration-200"
         >
           Volgende →

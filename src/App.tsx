@@ -31,7 +31,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
 
             <Route element={<Layout />}>
-              <Route index element={<Navigate to="/projects" replace />} />
+              <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="blauwdruk" element={<BlauwdrukStartPage />} />

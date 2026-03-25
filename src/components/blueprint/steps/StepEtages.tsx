@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
 import { nanoid } from 'nanoid'
 
 type EtageType = 'begane grond' | 'verdieping' | 'zolder' | 'kelder' | 'dak'
@@ -33,23 +33,22 @@ interface StepEtagesProps {
 }
 
 export default function StepEtages({ onNext, onPrev }: StepEtagesProps) {
-  const [etages, setEtages] = useState<Etage[]>([
-    { id: nanoid(), naam: 'Begane grond', type: 'begane grond', omschrijving: '' },
-  ])
-  const [dakbedekking, setDakbedekking] = useState(DAKBEDEKKING_OPTIONS[0])
-  const [dakoversteekhoogte, setDakoversteekhoogte] = useState(50)
+  const etages = useRoomDetailsStore(s => s.etages) as Etage[]
+  const dakbedekking = useRoomDetailsStore(s => s.dakbedekking)
+  const dakoversteekhoogte = useRoomDetailsStore(s => s.dakoversteekhoogte)
+  const { setEtages, setDakbedekking, setDakoversteekhoogte } = useRoomDetailsStore()
 
   const addEtage = () =>
-    setEtages(prev => [
-      ...prev,
+    setEtages([
+      ...etages,
       { id: nanoid(), naam: '', type: 'verdieping', omschrijving: '' },
     ])
 
   const updateEtage = (id: string, patch: Partial<Etage>) =>
-    setEtages(prev => prev.map(e => (e.id === id ? { ...e, ...patch } : e)))
+    setEtages(etages.map(e => (e.id === id ? { ...e, ...patch } : e)))
 
   const removeEtage = (id: string) =>
-    setEtages(prev => prev.filter(e => e.id !== id))
+    setEtages(etages.filter(e => e.id !== id))
 
   return (
     <div className="space-y-3">
