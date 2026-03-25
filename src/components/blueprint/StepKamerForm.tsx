@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import { blueprintStore } from '../../store/blueprintStore'
 import {
   generateShapeVertices,
@@ -10,6 +10,10 @@ import RoomShapePicker from './RoomShapePicker'
 
 /** Zelfde stap als wandlengte in het metrische rooster (5 cm). */
 const METER_FIELD_NUDGE_CM = 5
+
+/** Eerste herhaling na ingedrukt houden; daarna interval voor “door-scrollen”. */
+const METER_REPEAT_DELAY_MS = 420
+const METER_REPEAT_INTERVAL_MS = 55
 
 /** Inline SVG’s — voorkomt bundel/tree-shake issues met named Lucide-exports. */
 function MeterChevronUpIcon({ className }: { className?: string }) {
@@ -50,21 +54,91 @@ function MeterChevronDownIcon({ className }: { className?: string }) {
   )
 }
 
-function MeterArrowButtons({ onUp, onDown }: { onUp: () => void; onDown: () => void }) {
+function MeterRepeatButton({
+  onTick,
+  'aria-label': ariaLabel,
+  children,
+}: {
+  onTick: () => void
+  'aria-label': string
+  children: ReactNode
+}) {
   const btnClass =
-    'flex items-center justify-center py-0.5 text-light/50 hover:text-light hover:bg-light/[0.06] transition-colors'
+    'flex items-center justify-center py-0.5 text-light/50 hover:text-light hover:bg-light/[0.06] transition-colors select-none touch-manipulation'
+  /** DOM timer handles are numeric; Node typings can make `setTimeout` return `Timeout` (build fails). */
+  const delayRef = useRef<number | null>(null)
+  const intervalRef = useRef<number | null>(null)
+  const tickRef = useRef(onTick)
+  tickRef.current = onTick
+
+  const stop = useCallback(() => {
+    if (delayRef.current != null) {
+      clearTimeout(delayRef.current)
+      delayRef.current = null
+    }
+    if (intervalRef.current != null) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [])
+
+  const start = useCallback(() => {
+    tickRef.current()
+    stop()
+    delayRef.current = window.setTimeout(() => {
+      intervalRef.current = window.setInterval(() => tickRef.current(), METER_REPEAT_INTERVAL_MS)
+    }, METER_REPEAT_DELAY_MS)
+  }, [stop])
+
+  useEffect(() => () => stop(), [stop])
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      e.preventDefault()
+      start()
+      const onRelease = () => {
+        stop()
+        window.removeEventListener('pointerup', onRelease)
+        window.removeEventListener('pointercancel', onRelease)
+      }
+      window.addEventListener('pointerup', onRelease)
+      window.addEventListener('pointercancel', onRelease)
+    },
+    [start, stop],
+  )
+
+  return (
+    <button
+      type="button"
+      className={btnClass}
+      aria-label={ariaLabel}
+      onPointerDown={onPointerDown}
+      onKeyDown={ev => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault()
+          tickRef.current()
+        }
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function MeterArrowButtons({ onUp, onDown }: { onUp: () => void; onDown: () => void }) {
   return (
     <div
       className="flex flex-col shrink-0 w-7 border border-dark-border rounded-md overflow-hidden divide-y divide-dark-border"
       role="group"
       aria-label="Waarde aanpassen"
     >
-      <button type="button" className={btnClass} onClick={onUp} aria-label="Verhogen">
+      <MeterRepeatButton onTick={onUp} aria-label="Verhogen">
         <MeterChevronUpIcon className="shrink-0" />
-      </button>
-      <button type="button" className={btnClass} onClick={onDown} aria-label="Verlagen">
+      </MeterRepeatButton>
+      <MeterRepeatButton onTick={onDown} aria-label="Verlagen">
         <MeterChevronDownIcon className="shrink-0" />
-      </button>
+      </MeterRepeatButton>
     </div>
   )
 }

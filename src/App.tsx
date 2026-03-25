@@ -6,8 +6,10 @@ import Layout from './components/layout/Layout';
 const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
 const ProjectsPage = lazy(() => import('./pages/dashboard/ProjectsPage'));
 const ArchiefPlaceholder = lazy(() => import('./pages/archief/ArchiefPlaceholder'));
+const ComingSoonToolPage = lazy(() => import('./pages/tools/ComingSoonToolPage'));
 const Login = lazy(() => import('./pages/auth/Login'));
 const ProjectDetail = lazy(() => import('./pages/project/ProjectDetail'));
+const BlauwdrukStartPage = lazy(() => import('./pages/blauwdruk/BlauwdrukStartPage'));
 
 function RouteFallback() {
   return (
@@ -32,7 +34,9 @@ export default function App() {
               <Route index element={<Navigate to="/projects" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="projects" element={<ProjectsPage />} />
+              <Route path="blauwdruk" element={<BlauwdrukStartPage />} />
               <Route path="archief" element={<ArchiefPlaceholder />} />
+              <Route path="tools/:toolId" element={<ComingSoonToolPage />} />
               <Route path="project/:id" element={<ProjectDetail />} />
             </Route>
           </Routes>

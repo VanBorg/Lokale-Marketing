@@ -16,6 +16,9 @@ export default function Breadcrumb() {
   } else if (pathname === '/projects') {
     crumbs.push({ label: 'Dashboard', to: '/dashboard' });
     crumbs.push({ label: 'Projecten' });
+  } else if (pathname === '/blauwdruk') {
+    crumbs.push({ label: 'Dashboard', to: '/dashboard' });
+    crumbs.push({ label: 'Blauwdruk tool' });
   } else if (pathname.startsWith('/project/') && id) {
     crumbs.push({ label: 'Dashboard', to: '/dashboard' });
     crumbs.push({ label: 'Projecten', to: '/projects' });
@@ -23,6 +26,21 @@ export default function Breadcrumb() {
   } else if (pathname === '/archief') {
     crumbs.push({ label: 'Dashboard', to: '/dashboard' });
     crumbs.push({ label: 'Archief' });
+  } else if (pathname.startsWith('/tools/')) {
+    const toolLabels: Record<string, string> = {
+      offerte: 'Offerte tool',
+      materiaallijst: 'Materiaallijst',
+      urenregistratie: 'Urenregistratie',
+      'document-scanner': 'Document scanner',
+    };
+    const segment = pathname.replace(/^\/tools\//, '');
+    const label = toolLabels[segment];
+    if (label) {
+      crumbs.push({ label: 'Dashboard', to: '/dashboard' });
+      crumbs.push({ label });
+    } else {
+      return null;
+    }
   } else {
     return null;
   }

@@ -1,0 +1,201 @@
+import { useState, useMemo } from 'react'
+import { useRoom } from '../../../store/blueprintStore'
+import { formatNlDecimal } from '../../../utils/blueprintGeometry'
+
+type WallMaterial = 'Beton' | 'Kalkzandsteen' | 'Houtskelet' | 'Gipsblok' | 'Overig'
+
+interface WallData {
+  material: WallMaterial
+  thickness: number
+  loadBearing: boolean
+  exterior: boolean
+  wetRoom: boolean
+}
+
+const DEFAULT_WALL: WallData = {
+  material: 'Beton',
+  thickness: 20,
+  loadBearing: false,
+  exterior: false,
+  wetRoom: false,
+}
+
+const MATERIALS: WallMaterial[] = [
+  'Beton',
+  'Kalkzandsteen',
+  'Houtskelet',
+  'Gipsblok',
+  'Overig',
+]
+
+interface Props {
+  roomId: string | null
+  onNext: () => void
+  onPrev: () => void
+}
+
+export default function StepWanden({ roomId, onNext, onPrev }: Props) {
+  const room = useRoom(roomId ?? '')
+
+  const wallCount = room?.vertices?.length ?? 0
+
+  const [walls, setWalls] = useState<WallData[]>(() =>
+    Array.from({ length: wallCount }, () => ({ ...DEFAULT_WALL }))
+  )
+
+  // Sync state when wallCount changes (e.g. room shape changed)
+  const syncedWalls = useMemo(() => {
+    if (walls.length === wallCount) return walls
+    if (wallCount === 0) return []
+    return Array.from({ length: wallCount }, (_, i) => walls[i] ?? { ...DEFAULT_WALL })
+  }, [wallCount, walls])
+
+  const wallMetrics = useMemo(() => {
+    if (!room) return []
+    const verts = room.vertices
+    return verts.map((v, i) => {
+      const next = verts[(i + 1) % verts.length]
+      const lengthCm = Math.hypot(next.x - v.x, next.y - v.y)
+      const heightCm = room.wallHeights?.[i] ?? room.wallHeight
+      const areaSqM = (lengthCm * heightCm) / 10_000
+      return { lengthCm, heightCm, areaSqM }
+    })
+  }, [room])
+
+  const totalSqM = wallMetrics.reduce((sum, w) => sum + w.areaSqM, 0)
+
+  function updateWall(index: number, patch: Partial<WallData>) {
+    setWalls(prev => {
+      const next = prev.length === wallCount ? [...prev] : Array.from({ length: wallCount }, (_, i) => prev[i] ?? { ...DEFAULT_WALL })
+      next[index] = { ...next[index], ...patch }
+      return next
+    })
+  }
+
+  if (!room) {
+    return (
+      <div className="space-y-4">
+        <p className="text-xs text-light/50">
+          Plaats eerst een kamer in stap 1 voordat je de wanden kunt invullen.
+        </p>
+        <button
+          type="button"
+          onClick={onPrev}
+          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+        >
+          ← Vorige
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2.5">
+        {wallMetrics.map((metric, i) => {
+          const wall = syncedWalls[i] ?? DEFAULT_WALL
+          return (
+            <div
+              key={i}
+              className="rounded-lg border border-dark-border bg-white/[0.02] p-2.5 space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-light">Wand {i + 1}</span>
+                <span className="text-[10px] font-medium text-accent tabular-nums">
+                  {formatNlDecimal(metric.areaSqM, 2)} m²
+                </span>
+              </div>
+
+              {/* Materiaal */}
+              <label className="flex flex-col gap-1">
+                <span className="ui-label">Materiaal</span>
+                <select
+                  className="ui-input text-sm py-1.5"
+                  value={wall.material}
+                  onChange={e => updateWall(i, { material: e.target.value as WallMaterial })}
+                >
+                  {MATERIALS.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </label>
+
+              {/* Dikte */}
+              <label className="flex flex-col gap-1">
+                <span className="ui-label">Dikte (cm)</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    className="ui-input text-sm py-1.5 flex-1 min-w-0 tabular-nums"
+                    value={wall.thickness}
+                    min={5}
+                    max={100}
+                    onChange={e => updateWall(i, { thickness: Number(e.target.value) })}
+                  />
+                  <span className="text-xs text-light/40 shrink-0">cm</span>
+                </div>
+              </label>
+
+              {/* Checkboxes */}
+              <div className="flex flex-wrap gap-x-3 gap-y-1.5 pt-0.5">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-dark-border"
+                    checked={wall.loadBearing}
+                    onChange={e => updateWall(i, { loadBearing: e.target.checked })}
+                  />
+                  <span className="ui-label !mb-0">Dragende muur</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-dark-border"
+                    checked={wall.exterior}
+                    onChange={e => updateWall(i, { exterior: e.target.checked })}
+                  />
+                  <span className="ui-label !mb-0">Buitenmuur</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-dark-border"
+                    checked={wall.wetRoom}
+                    onChange={e => updateWall(i, { wetRoom: e.target.checked })}
+                  />
+                  <span className="ui-label !mb-0">Natte ruimte</span>
+                </label>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Totaal */}
+      <div className="rounded-lg border border-dark-border bg-white/[0.02] px-3 py-2 flex items-center justify-between">
+        <span className="text-xs text-light/60">Totaal wandoppervlak</span>
+        <span className="text-sm font-semibold text-accent tabular-nums">
+          {formatNlDecimal(totalSqM, 2)} m²
+        </span>
+      </div>
+
+      {/* Navigatie */}
+      <div className="flex flex-col gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onNext}
+          className="w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 bg-accent text-white hover:bg-accent/90"
+        >
+          Volgende →
+        </button>
+        <button
+          type="button"
+          onClick={onPrev}
+          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+        >
+          ← Vorige
+        </button>
+      </div>
+    </div>
+  )
+}
