@@ -69,7 +69,7 @@ export default function StepKamerForm({
   const [cassetteGrid, setCassetteGrid]         = useState('60×60 cm')
 
   const previewVertices = useMemo(
-    () => (shape === 'vrije-vorm' ? [] : generateShapeVertices(shape, roomWidth, roomDepth)),
+    () => generateShapeVertices(shape, roomWidth, roomDepth),
     [shape, roomWidth, roomDepth],
   )
 
@@ -87,10 +87,6 @@ export default function StepKamerForm({
   }
 
   const handlePlace = useCallback(() => {
-    if (shape === 'vrije-vorm') {
-      blueprintStore.getState().setActiveTool('draw')
-      return
-    }
     const vertices = generateShapeVertices(shape, roomWidth, roomDepth)
     if (vertices.length < 3) return
 
@@ -107,6 +103,8 @@ export default function StepKamerForm({
       name: roomName || 'Ruimte',
       wallHeight,
       shape,
+      planWidthCm: roomWidth,
+      planDepthCm: roomDepth,
       roofType,
       roofPeakHeight,
       ...(wallHeightMode === 'per-wall' ? { wallHeights: perWallHeights } : {}),
@@ -122,24 +120,6 @@ export default function StepKamerForm({
 
   const showPeakHeight = roofType !== 'plat' && roofType !== 'platband'
   const ceilingNeedsRidge = ceilingType === 'schuin' || ceilingType === 'gewelfd' || ceilingType === 'open-kap'
-
-  if (shape === 'vrije-vorm') {
-    return (
-      <div className="space-y-3">
-        <RoomShapePicker selected={shape} onSelect={setShape} />
-        <p className="text-[11px] text-accent/80 bg-accent/10 border border-accent/20 rounded-lg px-3 py-2">
-          Klik op de canvas om punten te plaatsen. Dubbelklik om de vorm te sluiten.
-        </p>
-        <button
-          onClick={handlePlace}
-          className="w-full mt-1 px-4 py-2 text-sm bg-accent text-white font-semibold rounded-lg
-            hover:bg-accent/90 transition-colors"
-        >
-          Tekenmodus starten ↓
-        </button>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-3">

@@ -99,23 +99,17 @@ function StepDefinitiefMaken({ roomId, onPrev, onFinalize }: StepDefinitiefProps
         <div className="divide-y divide-dark-border/50 max-h-48 overflow-y-auto">
           {room.vertices.map((v, i) => {
             const next = room.vertices[(i + 1) % room.vertices.length]
-            const len     = wallLength(v, next)
-            const ang     = wallAngle(v, next)
-            const geomLock = room.lockedWalls?.includes(i)
-            const lenLock = room.lengthLockedWalls?.includes(i)
-            const wandM2  = (len / 100) * (room.wallHeight / 100)
+            const len    = wallLength(v, next)
+            const ang    = wallAngle(v, next)
+            const locked = room.lockedWalls?.includes(i)
+            const wandM2 = (len / 100) * (room.wallHeight / 100)
             return (
               <div key={i} className="flex items-center px-3 py-1.5 text-xs gap-2">
                 <span className="text-light/30 w-12 shrink-0">Wand {i + 1}</span>
-                <span className="text-light flex-1">{formatLength(len)}</span>
+                <span className={locked ? 'text-orange-400 flex-1' : 'text-light flex-1'}>{formatLength(len)}</span>
                 <span className="text-light/40">{ang.toFixed(0)}°</span>
                 <span className="text-light/40">{formatNlDecimal(wandM2, 2)} m²</span>
-                {lenLock && !geomLock && (
-                  <span className="text-orange-400 text-[9px]" title="Lengte vergrendeld">
-                    L
-                  </span>
-                )}
-                {geomLock && <span className="text-amber-400 text-[9px]">🔒</span>}
+                {locked && <span className="text-orange-400 text-[10px]" title="Wand vergrendeld">🔒</span>}
               </div>
             )
           })}

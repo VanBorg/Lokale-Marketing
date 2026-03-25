@@ -1,5 +1,6 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import type { ShapeType } from '../../utils/blueprintGeometry'
+import { useTheme } from '../../hooks/useTheme'
 
 interface RoomShapePickerProps {
   selected: ShapeType
@@ -12,7 +13,7 @@ interface ShapeOption {
   path: string
 }
 
-// 8 shapes in a 4×2 grid — the most commonly used floor plan shapes
+// 6 preset shapes in een 3×2 grid
 const SHAPES: ShapeOption[] = [
   {
     id: 'rechthoek',
@@ -22,12 +23,8 @@ const SHAPES: ShapeOption[] = [
   {
     id: 'l-vorm',
     label: 'L-vorm',
-    path: 'M4 4h14v12h14v12H4z',
-  },
-  {
-    id: 'l-omgekeerd',
-    label: 'L omgek.',
-    path: 'M28 4H14v12H4v12h24z',
+    /** h13 i.p.v. h14: anders raakt de rechterrand x=32 en wordt de stroke door de viewBox afgeknipt. */
+    path: 'M4 4h14v12h13v12H4z',
   },
   {
     id: 't-vorm',
@@ -49,17 +46,33 @@ const SHAPES: ShapeOption[] = [
     label: 'Kruis',
     path: 'M11 4h10v7h7v10h-7v7H11v-7H4V11h7z',
   },
-  {
-    id: 'vrije-vorm',
-    label: 'Vrij',
-    // hammer icon
-    path: 'M18 4h10v8H20L8 28H4L16 12V4z',
-  },
 ]
 
+const ACCENT = '#35B4D3'
+
 const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: RoomShapePickerProps) {
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
+
+  const svgColors = useMemo(() => {
+    if (isLight) {
+      return {
+        fillSelected: 'rgba(53,180,211,0.22)',
+        fillIdle: 'rgba(15,23,42,0.06)',
+        strokeSelected: ACCENT,
+        strokeIdle: 'rgba(15,23,42,0.5)',
+      }
+    }
+    return {
+      fillSelected: 'rgba(53,180,211,0.2)',
+      fillIdle: 'rgba(255,255,255,0.06)',
+      strokeSelected: ACCENT,
+      strokeIdle: 'rgba(255,255,255,0.45)',
+    }
+  }, [isLight])
+
   return (
-    <div className="grid grid-cols-4 gap-1.5">
+    <div className="grid grid-cols-3 gap-1.5">
       {SHAPES.map(s => {
         const isSelected = selected === s.id
         return (
@@ -80,12 +93,18 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
               viewBox="0 0 32 32"
               width={22}
               height={22}
-              fill={isSelected ? 'rgba(53,180,211,0.2)' : 'rgba(255,255,255,0.06)'}
-              stroke={isSelected ? '#35B4D3' : 'rgba(255,255,255,0.4)'}
+              fill={isSelected ? svgColors.fillSelected : svgColors.fillIdle}
+              stroke={isSelected ? svgColors.strokeSelected : svgColors.strokeIdle}
               strokeWidth={1.5}
               strokeLinejoin="round"
             >
-              <path d={s.path} />
+              {s.id === 'i-vorm' || s.id === 'plus-vorm' ? (
+                <g transform="translate(16,16) scale(1.18) translate(-16,-16)">
+                  <path d={s.path} />
+                </g>
+              ) : (
+                <path d={s.path} />
+              )}
             </svg>
             <span className={`text-[9px] font-medium leading-none text-center truncate w-full ${isSelected ? 'text-accent' : ''}`}>
               {s.label}

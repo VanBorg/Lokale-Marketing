@@ -4,9 +4,9 @@ import { temporal } from 'zundo'
 import { nanoid } from 'nanoid'
 import {
   applyWallLengthRespectingLocks,
-  mergeWallLockIndices,
+  axisAlignedBBoxSize,
   type Point,
-  type ShapeType,
+  type RoomShapeStored,
   type RoofType,
 } from '../utils/blueprintGeometry'
 
@@ -28,11 +28,12 @@ export interface Room {
   fill: string
   wallHeight: number
   label?: string
-  shape?: ShapeType
-  /** Muur (geometrie): geen slepen op deze wand; amber op canvas. */
+  shape?: RoomShapeStored
+  /** Nominale breedte/diepte (cm) voor dezelfde preview-schaal bij alle vormen; wordt bij vertex-updates gesynchroniseerd. */
+  planWidthCm?: number
+  planDepthCm?: number
+  /** Vergrendeld: wand kan niet worden gesleept en de lengte blijft behouden. */
   lockedWalls: number[]
-  /** Alleen lengte vast (invoer + behoud bij andere wijzigingen); oranje in UI. */
-  lengthLockedWalls?: number[]
   roofType: RoofType
   roofPeakHeight?: number
   wallHeights?: number[]
@@ -95,7 +96,6 @@ interface BlueprintState extends BlueprintDoc {
   updateElement: (id: string, updates: Partial<FloorElement>) => void
   deleteElement: (id: string) => void
   toggleWallLock: (roomId: string, wallIndex: number) => void
-  toggleWallLengthLock: (roomId: string, wallIndex: number) => void
   setWallLength: (roomId: string, wallIndex: number, lengthCm: number) => void
   setRoofType: (roomId: string, type: RoofType, peakHeight?: number) => void
 
@@ -183,6 +183,7 @@ export const useBlueprintStore = create<BlueprintState>()(
 
       addRoom: (vertices, meta = {}) => {
         const id = nanoid()
+        const bbox = axisAlignedBBoxSize(vertices)
         set(state => {
           state.rooms[id] = {
             id,
@@ -192,8 +193,9 @@ export const useBlueprintStore = create<BlueprintState>()(
             wallHeight: meta.wallHeight ?? DEFAULT_WALL_HEIGHT,
             label: meta.label,
             shape: meta.shape,
+            planWidthCm: meta.planWidthCm ?? bbox.w,
+            planDepthCm: meta.planDepthCm ?? bbox.h,
             lockedWalls: meta.lockedWalls ?? [],
-            lengthLockedWalls: meta.lengthLockedWalls ?? [],
             roofType: meta.roofType ?? 'plat',
             roofPeakHeight: meta.roofPeakHeight,
             wallHeights: meta.wallHeights,
@@ -206,13 +208,23 @@ export const useBlueprintStore = create<BlueprintState>()(
 
       updateRoomVertices: (id, vertices) => {
         set(state => {
-          if (state.rooms[id]) state.rooms[id].vertices = vertices
+          const room = state.rooms[id]
+          if (!room) return
+          room.vertices = vertices
+          const { w, h } = axisAlignedBBoxSize(vertices)
+          room.planWidthCm = w
+          room.planDepthCm = h
         })
       },
 
       updateRoomVertex: (id, index, point) => {
         set(state => {
-          if (state.rooms[id]) state.rooms[id].vertices[index] = point
+          const room = state.rooms[id]
+          if (!room) return
+          room.vertices[index] = point
+          const { w, h } = axisAlignedBBoxSize(room.vertices)
+          room.planWidthCm = w
+          room.planDepthCm = h
         })
       },
 
@@ -257,23 +269,8 @@ export const useBlueprintStore = create<BlueprintState>()(
           const room = state.rooms[roomId]
           if (!room) return
           const idx = room.lockedWalls.indexOf(wallIndex)
-          if (idx >= 0) {
-            room.lockedWalls.splice(idx, 1)
-          } else {
-            room.lockedWalls.push(wallIndex)
-          }
-        })
-      },
-
-      toggleWallLengthLock: (roomId, wallIndex) => {
-        set(state => {
-          const room = state.rooms[roomId]
-          if (!room) return
-          if (!room.lengthLockedWalls) room.lengthLockedWalls = []
-          const arr = room.lengthLockedWalls
-          const j = arr.indexOf(wallIndex)
-          if (j >= 0) arr.splice(j, 1)
-          else arr.push(wallIndex)
+          if (idx >= 0) room.lockedWalls.splice(idx, 1)
+          else room.lockedWalls.push(wallIndex)
         })
       },
 
@@ -281,17 +278,16 @@ export const useBlueprintStore = create<BlueprintState>()(
         set(state => {
           const room = state.rooms[roomId]
           if (!room) return
-          /** Alleen L-slot blokkeert numerieke lengte; M-slot (geometrie) niet — dan mag streep mee groeien. */
-          if ((room.lengthLockedWalls ?? []).includes(wallIndex)) {
-            return
-          }
-          const locked = mergeWallLockIndices(room.lockedWalls ?? [], room.lengthLockedWalls ?? [])
+          if ((room.lockedWalls ?? []).includes(wallIndex)) return
           room.vertices = applyWallLengthRespectingLocks(
             room.vertices.map(v => ({ ...v })),
             wallIndex,
             lengthCm,
-            locked,
+            room.lockedWalls ?? [],
           )
+          const { w, h } = axisAlignedBBoxSize(room.vertices)
+          room.planWidthCm = w
+          room.planDepthCm = h
         })
       },
 

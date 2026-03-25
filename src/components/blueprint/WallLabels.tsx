@@ -9,8 +9,8 @@ interface WallLabelsProps {
 }
 
 /** Afstand vanaf wand-midden naar buiten (zelfde eenheid als vertices, cm). */
-const LABEL_OFFSET_OUT_CM = 60
-const ANGLE_INSET_CM = 55
+const LABEL_OFFSET_OUT_CM = 48
+const ANGLE_INSET_CM = 46
 const FONT_SIZE = 11
 const FONT_FAMILY = 'DM Sans'
 const LABEL_FILL = '#e8eef4'
@@ -64,11 +64,11 @@ const WallLabels = memo(function WallLabels({ roomId, isSelected }: WallLabelsPr
         const angle = wallAngle(v, next)
         const len = wallLength(v, next)
         const pos = outwardFromWallMid(i, LABEL_OFFSET_OUT_CM)
-        const label = `${formatWallLengthMetersLabel(len)} m`
+        const label = formatWallLengthMetersLabel(len)
         const rot = angle > 90 || angle < -90 ? angle + 180 : angle
         const labelW = Math.max(52, label.length * FONT_SIZE * 0.35)
         const labelH = FONT_SIZE * 1.35
-        const lengthLocked = room.lengthLockedWalls?.includes(i) ?? false
+        const locked = room.lockedWalls?.includes(i) ?? false
 
         return (
           <Group key={`wall-${i}`} x={pos.x} y={pos.y} rotation={rot}>
@@ -83,9 +83,9 @@ const WallLabels = memo(function WallLabels({ roomId, isSelected }: WallLabelsPr
               fontSize={FONT_SIZE}
               fontStyle="normal"
               fontFamily={FONT_FAMILY}
-              fill={lengthLocked ? LENGTH_LOCK : LABEL_FILL}
-              stroke={lengthLocked ? LENGTH_LOCK : LABEL_STROKE}
-              strokeWidth={lengthLocked ? 0.45 : 0.65}
+              fill={locked ? LENGTH_LOCK : LABEL_FILL}
+              stroke={locked ? LENGTH_LOCK : LABEL_STROKE}
+              strokeWidth={locked ? 0.45 : 0.65}
               lineJoin="round"
               align="center"
               verticalAlign="middle"
