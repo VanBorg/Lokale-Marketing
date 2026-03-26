@@ -11,7 +11,7 @@ import {
 interface MeasureToolKonvaLayerProps {
   measureLines: MeasureLineEntity[]
   measureDraft: { start: Point; hover: Point } | null
-  selectedMeasureLineId: string | null
+  selectedMeasureLineIds: string[]
   activeTool: ActiveTool
   viewportScale: number
 }
@@ -82,11 +82,24 @@ function MeasureLineVisual({
   const strokeCol = selected ? '#fbbf24' : MEASURE_STROKE
   const fillCol = selected ? '#fb923c' : MEASURE_FILL
 
-  const onPick = (e: { cancelBubble: boolean; evt: { stopPropagation: () => void } }) => {
+  const onPick = (e: {
+    cancelBubble: boolean
+    evt: MouseEvent | TouchEvent & { stopPropagation: () => void }
+  }) => {
     if (!canPick || !id) return
     e.cancelBubble = true
     e.evt.stopPropagation()
-    blueprintStore.getState().selectMeasureLine(id)
+    const evt = e.evt as MouseEvent
+    const store = blueprintStore.getState()
+    if (evt.ctrlKey || evt.metaKey) {
+      store.toggleMeasureLineInSelection(id)
+    } else if (evt.shiftKey) {
+      store.addMeasureLineToSelection(id)
+    } else if (store.selectedMeasureLineIds.includes(id)) {
+      return
+    } else {
+      store.selectMeasureLine(id)
+    }
   }
 
   return (
@@ -101,7 +114,6 @@ function MeasureLineVisual({
         listening={canPick}
         hitStrokeWidth={canPick ? 18 / vs : 0}
         onMouseDown={onPick}
-        onTap={onPick}
       />
 
       <Circle
@@ -160,7 +172,7 @@ function MeasureLineVisual({
 export default function MeasureToolKonvaLayer({
   measureLines,
   measureDraft,
-  selectedMeasureLineId,
+  selectedMeasureLineIds,
   activeTool,
   viewportScale,
 }: MeasureToolKonvaLayerProps) {
@@ -181,7 +193,7 @@ export default function MeasureToolKonvaLayer({
           id={line.id}
           start={line.start}
           end={line.end}
-          selected={selectedMeasureLineId === line.id}
+          selected={selectedMeasureLineIds.includes(line.id)}
           canPick={canPickMeasure}
           viewportScale={viewportScale}
         />

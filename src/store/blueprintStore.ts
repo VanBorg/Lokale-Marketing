@@ -108,8 +108,8 @@ interface BlueprintState extends BlueprintDoc {
   // Ephemeral — not in undo history
   projectId: string | null
   selectedIds: string[]
-  /** Geselecteerde plattegrond-tekst (los van kamers). */
-  selectedCanvasTextNoteId: string | null
+  /** Geselecteerde plattegrond-teksten (los van kamers). */
+  selectedCanvasTextNoteIds: string[]
   /** Welke tekstnotitie toont de HTML-editor (overlay). */
   editingCanvasTextNoteId: string | null
   activeTool: ActiveTool
@@ -117,10 +117,10 @@ interface BlueprintState extends BlueprintDoc {
   gridEnabled: boolean
   /** Eén polylijn per mousedown–mouseup; geen lijn tussen twee strokes. */
   drawingStrokes: Point[][]
-  /** Selectiemodus: welke preview-strook (index in drawingStrokes) is geselecteerd voor Delete. */
-  selectedDrawingStrokeIndex: number | null
-  /** Geselecteerde meetlijn (Delete). */
-  selectedMeasureLineId: string | null
+  /** Selectiemodus: preview-stroken (indices in drawingStrokes) voor Delete. */
+  selectedDrawingStrokeIndices: number[]
+  /** Geselecteerde meetlijnen (Delete). */
+  selectedMeasureLineIds: string[]
   /** Eerste klik + live hover voor klik–klik–meten (alleen bij meet-tool). */
   measureDraft: { start: Point; hover: Point } | null
   viewport: Viewport
@@ -157,7 +157,29 @@ interface BlueprintState extends BlueprintDoc {
   // Actions — ephemeral
   initProject: (projectId: string) => void
   select: (ids: string[]) => void
+  /** Voeg kamers/elementen toe aan selectie (Shift+klik); wist andere selectietypen. */
+  addToSelection: (ids: string[]) => void
+  /** Toggle kamer/element in selectie (Ctrl+klik); wist andere selectietypen. */
+  toggleInSelection: (id: string) => void
+  addCanvasTextNoteToSelection: (id: string) => void
+  toggleCanvasTextNoteInSelection: (id: string) => void
+  addDrawingStrokeToSelection: (index: number) => void
+  toggleDrawingStrokeInSelection: (index: number) => void
+  addMeasureLineToSelection: (id: string) => void
+  toggleMeasureLineInSelection: (id: string) => void
+  /** Sleep-selectie: zet alle selectietypen tegelijk (kamers, tekst, streken, meetlijnen). */
+  applyMarqueeSelection: (payload: {
+    selectedIds: string[]
+    selectedCanvasTextNoteIds: string[]
+    selectedDrawingStrokeIndices: number[]
+    selectedMeasureLineIds: string[]
+  }) => void
   clearSelection: () => void
+  /**
+   * Verwijdert alles wat nu geselecteerd is in één temporal-stap (één undo/redo).
+   * Gebruikt voor Delete/Backspace na multi-select.
+   */
+  deleteSelectionBulk: () => void
   setActiveTool: (tool: ActiveTool) => void
   setSnapEnabled: (enabled: boolean) => void
   setGridEnabled: (enabled: boolean) => void
@@ -245,14 +267,14 @@ export const useBlueprintStore = create<BlueprintState>()(
       // Ephemeral state
       projectId: null,
       selectedIds: [],
-      selectedCanvasTextNoteId: null,
+      selectedCanvasTextNoteIds: [],
       editingCanvasTextNoteId: null,
       activeTool: 'select',
       snapEnabled: true,
       gridEnabled: false,
       drawingStrokes: [],
-      selectedDrawingStrokeIndex: null,
-      selectedMeasureLineId: null,
+      selectedDrawingStrokeIndices: [],
+      selectedMeasureLineIds: [],
       measureDraft: null,
       viewport: DEFAULT_VIEWPORT,
       activeRoomDraft: null,
@@ -387,7 +409,7 @@ export const useBlueprintStore = create<BlueprintState>()(
           const b = snapPointToGrid(end)
           state.measureLines.push({ id, start: a, end: b })
           state.measureDraft = null
-          state.selectedMeasureLineId = null
+          state.selectedMeasureLineIds = []
         })
         return id
       },
@@ -395,15 +417,15 @@ export const useBlueprintStore = create<BlueprintState>()(
       deleteMeasureLine: (lineId) => {
         set(state => {
           state.measureLines = state.measureLines.filter(m => m.id !== lineId)
-          if (state.selectedMeasureLineId === lineId) state.selectedMeasureLineId = null
+          state.selectedMeasureLineIds = state.selectedMeasureLineIds.filter(id => id !== lineId)
         })
       },
 
       selectMeasureLine: (lineId) => {
         set(state => {
-          state.selectedMeasureLineId = lineId
-          state.selectedDrawingStrokeIndex = null
-          state.selectedCanvasTextNoteId = null
+          state.selectedMeasureLineIds = lineId ? [lineId] : []
+          state.selectedDrawingStrokeIndices = []
+          state.selectedCanvasTextNoteIds = []
           state.editingCanvasTextNoteId = null
           state.selectedIds = []
         })
@@ -429,10 +451,10 @@ export const useBlueprintStore = create<BlueprintState>()(
           Object.assign(state, emptyDoc())
           state.projectId = projectId
           state.selectedIds = []
-          state.selectedCanvasTextNoteId = null
+          state.selectedCanvasTextNoteIds = []
           state.editingCanvasTextNoteId = null
-          state.selectedDrawingStrokeIndex = null
-          state.selectedMeasureLineId = null
+          state.selectedDrawingStrokeIndices = []
+          state.selectedMeasureLineIds = []
           state.measureDraft = null
           state.activeTool = 'select'
           state.drawingStrokes = []
@@ -447,40 +469,187 @@ export const useBlueprintStore = create<BlueprintState>()(
       select: (ids) => {
         set(state => {
           state.selectedIds = ids
-          state.selectedCanvasTextNoteId = null
+          state.selectedCanvasTextNoteIds = []
           state.editingCanvasTextNoteId = null
-          state.selectedDrawingStrokeIndex = null
-          state.selectedMeasureLineId = null
+          state.selectedDrawingStrokeIndices = []
+          state.selectedMeasureLineIds = []
+        })
+      },
+
+      addToSelection: (ids) => {
+        set(state => {
+          const next = new Set(state.selectedIds)
+          for (const id of ids) {
+            if (state.rooms[id] || state.elements[id]) next.add(id)
+          }
+          state.selectedIds = Array.from(next)
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      toggleInSelection: (id) => {
+        set(state => {
+          if (!state.rooms[id] && !state.elements[id]) return
+          const idx = state.selectedIds.indexOf(id)
+          if (idx >= 0) {
+            state.selectedIds.splice(idx, 1)
+          } else {
+            state.selectedIds.push(id)
+          }
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      addCanvasTextNoteToSelection: (id) => {
+        set(state => {
+          if (!state.canvasTextNotes[id]) return
+          if (!state.selectedCanvasTextNoteIds.includes(id)) {
+            state.selectedCanvasTextNoteIds.push(id)
+          }
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      toggleCanvasTextNoteInSelection: (id) => {
+        set(state => {
+          if (!state.canvasTextNotes[id]) return
+          const i = state.selectedCanvasTextNoteIds.indexOf(id)
+          if (i >= 0) state.selectedCanvasTextNoteIds.splice(i, 1)
+          else state.selectedCanvasTextNoteIds.push(id)
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      addDrawingStrokeToSelection: (index) => {
+        set(state => {
+          if (index < 0 || index >= state.drawingStrokes.length) return
+          if (!state.selectedDrawingStrokeIndices.includes(index)) {
+            state.selectedDrawingStrokeIndices.push(index)
+          }
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      toggleDrawingStrokeInSelection: (index) => {
+        set(state => {
+          if (index < 0 || index >= state.drawingStrokes.length) return
+          const i = state.selectedDrawingStrokeIndices.indexOf(index)
+          if (i >= 0) state.selectedDrawingStrokeIndices.splice(i, 1)
+          else state.selectedDrawingStrokeIndices.push(index)
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      addMeasureLineToSelection: (lineId) => {
+        set(state => {
+          if (!state.measureLines.some(m => m.id === lineId)) return
+          if (!state.selectedMeasureLineIds.includes(lineId)) {
+            state.selectedMeasureLineIds.push(lineId)
+          }
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      toggleMeasureLineInSelection: (lineId) => {
+        set(state => {
+          if (!state.measureLines.some(m => m.id === lineId)) return
+          const i = state.selectedMeasureLineIds.indexOf(lineId)
+          if (i >= 0) state.selectedMeasureLineIds.splice(i, 1)
+          else state.selectedMeasureLineIds.push(lineId)
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      applyMarqueeSelection: (payload) => {
+        set(state => {
+          state.selectedIds = payload.selectedIds
+          state.selectedCanvasTextNoteIds = payload.selectedCanvasTextNoteIds
+          state.selectedDrawingStrokeIndices = payload.selectedDrawingStrokeIndices
+          state.selectedMeasureLineIds = payload.selectedMeasureLineIds
+          state.editingCanvasTextNoteId = null
         })
       },
 
       clearSelection: () => {
         set(state => {
           state.selectedIds = []
-          state.selectedCanvasTextNoteId = null
+          state.selectedCanvasTextNoteIds = []
           state.editingCanvasTextNoteId = null
-          state.selectedDrawingStrokeIndex = null
-          state.selectedMeasureLineId = null
+          state.selectedDrawingStrokeIndices = []
+          state.selectedMeasureLineIds = []
+        })
+      },
+
+      deleteSelectionBulk: () => {
+        const s = get()
+        const skipNotes = !!s.editingCanvasTextNoteId
+        const noteIds = skipNotes ? [] : [...s.selectedCanvasTextNoteIds]
+        const measureIds = [...s.selectedMeasureLineIds]
+        const strokeIndices = [...s.selectedDrawingStrokeIndices].sort((a, b) => b - a)
+        const entityIds = [...s.selectedIds]
+
+        const hasWork =
+          noteIds.length > 0 ||
+          measureIds.length > 0 ||
+          strokeIndices.length > 0 ||
+          entityIds.length > 0
+        if (!hasWork) return
+
+        const measureSet = new Set(measureIds)
+
+        set(state => {
+          for (const id of noteIds) {
+            if (!state.canvasTextNotes[id]) continue
+            delete state.canvasTextNotes[id]
+            state.canvasTextNoteOrder = state.canvasTextNoteOrder.filter(x => x !== id)
+            if (state.editingCanvasTextNoteId === id) state.editingCanvasTextNoteId = null
+          }
+
+          state.measureLines = state.measureLines.filter(m => !measureSet.has(m.id))
+
+          for (const idx of strokeIndices) {
+            if (idx >= 0 && idx < state.drawingStrokes.length) {
+              state.drawingStrokes.splice(idx, 1)
+            }
+          }
+
+          for (const id of entityIds) {
+            if (state.rooms[id]) {
+              delete state.rooms[id]
+              state.roomOrder = state.roomOrder.filter(rid => rid !== id)
+              for (const eid of Object.keys(state.elements)) {
+                if (state.elements[eid].roomId === id) delete state.elements[eid]
+              }
+            } else if (state.elements[id]) {
+              delete state.elements[id]
+            }
+          }
+
+          state.selectedIds = []
+          state.selectedCanvasTextNoteIds = []
+          state.editingCanvasTextNoteId = null
+          state.selectedDrawingStrokeIndices = []
+          state.selectedMeasureLineIds = []
         })
       },
 
       selectCanvasTextNote: (id) => {
         set(state => {
-          state.selectedCanvasTextNoteId = id
+          state.selectedCanvasTextNoteIds = [id]
           state.editingCanvasTextNoteId = null
           state.selectedIds = []
-          state.selectedDrawingStrokeIndex = null
-          state.selectedMeasureLineId = null
+          state.selectedDrawingStrokeIndices = []
+          state.selectedMeasureLineIds = []
         })
       },
 
       openCanvasTextNoteEditor: (id) => {
         set(state => {
-          state.selectedCanvasTextNoteId = id
+          state.selectedCanvasTextNoteIds = [id]
           state.editingCanvasTextNoteId = id
           state.selectedIds = []
-          state.selectedDrawingStrokeIndex = null
-          state.selectedMeasureLineId = null
+          state.selectedDrawingStrokeIndices = []
+          state.selectedMeasureLineIds = []
         })
       },
 
@@ -496,10 +665,10 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.canvasTextNotes[id] = { id, x: point.x, y: point.y, text: '' }
           state.canvasTextNoteOrder.push(id)
           state.selectedIds = []
-          state.selectedCanvasTextNoteId = id
+          state.selectedCanvasTextNoteIds = [id]
           state.editingCanvasTextNoteId = id
-          state.selectedDrawingStrokeIndex = null
-          state.selectedMeasureLineId = null
+          state.selectedDrawingStrokeIndices = []
+          state.selectedMeasureLineIds = []
         })
         return id
       },
@@ -515,7 +684,7 @@ export const useBlueprintStore = create<BlueprintState>()(
         set(state => {
           delete state.canvasTextNotes[id]
           state.canvasTextNoteOrder = state.canvasTextNoteOrder.filter(x => x !== id)
-          if (state.selectedCanvasTextNoteId === id) state.selectedCanvasTextNoteId = null
+          state.selectedCanvasTextNoteIds = state.selectedCanvasTextNoteIds.filter(x => x !== id)
           if (state.editingCanvasTextNoteId === id) state.editingCanvasTextNoteId = null
         })
       },
@@ -546,19 +715,19 @@ export const useBlueprintStore = create<BlueprintState>()(
         set(state => {
           const snap = snapPointToGrid(point)
           state.drawingStrokes.push([snap])
-          state.selectedDrawingStrokeIndex = null
-          state.selectedMeasureLineId = null
+          state.selectedDrawingStrokeIndices = []
+          state.selectedMeasureLineIds = []
         })
       },
 
       selectDrawingStroke: (index) => {
         set(state => {
           if (index < 0 || index >= state.drawingStrokes.length) return
-          state.selectedDrawingStrokeIndex = index
+          state.selectedDrawingStrokeIndices = [index]
           state.selectedIds = []
-          state.selectedCanvasTextNoteId = null
+          state.selectedCanvasTextNoteIds = []
           state.editingCanvasTextNoteId = null
-          state.selectedMeasureLineId = null
+          state.selectedMeasureLineIds = []
         })
       },
 
@@ -566,7 +735,9 @@ export const useBlueprintStore = create<BlueprintState>()(
         set(state => {
           if (index < 0 || index >= state.drawingStrokes.length) return
           state.drawingStrokes.splice(index, 1)
-          state.selectedDrawingStrokeIndex = null
+          state.selectedDrawingStrokeIndices = state.selectedDrawingStrokeIndices
+            .filter(i => i !== index)
+            .map(i => (i > index ? i - 1 : i))
         })
       },
 
@@ -588,14 +759,14 @@ export const useBlueprintStore = create<BlueprintState>()(
         if (flat.length < 3) {
           set(state => {
             state.drawingStrokes = []
-            state.selectedDrawingStrokeIndex = null
+            state.selectedDrawingStrokeIndices = []
           })
           return null
         }
         const id = addRoom([...flat])
         set(state => {
           state.drawingStrokes = []
-          state.selectedDrawingStrokeIndex = null
+          state.selectedDrawingStrokeIndices = []
           state.activeTool = 'select'
         })
         return id
@@ -604,7 +775,7 @@ export const useBlueprintStore = create<BlueprintState>()(
       cancelDrawing: () => {
         set(state => {
           state.drawingStrokes = []
-          state.selectedDrawingStrokeIndex = null
+          state.selectedDrawingStrokeIndices = []
           state.activeTool = 'select'
         })
       },
@@ -720,11 +891,11 @@ export const useCanvasTextNoteOrder = () =>
 export const useEditingCanvasTextNoteId = () =>
   useBlueprintStore(state => state.editingCanvasTextNoteId)
 
-export const useSelectedCanvasTextNoteId = () =>
-  useBlueprintStore(state => state.selectedCanvasTextNoteId)
+export const useSelectedCanvasTextNoteIds = () =>
+  useBlueprintStore(state => state.selectedCanvasTextNoteIds)
 
-export const useSelectedDrawingStrokeIndex = () =>
-  useBlueprintStore(state => state.selectedDrawingStrokeIndex)
+export const useSelectedDrawingStrokeIndices = () =>
+  useBlueprintStore(state => state.selectedDrawingStrokeIndices)
 
 export const useMeasureLines = () =>
   useBlueprintStore(state => state.measureLines)
@@ -732,8 +903,8 @@ export const useMeasureLines = () =>
 export const useMeasureDraft = () =>
   useBlueprintStore(state => state.measureDraft)
 
-export const useSelectedMeasureLineId = () =>
-  useBlueprintStore(state => state.selectedMeasureLineId)
+export const useSelectedMeasureLineIds = () =>
+  useBlueprintStore(state => state.selectedMeasureLineIds)
 
 // Module-level singleton for use in Konva event handlers (outside React)
 export const blueprintStore = useBlueprintStore

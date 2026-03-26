@@ -36,9 +36,25 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
 
   const groupRef = useRef<Konva.Group>(null)
 
-  const handleSelect = useCallback(() => {
-    blueprintStore.getState().select([roomId])
-  }, [roomId])
+  const applyRoomSelection = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      const evt = e.evt as MouseEvent
+      const store = blueprintStore.getState()
+      if (evt.ctrlKey || evt.metaKey) {
+        store.toggleInSelection(roomId)
+        return
+      }
+      if (evt.shiftKey) {
+        store.addToSelection([roomId])
+        return
+      }
+      if (store.selectedIds.includes(roomId)) {
+        return
+      }
+      store.select([roomId])
+    },
+    [roomId],
+  )
 
   /** Schrijven: alleen via onTap plaatsen — niet in onMouseDown (anders dubbel met Tap). */
   const handleGroupPointerDown = useCallback(
@@ -47,9 +63,9 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         e.cancelBubble = true
         return
       }
-      handleSelect()
+      applyRoomSelection(e)
     },
-    [activeTool, handleSelect],
+    [activeTool, applyRoomSelection],
   )
 
   const handleGroupTap = useCallback(
@@ -67,9 +83,9 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         })
         return
       }
-      handleSelect()
+      // Selectie gebeurt op PointerDown; hier geen applyRoomSelection (voorkomt dubbele Ctrl/Shift-toggle bij tap).
     },
-    [activeTool, stageRef, handleSelect],
+    [activeTool, stageRef],
   )
 
   /**
@@ -78,7 +94,9 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
    * enige updateRoomVertices na de sleep ontbrak in de undo-geschiedenis.
    */
   const handleGroupDragStart = useCallback(() => {
-    blueprintStore.getState().select([roomId])
+    const store = blueprintStore.getState()
+    if (store.selectedIds.includes(roomId)) return
+    store.select([roomId])
   }, [roomId])
 
   const handleGroupDragEnd = useCallback(

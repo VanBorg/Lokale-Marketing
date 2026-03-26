@@ -24,6 +24,9 @@ export const RECENTER_AFTER_OPEN_MS = 150
  */
 export const STROKE_SAMPLE_MIN_CM = 28
 
+/** Min. pointer movement (screen px) before sleep-selectie (marquee) start. */
+export const MARQUEE_DRAG_THRESHOLD_PX = 4
+
 /** Maps pointer proximity to a canvas edge into a pan speed (screen px/frame). */
 export const AUTO_PAN_EDGE = 100
 

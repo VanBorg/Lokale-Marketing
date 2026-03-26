@@ -55,6 +55,39 @@ export function getPerimeter(vertices: Point[]): number {
   }, 0)
 }
 
+/** Axis-aligned bounds for marquee hit-testing (same units as vertices, e.g. cm). */
+export interface AxisAlignedRect {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+export function roomAxisAlignedBounds(vertices: Point[]): AxisAlignedRect | null {
+  if (vertices.length < 1) return null
+  const xs = vertices.map(v => v.x)
+  const ys = vertices.map(v => v.y)
+  return {
+    minX: Math.min(...xs),
+    minY: Math.min(...ys),
+    maxX: Math.max(...xs),
+    maxY: Math.max(...ys),
+  }
+}
+
+export function rectsIntersect(a: AxisAlignedRect, b: AxisAlignedRect): boolean {
+  return !(a.maxX < b.minX || b.maxX < a.minX || a.maxY < b.minY || b.maxY < a.minY)
+}
+
+export function axisAlignedRectFromCorners(a: Point, b: Point): AxisAlignedRect {
+  return {
+    minX: Math.min(a.x, b.x),
+    minY: Math.min(a.y, b.y),
+    maxX: Math.max(a.x, b.x),
+    maxY: Math.max(a.y, b.y),
+  }
+}
+
 /** Axis-aligned bounding box size (same units as vertices, e.g. cm). Min 1 to avoid divide-by-zero. */
 export function axisAlignedBBoxSize(vertices: Point[]): { w: number; h: number } {
   if (vertices.length < 1) return { w: 1, h: 1 }

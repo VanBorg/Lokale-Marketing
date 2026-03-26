@@ -1,4 +1,4 @@
-import { Stage, Layer } from 'react-konva'
+import { Stage, Layer, Rect } from 'react-konva'
 import {
   useBlueprintStore,
   useRoomIds,
@@ -7,12 +7,12 @@ import {
   useGridEnabled,
   useCanvasTextNoteOrder,
   useEditingCanvasTextNoteId,
-  useSelectedCanvasTextNoteId,
+  useSelectedCanvasTextNoteIds,
   useActiveTool,
-  useSelectedDrawingStrokeIndex,
+  useSelectedDrawingStrokeIndices,
   useMeasureLines,
   useMeasureDraft,
-  useSelectedMeasureLineId,
+  useSelectedMeasureLineIds,
 } from '../../store/blueprintStore'
 import { useTheme } from '../../hooks/useTheme'
 import EditableRoom from '../../components/blueprint/EditableRoom'
@@ -33,6 +33,7 @@ export default function PixelCanvas() {
 
   const {
     cursorStyle,
+    marqueeWorld,
     handleWheel,
     handleMouseDown,
     handleMouseMove,
@@ -46,12 +47,12 @@ export default function PixelCanvas() {
   const canvasTextNotes = useBlueprintStore(s => s.canvasTextNotes)
   const canvasTextNoteOrder = useCanvasTextNoteOrder()
   const editingCanvasTextNoteId = useEditingCanvasTextNoteId()
-  const selectedCanvasTextNoteId = useSelectedCanvasTextNoteId()
+  const selectedCanvasTextNoteIds = useSelectedCanvasTextNoteIds()
   const activeTool = useActiveTool()
-  const selectedDrawingStrokeIndex = useSelectedDrawingStrokeIndex()
+  const selectedDrawingStrokeIndices = useSelectedDrawingStrokeIndices()
   const measureLines = useMeasureLines()
   const measureDraft = useMeasureDraft()
-  const selectedMeasureLineId = useSelectedMeasureLineId()
+  const selectedMeasureLineIds = useSelectedMeasureLineIds()
   const snapGuides = useSnapGuides()
   const gridEnabled = useGridEnabled()
   const { theme } = useTheme()
@@ -103,8 +104,22 @@ export default function PixelCanvas() {
               strokes={drawingStrokes}
               viewportScale={viewport.scale}
               activeTool={activeTool}
-              selectedStrokeIndex={selectedDrawingStrokeIndex}
+              selectedStrokeIndices={selectedDrawingStrokeIndices}
             />
+
+            {marqueeWorld && (
+              <Rect
+                x={marqueeWorld.minX}
+                y={marqueeWorld.minY}
+                width={marqueeWorld.maxX - marqueeWorld.minX}
+                height={marqueeWorld.maxY - marqueeWorld.minY}
+                fill="rgba(53,180,211,0.08)"
+                stroke="#35B4D3"
+                strokeWidth={Math.max(1, 1 / viewport.scale)}
+                dash={[6 / viewport.scale, 4 / viewport.scale]}
+                listening={false}
+              />
+            )}
           </Layer>
 
           {/* Eigen laag boven kamers — betrouwbare hit-testing voor tekst selecteren/verwijderen */}
@@ -114,7 +129,7 @@ export default function PixelCanvas() {
               notes={canvasTextNotes}
               viewportScale={viewport.scale}
               editingId={editingCanvasTextNoteId}
-              selectedId={selectedCanvasTextNoteId}
+              selectedIds={selectedCanvasTextNoteIds}
               isLight={isLight}
               activeTool={activeTool}
             />
@@ -123,7 +138,7 @@ export default function PixelCanvas() {
           <MeasureToolKonvaLayer
             measureLines={measureLines}
             measureDraft={measureDraft}
-            selectedMeasureLineId={selectedMeasureLineId}
+            selectedMeasureLineIds={selectedMeasureLineIds}
             activeTool={activeTool}
             viewportScale={viewport.scale}
           />

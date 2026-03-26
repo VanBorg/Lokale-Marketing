@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { Redo2, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useStore } from 'zustand'
 import {
   blueprintStore,
   useBlueprintStore,
@@ -87,10 +87,10 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const selectedIds    = useSelectedIds()
   const selectedRoomId = selectedIds.length === 1 ? selectedIds[0] : null
   const selectedRoom   = useBlueprintStore(s => selectedRoomId ? s.rooms[selectedRoomId] : null)
-  const selectedCanvasTextNoteId = useBlueprintStore(s => s.selectedCanvasTextNoteId)
-  const selectedCanvasNote = useBlueprintStore(s =>
-    s.selectedCanvasTextNoteId ? s.canvasTextNotes[s.selectedCanvasTextNoteId] : null,
-  )
+  const selectedCanvasNote = useBlueprintStore(s => {
+    const first = s.selectedCanvasTextNoteIds[0]
+    return first ? s.canvasTextNotes[first] : null
+  })
   const roomOrder      = useBlueprintStore(s => s.roomOrder)
   const rooms          = useBlueprintStore(s => s.rooms)
 
@@ -98,16 +98,16 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   /** Alleen nieuwe-kamer-preview (geen geselecteerde plattegrond-kamer), anders Kamerkaart → temporal. */
   const isPreviewDraftUndoActive = showingNewPreview && !selectedRoom
 
-  const canTemporalUndo = useSyncExternalStore(
-    blueprintStore.temporal.subscribe,
-    () => blueprintStore.temporal.getState().pastStates.length > 0,
-    () => false,
+  const canTemporalUndo = useStore(
+    blueprintStore.temporal,
+    s => s.pastStates.length > 0,
   )
-  const canTemporalRedo = useSyncExternalStore(
-    blueprintStore.temporal.subscribe,
-    () => blueprintStore.temporal.getState().futureStates.length > 0,
-    () => false,
+  const canTemporalRedo = useStore(
+    blueprintStore.temporal,
+    s => s.futureStates.length > 0,
   )
+  const canBlueprintUndo = isPreviewDraftUndoActive ? previewPast.length > 0 : canTemporalUndo
+  const canBlueprintRedo = isPreviewDraftUndoActive ? previewFuture.length > 0 : canTemporalRedo
 
   const stateRef = useRef({
     previewVertices,
@@ -225,8 +225,10 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   }
 
   const handleDeleteCanvasTextNote = () => {
-    if (!selectedCanvasTextNoteId) return
-    blueprintStore.getState().deleteCanvasTextNote(selectedCanvasTextNoteId)
+    const store = blueprintStore.getState()
+    if (store.editingCanvasTextNoteId) return
+    if (store.selectedCanvasTextNoteIds.length === 0) return
+    store.deleteSelectionBulk()
   }
 
   const handleWallLengthChange = useCallback((roomId: string, wallIndex: number, value: number) => {
@@ -288,6 +290,12 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
       project={project}
       onUpdateProject={onUpdateProject}
       onTabChange={onTabChange}
+      undoRedo={{
+        canUndo: canBlueprintUndo,
+        canRedo: canBlueprintRedo,
+        onUndo: handleKamerkaartUndo,
+        onRedo: handleKamerkaartRedo,
+      }}
     >
       <div className="flex flex-1 min-h-0">
         {/* Column 1 — Plattegrond */}
@@ -354,68 +362,10 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
         {/* Column 2 — Kamer Overview */}
         <div className="flex-[3] min-w-0 min-h-0 border-l border-dark-border bg-dark flex flex-col overflow-y-auto">
 
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-dark-border px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40 shrink-0">
+          <div className="flex shrink-0 items-center border-b border-dark-border px-3 py-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40">
               Kamerkaart
             </span>
-            <div className="flex items-center justify-end gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleKamerkaartUndo}
-                disabled={
-                  isPreviewDraftUndoActive ? previewPast.length === 0 : !canTemporalUndo
-                }
-                className={[
-                  'inline-flex h-9 min-w-[9.5rem] items-center justify-center gap-2 rounded-lg border border-dark-border',
-                  'bg-dark-card px-4 text-sm font-medium text-light transition-all duration-200',
-                  'hover:border-accent/50 hover:bg-accent/[0.08] active:bg-accent/[0.05]',
-                  'disabled:pointer-events-none disabled:opacity-35',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-dark',
-                  'theme-light:border-neutral-300 theme-light:bg-white theme-light:focus-visible:ring-offset-white',
-                ].join(' ')}
-                title={
-                  isPreviewDraftUndoActive
-                    ? 'Ongedaan maken (kamerkaart-voorbeeld)'
-                    : 'Ongedaan maken (plattegrond)'
-                }
-                aria-label={
-                  isPreviewDraftUndoActive
-                    ? 'Ongedaan maken kamerkaart-voorbeeld'
-                    : 'Ongedaan maken plattegrond'
-                }
-              >
-                <Undo2 size={16} className="shrink-0 text-accent" strokeWidth={2} aria-hidden />
-                Ongedaan
-              </button>
-              <button
-                type="button"
-                onClick={handleKamerkaartRedo}
-                disabled={
-                  isPreviewDraftUndoActive ? previewFuture.length === 0 : !canTemporalRedo
-                }
-                className={[
-                  'inline-flex h-9 min-w-[9.5rem] items-center justify-center gap-2 rounded-lg border border-dark-border',
-                  'bg-dark-card px-4 text-sm font-medium text-light transition-all duration-200',
-                  'hover:border-accent/50 hover:bg-accent/[0.08] active:bg-accent/[0.05]',
-                  'disabled:pointer-events-none disabled:opacity-35',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-dark',
-                  'theme-light:border-neutral-300 theme-light:bg-white theme-light:focus-visible:ring-offset-white',
-                ].join(' ')}
-                title={
-                  isPreviewDraftUndoActive
-                    ? 'Opnieuw (kamerkaart-voorbeeld)'
-                    : 'Opnieuw (plattegrond)'
-                }
-                aria-label={
-                  isPreviewDraftUndoActive
-                    ? 'Opnieuw kamerkaart-voorbeeld'
-                    : 'Opnieuw plattegrond'
-                }
-              >
-                <Redo2 size={16} className="shrink-0 text-accent" strokeWidth={2} aria-hidden />
-                Opnieuw
-              </button>
-            </div>
           </div>
 
           <div

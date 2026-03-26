@@ -11,12 +11,17 @@ const SHORTCUTS = [
   { key: 'Ctrl + Shift + Z', label: 'Opnieuw uitvoeren (Redo)' },
   { key: 'Escape', label: 'Deselecteer / annuleer tool' },
   { key: 'Delete / Backspace', label: 'Verwijder geselecteerde kamer of element' },
+  { key: 'Shift + klik', label: 'Voeg kamer toe aan selectie' },
+  { key: 'Ctrl + klik', label: 'Toggle kamer in selectie (aan/uit)' },
+  { key: 'Sleep op leeg canvas', label: 'Multi-select (selectiekader)' },
   { key: '+ / =', label: 'Zoom in' },
   { key: '-', label: 'Zoom uit' },
   { key: 'Scrollwiel', label: 'Zoom in/uit op cursorpositie' },
   { key: 'Spatie + slepen', label: 'Canvas verplaatsen (pan)' },
   { key: 'Middelste muisknop', label: 'Canvas verplaatsen (pan)' },
   { key: 'Dubbelklik canvas', label: 'Vrije tekening voltooien' },
+  { key: 'S', label: 'Centreer beeld op oorsprong' },
+  { key: 'Ctrl + S', label: 'Project opslaan' },
 ]
 
 export default function ShortcutsModal({ onClose }: ShortcutsModalProps) {

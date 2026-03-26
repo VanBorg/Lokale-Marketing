@@ -37,36 +37,9 @@ export function useBlueprintKeyboard() {
         return
       }
 
-      // Delete / Backspace — remove selected
+      // Delete / Backspace — één temporal-stap (één undo/redo voor multi-select)
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        const selectedNoteId = store.selectedCanvasTextNoteId
-        if (selectedNoteId && !store.editingCanvasTextNoteId) {
-          store.deleteCanvasTextNote(selectedNoteId)
-          return
-        }
-        const measureId = store.selectedMeasureLineId
-        if (measureId) {
-          store.deleteMeasureLine(measureId)
-          return
-        }
-        const strokeIdx = store.selectedDrawingStrokeIndex
-        if (
-          strokeIdx !== null &&
-          strokeIdx < store.drawingStrokes.length &&
-          store.drawingStrokes[strokeIdx]?.length
-        ) {
-          store.deleteDrawingStrokeAt(strokeIdx)
-          return
-        }
-        const { selectedIds } = store
-        for (const id of selectedIds) {
-          if (store.rooms[id]) {
-            store.deleteRoom(id)
-          } else if (store.elements[id]) {
-            store.deleteElement(id)
-          }
-        }
-        store.clearSelection()
+        blueprintStore.getState().deleteSelectionBulk()
         return
       }
 

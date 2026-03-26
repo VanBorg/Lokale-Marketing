@@ -11,8 +11,9 @@ import {
   useActiveTool,
   type Point,
 } from '../../store/blueprintStore'
-import { snapPointToGrid } from '../../utils/blueprintGeometry'
-import { STROKE_SAMPLE_MIN_CM } from './pixelCanvasConstants'
+import { axisAlignedRectFromCorners, snapPointToGrid, type AxisAlignedRect } from '../../utils/blueprintGeometry'
+import * as marqueeHitTest from './marqueeHitTest'
+import { MARQUEE_DRAG_THRESHOLD_PX, STROKE_SAMPLE_MIN_CM } from './pixelCanvasConstants'
 
 interface UsePixelCanvasStageInteractionsArgs {
   stageRef: RefObject<Konva.Stage | null>
@@ -32,6 +33,8 @@ export function usePixelCanvasStageInteractions({
   const [spaceHeld, setSpaceHeld] = useState(false)
   const suppressNextClickRef = useRef(false)
   const drawStrokeCleanupRef = useRef<(() => void) | null>(null)
+  const marqueeCleanupRef = useRef<(() => void) | null>(null)
+  const [marqueeWorld, setMarqueeWorld] = useState<AxisAlignedRect | null>(null)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -141,6 +144,83 @@ export function usePixelCanvasStageInteractions({
     }
   }, [stageRef])
 
+  const attachMarqueeListeners = useCallback(
+    (startClientX: number, startClientY: number) => {
+      marqueeCleanupRef.current?.()
+
+      const clientToWorld = (cx: number, cy: number): Point | null => {
+        const s = stageRef.current
+        if (!s) return null
+        const rect = s.container().getBoundingClientRect()
+        const x = cx - rect.left
+        const y = cy - rect.top
+        const sc = s.scaleX()
+        return { x: (x - s.x()) / sc, y: (y - s.y()) / sc }
+      }
+
+      const startWorld = clientToWorld(startClientX, startClientY)
+      if (!startWorld) return
+
+      const startClient = { x: startClientX, y: startClientY }
+      let marqueeActive = false
+
+      const onMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - startClient.x
+        const dy = ev.clientY - startClient.y
+        if (!marqueeActive && Math.hypot(dx, dy) >= MARQUEE_DRAG_THRESHOLD_PX) {
+          marqueeActive = true
+        }
+        if (!marqueeActive) return
+        const endW = clientToWorld(ev.clientX, ev.clientY)
+        if (!endW) return
+        setMarqueeWorld(axisAlignedRectFromCorners(startWorld, endW))
+      }
+
+      const onUp = (ev: MouseEvent) => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+        marqueeCleanupRef.current = null
+        setMarqueeWorld(null)
+
+        const store = blueprintStore.getState()
+        if (!marqueeActive) {
+          store.clearSelection()
+          suppressNextClickRef.current = true
+          return
+        }
+        const endW = clientToWorld(ev.clientX, ev.clientY)
+        if (!endW) return
+        const normalized = axisAlignedRectFromCorners(startWorld, endW)
+        const hits = marqueeHitTest.collectMarqueeHits(normalized, {
+          roomOrder: store.roomOrder,
+          rooms: store.rooms,
+          canvasTextNoteOrder: store.canvasTextNoteOrder,
+          canvasTextNotes: store.canvasTextNotes,
+          drawingStrokes: store.drawingStrokes,
+          measureLines: store.measureLines,
+          viewportScale: store.viewport.scale,
+        })
+        store.applyMarqueeSelection({
+          selectedIds: hits.roomIds,
+          selectedCanvasTextNoteIds: hits.noteIds,
+          selectedDrawingStrokeIndices: hits.strokeIndices,
+          selectedMeasureLineIds: hits.measureLineIds,
+        })
+        suppressNextClickRef.current = true
+      }
+
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+      marqueeCleanupRef.current = () => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+        marqueeCleanupRef.current = null
+        setMarqueeWorld(null)
+      }
+    },
+    [stageRef],
+  )
+
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
       const store = blueprintStore.getState()
@@ -152,6 +232,11 @@ export function usePixelCanvasStageInteractions({
       }
 
       if (e.evt.button === 0 && e.target === stageRef.current) {
+        if (tool === 'select') {
+          attachMarqueeListeners(e.evt.clientX, e.evt.clientY)
+          return
+        }
+
         store.clearSelection()
 
         if (tool === 'measure') {
@@ -178,12 +263,13 @@ export function usePixelCanvasStageInteractions({
         }
       }
     },
-    [attachWindowPanListeners, attachDrawStrokeListeners, stageRef],
+    [attachWindowPanListeners, attachDrawStrokeListeners, attachMarqueeListeners, stageRef],
   )
 
   useEffect(() => {
     return () => {
       drawStrokeCleanupRef.current?.()
+      marqueeCleanupRef.current?.()
     }
   }, [])
 
@@ -271,6 +357,7 @@ export function usePixelCanvasStageInteractions({
 
   return {
     cursorStyle,
+    marqueeWorld,
     handleWheel,
     handleMouseDown,
     handleMouseMove,

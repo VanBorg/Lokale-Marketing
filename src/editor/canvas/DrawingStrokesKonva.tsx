@@ -6,16 +6,17 @@ interface DrawingStrokesKonvaProps {
   strokes: Point[][]
   viewportScale: number
   activeTool: ActiveTool
-  selectedStrokeIndex: number | null
+  selectedStrokeIndices: number[]
 }
 
 export default function DrawingStrokesKonva({
   strokes,
   viewportScale,
   activeTool,
-  selectedStrokeIndex,
+  selectedStrokeIndices,
 }: DrawingStrokesKonvaProps) {
   const canPickStroke = activeTool === 'select'
+  const selSet = new Set(selectedStrokeIndices)
 
   return (
     <>
@@ -24,8 +25,8 @@ export default function DrawingStrokesKonva({
           <Line
             key={`draw-stroke-${si}`}
             points={stroke.flatMap(v => [v.x, v.y])}
-            stroke={selectedStrokeIndex === si ? '#f59e0b' : '#35B4D3'}
-            strokeWidth={(selectedStrokeIndex === si ? 3 : 2) / viewportScale}
+            stroke={selSet.has(si) ? '#f59e0b' : '#35B4D3'}
+            strokeWidth={(selSet.has(si) ? 3 : 2) / viewportScale}
             lineCap="round"
             lineJoin="round"
             listening={canPickStroke}
@@ -33,13 +34,17 @@ export default function DrawingStrokesKonva({
               if (!canPickStroke) return
               e.cancelBubble = true
               e.evt.stopPropagation()
-              blueprintStore.getState().selectDrawingStroke(si)
-            }}
-            onTap={e => {
-              if (!canPickStroke) return
-              e.cancelBubble = true
-              e.evt.stopPropagation()
-              blueprintStore.getState().selectDrawingStroke(si)
+              const evt = e.evt as MouseEvent
+              const store = blueprintStore.getState()
+              if (evt.ctrlKey || evt.metaKey) {
+                store.toggleDrawingStrokeInSelection(si)
+              } else if (evt.shiftKey) {
+                store.addDrawingStrokeToSelection(si)
+              } else if (store.selectedDrawingStrokeIndices.includes(si)) {
+                return
+              } else {
+                store.selectDrawingStroke(si)
+              }
             }}
           />
         ) : null,

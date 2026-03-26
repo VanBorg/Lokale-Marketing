@@ -1,10 +1,19 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStore } from 'zustand'
 import { blueprintStore, useBlueprintStore } from '../store/blueprintStore'
 import { useBlueprintSave } from '../hooks/useBlueprintSave'
 import ShortcutsModal from '../components/blueprint/ShortcutsModal'
 import EditorToolbar from './toolbar/EditorToolbar'
 import type { Project } from '../lib/database.types'
+
+/** Optioneel: plattegrond + kamerkaart-preview (BlueprintPage) — overschrijft alleen temporal undo/redo. */
+export interface EditorPageUndoRedo {
+  canUndo: boolean
+  canRedo: boolean
+  onUndo: () => void
+  onRedo: () => void
+}
 
 interface EditorPageProps {
   project: Project
@@ -12,6 +21,8 @@ interface EditorPageProps {
   onTabChange: (tab: string) => void
   /** The main content area (3-column layout or just PixelCanvas) */
   children: ReactNode
+  /** Wanneer gezet (Blueprint), volgen undo/redo de kamerkaart-preview of de plattegrond. */
+  undoRedo?: EditorPageUndoRedo
 }
 
 /**
@@ -19,11 +30,11 @@ interface EditorPageProps {
  * then `children` fills the remaining height (the column layout).
  * Owning the toolbar here ensures it always spans 100% of the page width.
  */
-export default function EditorPage({ project, onUpdateProject, children }: EditorPageProps) {
+export default function EditorPage({ project, onUpdateProject, children, undoRedo }: EditorPageProps) {
   const navigate = useNavigate()
   const [showShortcuts, setShowShortcuts] = useState(false)
-  const [canUndo, setCanUndo] = useState(false)
-  const [canRedo, setCanRedo] = useState(false)
+  const canTemporalUndo = useStore(blueprintStore.temporal, s => s.pastStates.length > 0)
+  const canTemporalRedo = useStore(blueprintStore.temporal, s => s.futureStates.length > 0)
   const {
     isSaving,
     lastSaved,
@@ -51,16 +62,6 @@ export default function EditorPage({ project, onUpdateProject, children }: Edito
   }, [project.id, loadProject])
 
   useEffect(() => {
-    const sync = () => {
-      const t = blueprintStore.temporal.getState()
-      setCanUndo(t.pastStates.length > 0)
-      setCanRedo(t.futureStates.length > 0)
-    }
-    sync()
-    return blueprintStore.temporal.subscribe(sync)
-  }, [])
-
-  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault()
@@ -71,8 +72,15 @@ export default function EditorPage({ project, onUpdateProject, children }: Edito
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [saveNow])
 
-  const handleUndo = () => blueprintStore.temporal.getState().undo()
-  const handleRedo = () => blueprintStore.temporal.getState().redo()
+  const handleTemporalUndo = () => blueprintStore.temporal.getState().undo()
+  const handleTemporalRedo = () => blueprintStore.temporal.getState().redo()
+
+  const effectiveUndoRedo = undoRedo ?? {
+    canUndo: canTemporalUndo,
+    canRedo: canTemporalRedo,
+    onUndo: handleTemporalUndo,
+    onRedo: handleTemporalRedo,
+  }
 
   const resetBlueprint = () => {
     const store = useBlueprintStore.getState()
@@ -90,10 +98,10 @@ export default function EditorPage({ project, onUpdateProject, children }: Edito
         project={project}
         onUpdateProject={onUpdateProject}
         onBack={() => navigate('/projects')}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
+        canUndo={effectiveUndoRedo.canUndo}
+        canRedo={effectiveUndoRedo.canRedo}
+        onUndo={effectiveUndoRedo.onUndo}
+        onRedo={effectiveUndoRedo.onRedo}
         isSaving={isSaving}
         lastSaved={lastSaved}
         isDirty={isDirty}

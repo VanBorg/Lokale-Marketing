@@ -1,4 +1,5 @@
 import { Group, Rect, Text } from 'react-konva'
+import type Konva from 'konva'
 import { blueprintStore } from '../../store/blueprintStore'
 import type { ActiveTool, CanvasTextNote } from '../../store/blueprintStore'
 
@@ -13,7 +14,7 @@ interface CanvasTextNotesProps {
   notes: Record<string, CanvasTextNote>
   viewportScale: number
   editingId: string | null
-  selectedId: string | null
+  selectedIds: string[]
   isLight: boolean
   activeTool: ActiveTool
 }
@@ -23,7 +24,7 @@ export default function CanvasTextNotes({
   notes,
   viewportScale,
   editingId,
-  selectedId,
+  selectedIds,
   isLight,
   activeTool,
 }: CanvasTextNotesProps) {
@@ -42,18 +43,30 @@ export default function CanvasTextNotes({
         const note = notes[id]
         if (!note) return null
         const isEditing = editingId === id
-        const isSelected = selectedId === id
+        const isSelected = selectedIds.includes(id)
         const display = note.text.trim() ? note.text : 'Typ hier…'
         const lineCount = Math.max(1, display.split('\n').length)
         const minH = fs * lineCount + pad * 2 + fs * 0.35
 
-        const handlePointerPick = () => {
+        const handlePointerPick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
           const store = blueprintStore.getState()
           if (activeTool === 'write') {
             store.openCanvasTextNoteEditor(id)
-          } else {
-            store.selectCanvasTextNote(id)
+            return
           }
+          const evt = e.evt as MouseEvent
+          if (evt.ctrlKey || evt.metaKey) {
+            store.toggleCanvasTextNoteInSelection(id)
+            return
+          }
+          if (evt.shiftKey) {
+            store.addCanvasTextNoteToSelection(id)
+            return
+          }
+          if (store.selectedCanvasTextNoteIds.includes(id)) {
+            return
+          }
+          store.selectCanvasTextNote(id)
         }
 
         return (
@@ -64,12 +77,14 @@ export default function CanvasTextNotes({
             onMouseDown={e => {
               e.cancelBubble = true
               e.evt.stopPropagation()
-              handlePointerPick()
+              handlePointerPick(e)
             }}
             onTap={e => {
               e.cancelBubble = true
               e.evt.stopPropagation()
-              handlePointerPick()
+              if (activeTool === 'write') {
+                blueprintStore.getState().openCanvasTextNoteEditor(id)
+              }
             }}
             onClick={e => {
               e.cancelBubble = true
