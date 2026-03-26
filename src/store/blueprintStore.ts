@@ -74,6 +74,13 @@ export interface CanvasTextNote {
   text: string
 }
 
+/** Opgeslagen meetlijn (wereldcoördinaten in cm). */
+export interface MeasureLineEntity {
+  id: string
+  start: Point
+  end: Point
+}
+
 export interface Viewport {
   x: number
   y: number
@@ -92,6 +99,7 @@ export interface BlueprintDoc {
   elements: Record<string, FloorElement>
   canvasTextNotes: Record<string, CanvasTextNote>
   canvasTextNoteOrder: string[]
+  measureLines: MeasureLineEntity[]
 }
 
 // ─── Full store state ──────────────────────────────────────────────────────
@@ -109,6 +117,12 @@ interface BlueprintState extends BlueprintDoc {
   gridEnabled: boolean
   /** Eén polylijn per mousedown–mouseup; geen lijn tussen twee strokes. */
   drawingStrokes: Point[][]
+  /** Selectiemodus: welke preview-strook (index in drawingStrokes) is geselecteerd voor Delete. */
+  selectedDrawingStrokeIndex: number | null
+  /** Geselecteerde meetlijn (Delete). */
+  selectedMeasureLineId: string | null
+  /** Eerste klik + live hover voor klik–klik–meten (alleen bij meet-tool). */
+  measureDraft: { start: Point; hover: Point } | null
   viewport: Viewport
   activeRoomDraft: Partial<Room> | null
   snapGuides: SnapGuide[]
@@ -126,11 +140,19 @@ interface BlueprintState extends BlueprintDoc {
   addCanvasTextNote: (point: Point) => string
   updateCanvasTextNote: (id: string, updates: Partial<Pick<CanvasTextNote, 'text' | 'x' | 'y'>>) => void
   deleteCanvasTextNote: (id: string) => void
+  /** Alleen selectie (rand), geen teksteditor — voor selectiemodus + Delete. */
   selectCanvasTextNote: (id: string) => void
+  /** Selectie + teksteditor openen (schrijf-tool of dubbelklik). */
+  openCanvasTextNoteEditor: (id: string) => void
   setEditingCanvasTextNoteId: (id: string | null) => void
   toggleWallLock: (roomId: string, wallIndex: number) => void
   setWallLength: (roomId: string, wallIndex: number, lengthCm: number) => void
   setRoofType: (roomId: string, type: RoofType, peakHeight?: number) => void
+  addMeasureLine: (start: Point, end: Point) => string
+  deleteMeasureLine: (id: string) => void
+  selectMeasureLine: (id: string | null) => void
+  setMeasureDraft: (draft: { start: Point; hover: Point } | null) => void
+  clearMeasureDraft: () => void
 
   // Actions — ephemeral
   initProject: (projectId: string) => void
@@ -143,6 +165,8 @@ interface BlueprintState extends BlueprintDoc {
   addDrawingVertex: (point: Point) => void
   finishDrawing: () => string | null
   cancelDrawing: () => void
+  selectDrawingStroke: (index: number) => void
+  deleteDrawingStrokeAt: (index: number) => void
   setViewport: (vp: Partial<Viewport>) => void
   setActiveRoomDraft: (draft: Partial<Room> | null) => void
   setSnapGuides: (guides: SnapGuide[]) => void
@@ -207,6 +231,7 @@ const emptyDoc = (): BlueprintDoc => ({
   elements: {},
   canvasTextNotes: {},
   canvasTextNoteOrder: [],
+  measureLines: [],
 })
 
 // ─── Store ─────────────────────────────────────────────────────────────────
@@ -226,6 +251,9 @@ export const useBlueprintStore = create<BlueprintState>()(
       snapEnabled: true,
       gridEnabled: false,
       drawingStrokes: [],
+      selectedDrawingStrokeIndex: null,
+      selectedMeasureLineId: null,
+      measureDraft: null,
       viewport: DEFAULT_VIEWPORT,
       activeRoomDraft: null,
       snapGuides: [],
@@ -352,6 +380,47 @@ export const useBlueprintStore = create<BlueprintState>()(
         })
       },
 
+      addMeasureLine: (start, end) => {
+        const id = nanoid()
+        set(state => {
+          const a = snapPointToGrid(start)
+          const b = snapPointToGrid(end)
+          state.measureLines.push({ id, start: a, end: b })
+          state.measureDraft = null
+          state.selectedMeasureLineId = null
+        })
+        return id
+      },
+
+      deleteMeasureLine: (lineId) => {
+        set(state => {
+          state.measureLines = state.measureLines.filter(m => m.id !== lineId)
+          if (state.selectedMeasureLineId === lineId) state.selectedMeasureLineId = null
+        })
+      },
+
+      selectMeasureLine: (lineId) => {
+        set(state => {
+          state.selectedMeasureLineId = lineId
+          state.selectedDrawingStrokeIndex = null
+          state.selectedCanvasTextNoteId = null
+          state.editingCanvasTextNoteId = null
+          state.selectedIds = []
+        })
+      },
+
+      setMeasureDraft: (draft) => {
+        set(state => {
+          state.measureDraft = draft
+        })
+      },
+
+      clearMeasureDraft: () => {
+        set(state => {
+          state.measureDraft = null
+        })
+      },
+
       // ── Ephemeral actions ─────────────────────────────────────────────
 
       initProject: (projectId) => {
@@ -362,6 +431,9 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.selectedIds = []
           state.selectedCanvasTextNoteId = null
           state.editingCanvasTextNoteId = null
+          state.selectedDrawingStrokeIndex = null
+          state.selectedMeasureLineId = null
+          state.measureDraft = null
           state.activeTool = 'select'
           state.drawingStrokes = []
           // Viewport is owned by PixelCanvas (centre on world 0,0). Do not reset to 0,0 here —
@@ -377,6 +449,8 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.selectedIds = ids
           state.selectedCanvasTextNoteId = null
           state.editingCanvasTextNoteId = null
+          state.selectedDrawingStrokeIndex = null
+          state.selectedMeasureLineId = null
         })
       },
 
@@ -385,14 +459,28 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.selectedIds = []
           state.selectedCanvasTextNoteId = null
           state.editingCanvasTextNoteId = null
+          state.selectedDrawingStrokeIndex = null
+          state.selectedMeasureLineId = null
         })
       },
 
       selectCanvasTextNote: (id) => {
         set(state => {
           state.selectedCanvasTextNoteId = id
+          state.editingCanvasTextNoteId = null
+          state.selectedIds = []
+          state.selectedDrawingStrokeIndex = null
+          state.selectedMeasureLineId = null
+        })
+      },
+
+      openCanvasTextNoteEditor: (id) => {
+        set(state => {
+          state.selectedCanvasTextNoteId = id
           state.editingCanvasTextNoteId = id
           state.selectedIds = []
+          state.selectedDrawingStrokeIndex = null
+          state.selectedMeasureLineId = null
         })
       },
 
@@ -410,6 +498,8 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.selectedIds = []
           state.selectedCanvasTextNoteId = id
           state.editingCanvasTextNoteId = id
+          state.selectedDrawingStrokeIndex = null
+          state.selectedMeasureLineId = null
         })
         return id
       },
@@ -431,7 +521,17 @@ export const useBlueprintStore = create<BlueprintState>()(
       },
 
       setActiveTool: (tool) => {
-        set(state => { state.activeTool = tool })
+        set(state => {
+          state.activeTool = tool
+          if (tool !== 'measure') {
+            state.measureDraft = null
+          }
+          // Sluit de HTML-teksteditor bij wisselen naar iets anders dan Schrijven — anders blijft
+          // editingCanvasTextNoteId gezet en werkt Delete/Backspace niet (useBlueprintKeyboard).
+          if (tool !== 'write') {
+            state.editingCanvasTextNoteId = null
+          }
+        })
       },
 
       setSnapEnabled: (enabled) => {
@@ -446,6 +546,27 @@ export const useBlueprintStore = create<BlueprintState>()(
         set(state => {
           const snap = snapPointToGrid(point)
           state.drawingStrokes.push([snap])
+          state.selectedDrawingStrokeIndex = null
+          state.selectedMeasureLineId = null
+        })
+      },
+
+      selectDrawingStroke: (index) => {
+        set(state => {
+          if (index < 0 || index >= state.drawingStrokes.length) return
+          state.selectedDrawingStrokeIndex = index
+          state.selectedIds = []
+          state.selectedCanvasTextNoteId = null
+          state.editingCanvasTextNoteId = null
+          state.selectedMeasureLineId = null
+        })
+      },
+
+      deleteDrawingStrokeAt: (index) => {
+        set(state => {
+          if (index < 0 || index >= state.drawingStrokes.length) return
+          state.drawingStrokes.splice(index, 1)
+          state.selectedDrawingStrokeIndex = null
         })
       },
 
@@ -465,12 +586,16 @@ export const useBlueprintStore = create<BlueprintState>()(
         const { drawingStrokes, addRoom } = get()
         const flat = drawingStrokes.flat()
         if (flat.length < 3) {
-          set(state => { state.drawingStrokes = [] })
+          set(state => {
+            state.drawingStrokes = []
+            state.selectedDrawingStrokeIndex = null
+          })
           return null
         }
         const id = addRoom([...flat])
         set(state => {
           state.drawingStrokes = []
+          state.selectedDrawingStrokeIndex = null
           state.activeTool = 'select'
         })
         return id
@@ -479,6 +604,7 @@ export const useBlueprintStore = create<BlueprintState>()(
       cancelDrawing: () => {
         set(state => {
           state.drawingStrokes = []
+          state.selectedDrawingStrokeIndex = null
           state.activeTool = 'select'
         })
       },
@@ -543,6 +669,7 @@ export const useBlueprintStore = create<BlueprintState>()(
         elements: state.elements,
         canvasTextNotes: state.canvasTextNotes,
         canvasTextNoteOrder: state.canvasTextNoteOrder,
+        measureLines: state.measureLines,
       }),
       /**
        * Zonder equality: elke `set` (viewport, selectie, pan, …) duwt een undo-stap,
@@ -552,7 +679,8 @@ export const useBlueprintStore = create<BlueprintState>()(
       equality: (past, current) =>
         past.rooms === current.rooms &&
         past.roomOrder === current.roomOrder &&
-        past.elements === current.elements,
+        past.elements === current.elements &&
+        past.measureLines === current.measureLines,
       limit: 50,
     },
   ),
@@ -592,6 +720,18 @@ export const useEditingCanvasTextNoteId = () =>
 
 export const useSelectedCanvasTextNoteId = () =>
   useBlueprintStore(state => state.selectedCanvasTextNoteId)
+
+export const useSelectedDrawingStrokeIndex = () =>
+  useBlueprintStore(state => state.selectedDrawingStrokeIndex)
+
+export const useMeasureLines = () =>
+  useBlueprintStore(state => state.measureLines)
+
+export const useMeasureDraft = () =>
+  useBlueprintStore(state => state.measureDraft)
+
+export const useSelectedMeasureLineId = () =>
+  useBlueprintStore(state => state.selectedMeasureLineId)
 
 // Module-level singleton for use in Konva event handlers (outside React)
 export const blueprintStore = useBlueprintStore

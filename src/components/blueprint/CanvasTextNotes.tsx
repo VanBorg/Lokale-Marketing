@@ -1,6 +1,6 @@
 import { Group, Rect, Text } from 'react-konva'
 import { blueprintStore } from '../../store/blueprintStore'
-import type { CanvasTextNote } from '../../store/blueprintStore'
+import type { ActiveTool, CanvasTextNote } from '../../store/blueprintStore'
 
 /** Tekstkolombreedte in wereld-eenheden (cm), zichtbaar als ~2,8 m op de plattegrond. */
 export const CANVAS_TEXT_NOTE_WIDTH_CM = 280
@@ -15,6 +15,7 @@ interface CanvasTextNotesProps {
   editingId: string | null
   selectedId: string | null
   isLight: boolean
+  activeTool: ActiveTool
 }
 
 export default function CanvasTextNotes({
@@ -24,6 +25,7 @@ export default function CanvasTextNotes({
   editingId,
   selectedId,
   isLight,
+  activeTool,
 }: CanvasTextNotesProps) {
   const fs = FONT_SCREEN_PX / viewportScale
   const pad = PAD_SCREEN_PX / viewportScale
@@ -45,6 +47,15 @@ export default function CanvasTextNotes({
         const lineCount = Math.max(1, display.split('\n').length)
         const minH = fs * lineCount + pad * 2 + fs * 0.35
 
+        const handlePointerPick = () => {
+          const store = blueprintStore.getState()
+          if (activeTool === 'write') {
+            store.openCanvasTextNoteEditor(id)
+          } else {
+            store.selectCanvasTextNote(id)
+          }
+        }
+
         return (
           <Group
             key={id}
@@ -52,11 +63,27 @@ export default function CanvasTextNotes({
             y={note.y}
             onMouseDown={e => {
               e.cancelBubble = true
-              blueprintStore.getState().selectCanvasTextNote(id)
+              e.evt.stopPropagation()
+              handlePointerPick()
             }}
             onTap={e => {
               e.cancelBubble = true
-              blueprintStore.getState().selectCanvasTextNote(id)
+              e.evt.stopPropagation()
+              handlePointerPick()
+            }}
+            onClick={e => {
+              e.cancelBubble = true
+              e.evt.stopPropagation()
+            }}
+            onDblClick={e => {
+              e.cancelBubble = true
+              e.evt.stopPropagation()
+              blueprintStore.getState().openCanvasTextNoteEditor(id)
+            }}
+            onDblTap={e => {
+              e.cancelBubble = true
+              e.evt.stopPropagation()
+              blueprintStore.getState().openCanvasTextNoteEditor(id)
             }}
           >
             <Rect

@@ -1,5 +1,7 @@
-/** World-space grid size in cm — matches MINOR_GRID in PixelCanvas (2 m). */
-export const GRID_SIZE = 200
+import { PIXEL_MINOR_GRID_CM } from './pixelCanvasConstants'
+
+/** World-space grid size in cm — same as `PIXEL_MINOR_GRID_CM` / `BLUEPRINT_MINOR_GRID_CM` (2 m). */
+export const GRID_SIZE = PIXEL_MINOR_GRID_CM
 
 /**
  * Snap a single world-space value to the nearest grid increment.

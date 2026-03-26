@@ -154,7 +154,15 @@ export default function EditorToolbar({
   }, [lastSaved])
 
   const toolSegmentIndex =
-    activeTool === 'select' ? 0 : activeTool === 'draw' ? 1 : 2
+    activeTool === 'select'
+      ? 0
+      : activeTool === 'draw'
+        ? 1
+        : activeTool === 'write'
+          ? 2
+          : activeTool === 'measure'
+            ? 3
+            : 2
 
   const segmentToolBtn = (active: boolean) =>
     [

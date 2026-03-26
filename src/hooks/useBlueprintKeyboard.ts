@@ -33,6 +33,7 @@ export function useBlueprintKeyboard() {
       if (e.key === 'Escape') {
         store.clearSelection()
         store.cancelDrawing()
+        store.clearMeasureDraft()
         return
       }
 
@@ -41,6 +42,20 @@ export function useBlueprintKeyboard() {
         const selectedNoteId = store.selectedCanvasTextNoteId
         if (selectedNoteId && !store.editingCanvasTextNoteId) {
           store.deleteCanvasTextNote(selectedNoteId)
+          return
+        }
+        const measureId = store.selectedMeasureLineId
+        if (measureId) {
+          store.deleteMeasureLine(measureId)
+          return
+        }
+        const strokeIdx = store.selectedDrawingStrokeIndex
+        if (
+          strokeIdx !== null &&
+          strokeIdx < store.drawingStrokes.length &&
+          store.drawingStrokes[strokeIdx]?.length
+        ) {
+          store.deleteDrawingStrokeAt(strokeIdx)
           return
         }
         const { selectedIds } = store

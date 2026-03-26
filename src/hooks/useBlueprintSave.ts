@@ -15,11 +15,24 @@ export function useBlueprintSave(projectId: string | null) {
     setIsSaving(true)
     try {
       const notes = werkbladNotitiesOverride ?? werkbladNotities
-      const { rooms, roomOrder, elements, canvasTextNotes, canvasTextNoteOrder } =
-        blueprintStore.getState()
+      const {
+        rooms,
+        roomOrder,
+        elements,
+        canvasTextNotes,
+        canvasTextNoteOrder,
+        measureLines,
+      } = blueprintStore.getState()
       const roomDetailsState = useRoomDetailsStore.getState()
       await saveBlueprintData(projectId, {
-        blueprintDoc: { rooms, roomOrder, elements, canvasTextNotes, canvasTextNoteOrder },
+        blueprintDoc: {
+          rooms,
+          roomOrder,
+          elements,
+          canvasTextNotes,
+          canvasTextNoteOrder,
+          measureLines,
+        },
         roomDetails: roomDetailsState.getAllDetails(),
         etages: roomDetailsState.etages,
         dakbedekking: roomDetailsState.dakbedekking,
@@ -72,6 +85,7 @@ export function useBlueprintSave(projectId: string | null) {
       elements: data.blueprintDoc.elements,
       canvasTextNotes: data.blueprintDoc.canvasTextNotes ?? {},
       canvasTextNoteOrder: data.blueprintDoc.canvasTextNoteOrder ?? [],
+      measureLines: data.blueprintDoc.measureLines ?? [],
     })
     blueprintStore.getState().recenterViewportToOrigin()
 
