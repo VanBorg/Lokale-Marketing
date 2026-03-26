@@ -9,11 +9,17 @@ import {
   useViewport,
   useSnapGuides,
   useGridEnabled,
+  useCanvasTextNoteOrder,
+  useEditingCanvasTextNoteId,
+  useSelectedCanvasTextNoteId,
 } from '../../store/blueprintStore'
 import type { Point } from '../../store/blueprintStore'
 import { snapPointToGrid } from '../../utils/blueprintGeometry'
 import { useTheme } from '../../hooks/useTheme'
 import EditableRoom from '../../components/blueprint/EditableRoom'
+import CanvasTextNotes, {
+  CANVAS_TEXT_NOTE_WIDTH_CM,
+} from '../../components/blueprint/CanvasTextNotes'
 import SnapGuides from '../../components/blueprint/SnapGuides'
 
 const MINOR_GRID = 200   // 2 m in world units (cm)
@@ -28,6 +34,9 @@ const CM_TO_M = 0.01
 
 /** After project open, RO often fires many times as layout settles — recentre on each until quiet. */
 const RECENTER_AFTER_OPEN_MS = 150
+
+/** Min. afstand tussen opeenvolgende punten tijdens ingedrukt houden (cm, wereld). ~grid 20cm; te hoog (100) gaf grote “dode” zone voor 2e punt (zie logs H-C). */
+const STROKE_SAMPLE_MIN_CM = 28
 
 interface MeasureLine {
   start: Point
@@ -45,6 +54,11 @@ export default function PixelCanvas() {
   const projectId = useBlueprintStore(s => s.projectId)
   const activeTool = useActiveTool()
   const viewport = useViewport()
+  const canvasTextNotes = useBlueprintStore(s => s.canvasTextNotes)
+  const canvasTextNoteOrder = useCanvasTextNoteOrder()
+  const editingCanvasTextNoteId = useEditingCanvasTextNoteId()
+  const selectedCanvasTextNoteId = useSelectedCanvasTextNoteId()
+  const textareaEditRef = useRef<HTMLTextAreaElement>(null)
   const snapGuides = useSnapGuides()
   const gridEnabled = useGridEnabled()
   const { theme } = useTheme()
@@ -61,6 +75,10 @@ export default function PixelCanvas() {
       setMeasureLine(null)
     }
   }, [activeTool])
+
+  useLayoutEffect(() => {
+    if (editingCanvasTextNoteId) textareaEditRef.current?.focus()
+  }, [editingCanvasTextNoteId])
 
   // ── Theme colours ──────────────────────────────────────────────────────────
   const originCross = isLight
@@ -107,8 +125,9 @@ export default function PixelCanvas() {
   const panStart = useRef({ x: 0, y: 0 })
   const spaceDown = useRef(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
-  const panPointerStart = useRef<{ x: number; y: number } | null>(null)
   const suppressNextClickRef = useRef(false)
+  /** Verwijdert window-listeners voor teken-strook (nieuwe mousedown of unmount). */
+  const drawStrokeCleanupRef = useRef<(() => void) | null>(null)
   const needsRecenterForProjectRef = useRef(true)
   const lastProjectIdRef = useRef<string | null>(null)
   const recenterSettledTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -311,7 +330,6 @@ export default function PixelCanvas() {
         window.removeEventListener('mouseup', onUp)
         isPanning.current = false
         setIsPanningUi(false)
-        panPointerStart.current = null
       }
 
       window.addEventListener('mousemove', onMove)
@@ -319,6 +337,59 @@ export default function PixelCanvas() {
     },
     [],
   )
+
+  /**
+   * Tekenen: ingedrukt houden = schrijven (punten volgen de muis); loslaten = stoppen.
+   * Elke mousedown start een nieuwe stroke; geen verbindende lijn naar de volgende klik.
+   */
+  const attachDrawStrokeListeners = useCallback((startWorld: Point) => {
+    const clientToWorld = (cx: number, cy: number): Point | null => {
+      const s = stageRef.current
+      if (!s) return null
+      const rect = s.container().getBoundingClientRect()
+      const x = cx - rect.left
+      const y = cy - rect.top
+      const sc = s.scaleX()
+      return { x: (x - s.x()) / sc, y: (y - s.y()) / sc }
+    }
+
+    const store = blueprintStore.getState()
+    store.startDrawingStroke(startWorld)
+    let lastSampleWorld = snapPointToGrid(startWorld)
+    suppressNextClickRef.current = true
+
+    const onMove = (ev: MouseEvent) => {
+      if (!(ev.buttons & 1)) return
+      const world = clientToWorld(ev.clientX, ev.clientY)
+      if (!world) return
+      const dist = Math.hypot(world.x - lastSampleWorld.x, world.y - lastSampleWorld.y)
+      if (dist >= STROKE_SAMPLE_MIN_CM) {
+        store.addDrawingVertex(world)
+        lastSampleWorld = snapPointToGrid(world)
+      }
+    }
+
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', onMove, true)
+      window.removeEventListener('mouseup', onUp, true)
+      drawStrokeCleanupRef.current = null
+
+      const world = clientToWorld(ev.clientX, ev.clientY)
+      if (world) {
+        const dist = Math.hypot(world.x - lastSampleWorld.x, world.y - lastSampleWorld.y)
+        if (dist > 2) store.addDrawingVertex(world)
+      }
+    }
+
+    window.addEventListener('mousemove', onMove, true)
+    window.addEventListener('mouseup', onUp, true)
+
+    drawStrokeCleanupRef.current = () => {
+      window.removeEventListener('mousemove', onMove, true)
+      window.removeEventListener('mouseup', onUp, true)
+      drawStrokeCleanupRef.current = null
+    }
+  }, [])
 
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -333,39 +404,40 @@ export default function PixelCanvas() {
       if (e.evt.button === 0 && e.target === stageRef.current) {
         store.clearSelection()
 
-        if (tool !== 'draw' && tool !== 'measure') {
+        if (tool !== 'draw' && tool !== 'measure' && tool !== 'write') {
           attachWindowPanListeners(e.evt.clientX, e.evt.clientY)
           return
         }
 
         if (tool === 'draw') {
-          panPointerStart.current = { x: e.evt.clientX, y: e.evt.clientY }
+          drawStrokeCleanupRef.current?.()
+          const stage = stageRef.current
+          if (!stage) return
+          const pointer = stage.getPointerPosition()
+          if (!pointer) return
+          const scale = stage.scaleX()
+          const worldPt: Point = {
+            x: (pointer.x - stage.x()) / scale,
+            y: (pointer.y - stage.y()) / scale,
+          }
+          attachDrawStrokeListeners(worldPt)
         }
       }
     },
-    [attachWindowPanListeners],
+    [attachWindowPanListeners, attachDrawStrokeListeners],
   )
 
-  const handleMouseMove = useCallback(
-    (e: Konva.KonvaEventObject<MouseEvent>) => {
-      if (isPanning.current) return
-      const start = panPointerStart.current
-      if (!start || blueprintStore.getState().activeTool !== 'draw') return
-
-      const dx = e.evt.clientX - start.x
-      const dy = e.evt.clientY - start.y
-      if (dx * dx + dy * dy < 36) return
-
-      suppressNextClickRef.current = true
-      panPointerStart.current = null
-      attachWindowPanListeners(e.evt.clientX, e.evt.clientY)
-    },
-    [attachWindowPanListeners],
-  )
-
-  const handleMouseUp = useCallback(() => {
-    if (!isPanning.current) panPointerStart.current = null
+  useEffect(() => {
+    return () => {
+      drawStrokeCleanupRef.current?.()
+    }
   }, [])
+
+  const handleMouseMove = useCallback(() => {
+    if (isPanning.current) return
+  }, [])
+
+  const handleMouseUp = useCallback(() => {}, [])
 
   // ── Stage click handler ────────────────────────────────────────────────────
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -386,9 +458,11 @@ export default function PixelCanvas() {
       y: (pointer.y - stage.y()) / scale,
     }
 
-    // Draw tool — place vertex
-    if (store.activeTool === 'draw') {
-      store.addDrawingVertex(snapPointToGrid(worldPt))
+    // Draw: alleen via mousedown→listeners (ingedrukt = tekenen), niet via onClick.
+
+    // Schrijven — nieuwe tekstnotitie op de plattegrond
+    if (store.activeTool === 'write') {
+      store.addCanvasTextNote(worldPt)
       return
     }
 
@@ -414,7 +488,7 @@ export default function PixelCanvas() {
     if (store.activeTool === 'draw') store.finishDrawing()
   }, [])
 
-  const drawingVerts = useBlueprintStore(s => s.drawingVertices)
+  const drawingStrokes = useBlueprintStore(s => s.drawingStrokes)
 
   const hasSize = size.width > 0 && size.height > 0
 
@@ -434,7 +508,7 @@ export default function PixelCanvas() {
     ? 'grabbing'
     : spaceHeld
       ? 'grab'
-      : activeTool === 'draw' || activeTool === 'measure'
+      : activeTool === 'draw' || activeTool === 'measure' || activeTool === 'write'
         ? 'crosshair'
         : activeTool === 'select'
           ? 'default'
@@ -590,19 +664,43 @@ export default function PixelCanvas() {
               <EditableRoom key={id} roomId={id} stageRef={stageRef} />
             ))}
 
-            {/* Drawing preview dots */}
-            {drawingVerts.map((v, i) => (
-              <Circle
-                key={i}
-                x={v.x}
-                y={v.y}
-                radius={4}
-                fill="#35B4D3"
-                stroke="#fff"
-                strokeWidth={1}
-                listening={false}
-              />
-            ))}
+            {/* Drawing preview — één lijn per stroke (geen segment tussen strokes) */}
+            {drawingStrokes.map((stroke, si) =>
+              stroke.length >= 2 ? (
+                <Line
+                  key={`draw-stroke-${si}`}
+                  points={stroke.flatMap(v => [v.x, v.y])}
+                  stroke="#35B4D3"
+                  strokeWidth={2 / viewport.scale}
+                  lineCap="round"
+                  lineJoin="round"
+                  listening={false}
+                />
+              ) : null,
+            )}
+            {drawingStrokes.map((stroke, si) =>
+              stroke.map((v, vi) => (
+                <Circle
+                  key={`draw-pt-${si}-${vi}`}
+                  x={v.x}
+                  y={v.y}
+                  radius={4}
+                  fill="#35B4D3"
+                  stroke="#fff"
+                  strokeWidth={1}
+                  listening={false}
+                />
+              )),
+            )}
+
+            <CanvasTextNotes
+              noteOrder={canvasTextNoteOrder}
+              notes={canvasTextNotes}
+              viewportScale={viewport.scale}
+              editingId={editingCanvasTextNoteId}
+              selectedId={selectedCanvasTextNoteId}
+              isLight={isLight}
+            />
           </Layer>
 
           {/* Layer 2: Measure tool overlay */}
@@ -674,6 +772,38 @@ export default function PixelCanvas() {
           </Layer>
         </Stage>
       )}
+
+      {hasSize &&
+        editingCanvasTextNoteId &&
+        canvasTextNotes[editingCanvasTextNoteId] &&
+        (() => {
+          const note = canvasTextNotes[editingCanvasTextNoteId]
+          const leftPx = note.x * viewport.scale + viewport.x
+          const topPx = note.y * viewport.scale + viewport.y
+          const wPx = CANVAS_TEXT_NOTE_WIDTH_CM * viewport.scale
+          return (
+            <textarea
+              ref={textareaEditRef}
+              className="pointer-events-auto absolute z-20 min-h-[4.5rem] resize-y rounded border border-accent/50 bg-neutral-950/95 p-2 text-sm text-neutral-100 shadow-lg outline-none transition-all duration-200 placeholder:text-neutral-500 focus:ring-2 focus:ring-accent/45 theme-light:border-neutral-300 theme-light:bg-white theme-light:text-neutral-900 theme-light:placeholder:text-neutral-400"
+              style={{ left: leftPx, top: topPx, width: wPx, maxWidth: 'min(100%, 24rem)' }}
+              value={note.text}
+              placeholder="Typ hier…"
+              aria-label="Tekst op plattegrond"
+              onChange={e => {
+                blueprintStore
+                  .getState()
+                  .updateCanvasTextNote(editingCanvasTextNoteId, { text: e.target.value })
+              }}
+              onBlur={() => blueprintStore.getState().setEditingCanvasTextNoteId(null)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation()
+                  blueprintStore.getState().setEditingCanvasTextNoteId(null)
+                }
+              }}
+            />
+          )
+        })()}
     </div>
   )
 }

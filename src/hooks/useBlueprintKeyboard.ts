@@ -38,6 +38,11 @@ export function useBlueprintKeyboard() {
 
       // Delete / Backspace — remove selected
       if (e.key === 'Delete' || e.key === 'Backspace') {
+        const selectedNoteId = store.selectedCanvasTextNoteId
+        if (selectedNoteId && !store.editingCanvasTextNoteId) {
+          store.deleteCanvasTextNote(selectedNoteId)
+          return
+        }
         const { selectedIds } = store
         for (const id of selectedIds) {
           if (store.rooms[id]) {

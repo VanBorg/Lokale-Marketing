@@ -59,6 +59,8 @@ export interface ProjectBlueprintData {
   dakbedekking: string
   dakoversteekhoogte: number
   lastSavedAt: string
+  /** Vrije notities op het werkblad (plattegrond-editor). */
+  werkbladNotities?: string
 }
 
 // ─── Placeholder functies — later vervangen door Supabase calls ──────────────

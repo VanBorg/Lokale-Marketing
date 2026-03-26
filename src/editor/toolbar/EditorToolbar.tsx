@@ -9,17 +9,20 @@ import {
   MousePointer2,
   Pencil,
   Plus,
+  Type,
   Redo2,
   Ruler,
+  StickyNote,
   Undo2,
 } from 'lucide-react'
 import ProjectStatusSelect from '../../components/project/ProjectStatusSelect'
 import { Button } from '../../components/ui'
 import KlantgegevensModal from '../../components/blueprint/KlantgegevensModal'
+import NotitieModal from '../../components/blueprint/NotitieModal'
 import type { Project } from '../../lib/database.types'
 import {
   blueprintStore,
-  getDefaultBlueprintScaleForCanvasHeight,
+  getDefaultBlueprintScaleForCanvasSize,
   useBlueprintStore,
   useViewport,
 } from '../../store/blueprintStore'
@@ -46,6 +49,8 @@ export interface EditorToolbarProps {
   lastSaved: Date | null
   isDirty: boolean
   onSaveNow: () => void
+  werkbladNotities: string
+  onSaveWerkbladNotities: (text: string) => void
   onResetBlueprint: () => void
   onOpenShortcuts: () => void
 }
@@ -62,10 +67,13 @@ export default function EditorToolbar({
   lastSaved,
   isDirty,
   onSaveNow,
+  werkbladNotities,
+  onSaveWerkbladNotities,
   onResetBlueprint,
   onOpenShortcuts,
 }: EditorToolbarProps) {
   const [showKlant, setShowKlant] = useState(false)
+  const [showNotitie, setShowNotitie] = useState(false)
   const [overflowOpen, setOverflowOpen] = useState(false)
   const overflowRef = useRef<HTMLDivElement>(null)
 
@@ -87,7 +95,10 @@ export default function EditorToolbar({
 
   const viewport = useViewport()
   const canvasSize = useBlueprintStore(s => s.canvasSize)
-  const baseScale = getDefaultBlueprintScaleForCanvasHeight(Math.max(canvasSize.height, 1))
+  const baseScale = getDefaultBlueprintScaleForCanvasSize(
+    Math.max(canvasSize.width, 1),
+    Math.max(canvasSize.height, 1),
+  )
   const zoomPercentLabel = Math.max(1, Math.round((viewport.scale / baseScale) * 100))
 
   const onZoomOut = useCallback(() => {
@@ -101,7 +112,7 @@ export default function EditorToolbar({
   }, [])
 
   const setCanvasTool = useCallback(
-    (tool: 'select' | 'draw' | 'measure') => {
+    (tool: 'select' | 'draw' | 'write' | 'measure') => {
       setActiveTool(tool)
     },
     [setActiveTool],
@@ -290,14 +301,14 @@ export default function EditorToolbar({
 
         {/* Groep 4 — canvas-tools: één groep met dunne rand; zachte vulling op selectie */}
         <div
-          className="relative flex h-8 min-w-[6.75rem] shrink-0 items-stretch overflow-hidden rounded-lg border border-neutral-600/85 bg-neutral-900/45 theme-light:border-neutral-300 theme-light:bg-neutral-100/95"
+          className="relative flex h-8 min-w-[9rem] shrink-0 items-stretch overflow-hidden rounded-lg border border-neutral-600/85 bg-neutral-900/45 theme-light:border-neutral-300 theme-light:bg-neutral-100/95"
           role="group"
           aria-label="Canvas-gereedschap"
         >
           <div
             className="pointer-events-none absolute inset-y-0 left-0 rounded-none bg-accent/40 transition-transform duration-200 ease-out theme-light:bg-accent/45"
             style={{
-              width: 'calc(100% / 3)',
+              width: 'calc(100% / 4)',
               transform: `translateX(${toolSegmentIndex * 100}%)`,
             }}
             aria-hidden
@@ -321,6 +332,16 @@ export default function EditorToolbar({
             aria-pressed={activeTool === 'draw'}
           >
             <Pencil size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setCanvasTool('write')}
+            className={`${segmentToolBtn(activeTool === 'write')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
+            title="Schrijven"
+            aria-label="Schrijven"
+            aria-pressed={activeTool === 'write'}
+          >
+            <Type size={15} />
           </button>
           <button
             type="button"
@@ -475,6 +496,13 @@ export default function EditorToolbar({
           project={project}
           onSave={onUpdateProject}
           onClose={() => setShowKlant(false)}
+        />
+      )}
+      {showNotitie && (
+        <NotitieModal
+          initialText={werkbladNotities}
+          onSave={onSaveWerkbladNotities}
+          onClose={() => setShowNotitie(false)}
         />
       )}
     </>

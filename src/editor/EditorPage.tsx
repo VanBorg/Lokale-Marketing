@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { blueprintStore, useBlueprintStore } from '../store/blueprintStore'
 import { useBlueprintSave } from '../hooks/useBlueprintSave'
@@ -24,7 +24,23 @@ export default function EditorPage({ project, onUpdateProject, children }: Edito
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
-  const { isSaving, lastSaved, isDirty, saveNow, loadProject } = useBlueprintSave(project.id)
+  const {
+    isSaving,
+    lastSaved,
+    isDirty,
+    saveNow,
+    loadProject,
+    werkbladNotities,
+    setWerkbladNotities,
+  } = useBlueprintSave(project.id)
+
+  const handleWerkbladNotitiesSave = useCallback(
+    (text: string) => {
+      setWerkbladNotities(text)
+      void saveNow(text)
+    },
+    [setWerkbladNotities, saveNow],
+  )
 
   useEffect(() => {
     blueprintStore.getState().initProject(project.id)
@@ -61,6 +77,10 @@ export default function EditorPage({ project, onUpdateProject, children }: Edito
   const resetBlueprint = () => {
     const store = useBlueprintStore.getState()
     Object.keys(store.rooms).forEach(id => store.deleteRoom(id))
+    blueprintStore.setState({
+      canvasTextNotes: {},
+      canvasTextNoteOrder: [],
+    })
     blueprintStore.temporal.getState().clear()
   }
 
@@ -77,7 +97,9 @@ export default function EditorPage({ project, onUpdateProject, children }: Edito
         isSaving={isSaving}
         lastSaved={lastSaved}
         isDirty={isDirty}
-        onSaveNow={saveNow}
+        onSaveNow={() => void saveNow()}
+        werkbladNotities={werkbladNotities}
+        onSaveWerkbladNotities={handleWerkbladNotitiesSave}
         onResetBlueprint={resetBlueprint}
         onOpenShortcuts={() => setShowShortcuts(true)}
       />

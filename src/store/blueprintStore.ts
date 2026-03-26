@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid'
 import {
   applyWallLengthRespectingLocks,
   axisAlignedBBoxSize,
+  snapPointToGrid,
   type Point,
   type RoomShapeStored,
   type RoofType,
@@ -53,7 +54,25 @@ export interface FloorElement {
   label?: string
 }
 
-export type ActiveTool = 'select' | 'draw' | 'measure' | 'pan' | 'add-deur' | 'add-raam' | 'add-trap' | 'add-kast' | 'add-overig'
+export type ActiveTool =
+  | 'select'
+  | 'draw'
+  | 'write'
+  | 'measure'
+  | 'pan'
+  | 'add-deur'
+  | 'add-raam'
+  | 'add-trap'
+  | 'add-kast'
+  | 'add-overig'
+
+/** Vrije tekst op de plattegrond (wereldcoördinaten in cm). */
+export interface CanvasTextNote {
+  id: string
+  x: number
+  y: number
+  text: string
+}
 
 export interface Viewport {
   x: number
@@ -71,6 +90,8 @@ export interface BlueprintDoc {
   rooms: Record<string, Room>
   roomOrder: string[]
   elements: Record<string, FloorElement>
+  canvasTextNotes: Record<string, CanvasTextNote>
+  canvasTextNoteOrder: string[]
 }
 
 // ─── Full store state ──────────────────────────────────────────────────────
@@ -79,10 +100,15 @@ interface BlueprintState extends BlueprintDoc {
   // Ephemeral — not in undo history
   projectId: string | null
   selectedIds: string[]
+  /** Geselecteerde plattegrond-tekst (los van kamers). */
+  selectedCanvasTextNoteId: string | null
+  /** Welke tekstnotitie toont de HTML-editor (overlay). */
+  editingCanvasTextNoteId: string | null
   activeTool: ActiveTool
   snapEnabled: boolean
   gridEnabled: boolean
-  drawingVertices: Point[]
+  /** Eén polylijn per mousedown–mouseup; geen lijn tussen twee strokes. */
+  drawingStrokes: Point[][]
   viewport: Viewport
   activeRoomDraft: Partial<Room> | null
   snapGuides: SnapGuide[]
@@ -97,6 +123,11 @@ interface BlueprintState extends BlueprintDoc {
   addElement: (el: Omit<FloorElement, 'id'>) => string
   updateElement: (id: string, updates: Partial<FloorElement>) => void
   deleteElement: (id: string) => void
+  addCanvasTextNote: (point: Point) => string
+  updateCanvasTextNote: (id: string, updates: Partial<Pick<CanvasTextNote, 'text' | 'x' | 'y'>>) => void
+  deleteCanvasTextNote: (id: string) => void
+  selectCanvasTextNote: (id: string) => void
+  setEditingCanvasTextNoteId: (id: string | null) => void
   toggleWallLock: (roomId: string, wallIndex: number) => void
   setWallLength: (roomId: string, wallIndex: number, lengthCm: number) => void
   setRoofType: (roomId: string, type: RoofType, peakHeight?: number) => void
@@ -108,6 +139,7 @@ interface BlueprintState extends BlueprintDoc {
   setActiveTool: (tool: ActiveTool) => void
   setSnapEnabled: (enabled: boolean) => void
   setGridEnabled: (enabled: boolean) => void
+  startDrawingStroke: (point: Point) => void
   addDrawingVertex: (point: Point) => void
   finishDrawing: () => string | null
   cancelDrawing: () => void
@@ -115,9 +147,9 @@ interface BlueprintState extends BlueprintDoc {
   setActiveRoomDraft: (draft: Partial<Room> | null) => void
   setSnapGuides: (guides: SnapGuide[]) => void
   setCanvasSize: (size: { width: number; height: number }) => void
-  /** World (0,0) centred; scale fits ~12 minor squares vertically (same as S / project open). */
+  /** World (0,0) centred; standaardzoom ≈ 10×8 minor blokken (zelfde als S / project open). */
   recenterViewportToOrigin: () => void
-  /** Zoom t.o.v. 100% = standaardschaal voor canvas-hoogte; `deltaPercent` bijv. +10 / −10 per stap. */
+  /** Zoom t.o.v. 100% = standaardschaal voor canvas (breedte+hoogte); `deltaPercent` bijv. +10 / −10 per stap. */
   zoomViewportByPercentDelta: (deltaPercent: number) => void
   zoomViewportAtCenter: (direction: 'in' | 'out') => void
 }
@@ -131,11 +163,14 @@ const DEFAULT_WALL_HEIGHT = 250
 export const BLUEPRINT_MINOR_GRID_CM = 200
 
 /**
- * Vertically: aim for this many minor grid squares visible (10–14 ⇒ 20–28 m).
- * 12 ⇒ 24 m visible height — middle of the range.
+ * Default zoom: ongeveer zoveel 2m-blokken (minor grid) zichtbaar op het canvas.
+ * Breedte en hoogte worden tegelijk begrensd (meer inzoomen dan alleen op hoogte).
  */
-export const TARGET_VISIBLE_MINOR_SQUARES_VERTICAL = 12
+export const TARGET_VISIBLE_MINOR_SQUARES_HORIZONTAL = 10
+export const TARGET_VISIBLE_MINOR_SQUARES_VERTICAL = 8
 
+const TARGET_VISIBLE_WORLD_WIDTH_CM =
+  TARGET_VISIBLE_MINOR_SQUARES_HORIZONTAL * BLUEPRINT_MINOR_GRID_CM
 const TARGET_VISIBLE_WORLD_HEIGHT_CM =
   TARGET_VISIBLE_MINOR_SQUARES_VERTICAL * BLUEPRINT_MINOR_GRID_CM
 
@@ -147,25 +182,31 @@ function clampViewScale(n: number): number {
 }
 
 /**
- * Scale so that the canvas shows ~`TARGET_VISIBLE_MINOR_SQUARES_VERTICAL` minor squares
- * top-to-bottom (world Y), i.e. visible height ≈ 20–28 m at 10–14 squares.
- * `visibleWorldHeight ≈ canvasHeightPx / scale`.
+ * Standaardschaal (px per cm wereld): zo ingezoomd dat het zichtbare vlak ongeveer
+ * `TARGET_VISIBLE_MINOR_SQUARES_HORIZONTAL` × `TARGET_VISIBLE_MINOR_SQUARES_VERTICAL` minor vierkanten is.
+ * Bij een breed canvas beperkt de breedte; bij een hoog canvas de hoogte — `max(scaleW, scaleH)`.
  */
-export function getDefaultBlueprintScaleForCanvasHeight(heightPx: number): number {
-  if (heightPx <= 0) return clampViewScale(600 / TARGET_VISIBLE_WORLD_HEIGHT_CM)
-  return clampViewScale(heightPx / TARGET_VISIBLE_WORLD_HEIGHT_CM)
+export function getDefaultBlueprintScaleForCanvasSize(widthPx: number, heightPx: number): number {
+  if (widthPx <= 0 || heightPx <= 0) {
+    return clampViewScale(600 / TARGET_VISIBLE_WORLD_HEIGHT_CM)
+  }
+  const scaleW = widthPx / TARGET_VISIBLE_WORLD_WIDTH_CM
+  const scaleH = heightPx / TARGET_VISIBLE_WORLD_HEIGHT_CM
+  return clampViewScale(Math.max(scaleW, scaleH))
 }
 
 const DEFAULT_VIEWPORT: Viewport = {
   x: 0,
   y: 0,
-  scale: getDefaultBlueprintScaleForCanvasHeight(600),
+  scale: getDefaultBlueprintScaleForCanvasSize(800, 600),
 }
 
 const emptyDoc = (): BlueprintDoc => ({
   rooms: {},
   roomOrder: [],
   elements: {},
+  canvasTextNotes: {},
+  canvasTextNoteOrder: [],
 })
 
 // ─── Store ─────────────────────────────────────────────────────────────────
@@ -179,10 +220,12 @@ export const useBlueprintStore = create<BlueprintState>()(
       // Ephemeral state
       projectId: null,
       selectedIds: [],
+      selectedCanvasTextNoteId: null,
+      editingCanvasTextNoteId: null,
       activeTool: 'select',
       snapEnabled: true,
       gridEnabled: false,
-      drawingVertices: [],
+      drawingStrokes: [],
       viewport: DEFAULT_VIEWPORT,
       activeRoomDraft: null,
       snapGuides: [],
@@ -317,8 +360,10 @@ export const useBlueprintStore = create<BlueprintState>()(
           Object.assign(state, emptyDoc())
           state.projectId = projectId
           state.selectedIds = []
+          state.selectedCanvasTextNoteId = null
+          state.editingCanvasTextNoteId = null
           state.activeTool = 'select'
-          state.drawingVertices = []
+          state.drawingStrokes = []
           // Viewport is owned by PixelCanvas (centre on world 0,0). Do not reset to 0,0 here —
           // parent useEffect runs after child ResizeObserver and would wipe a correct centre.
           state.activeRoomDraft = null
@@ -328,11 +373,61 @@ export const useBlueprintStore = create<BlueprintState>()(
       },
 
       select: (ids) => {
-        set(state => { state.selectedIds = ids })
+        set(state => {
+          state.selectedIds = ids
+          state.selectedCanvasTextNoteId = null
+          state.editingCanvasTextNoteId = null
+        })
       },
 
       clearSelection: () => {
-        set(state => { state.selectedIds = [] })
+        set(state => {
+          state.selectedIds = []
+          state.selectedCanvasTextNoteId = null
+          state.editingCanvasTextNoteId = null
+        })
+      },
+
+      selectCanvasTextNote: (id) => {
+        set(state => {
+          state.selectedCanvasTextNoteId = id
+          state.editingCanvasTextNoteId = id
+          state.selectedIds = []
+        })
+      },
+
+      setEditingCanvasTextNoteId: (id) => {
+        set(state => {
+          state.editingCanvasTextNoteId = id
+        })
+      },
+
+      addCanvasTextNote: (point) => {
+        const id = nanoid()
+        set(state => {
+          state.canvasTextNotes[id] = { id, x: point.x, y: point.y, text: '' }
+          state.canvasTextNoteOrder.push(id)
+          state.selectedIds = []
+          state.selectedCanvasTextNoteId = id
+          state.editingCanvasTextNoteId = id
+        })
+        return id
+      },
+
+      updateCanvasTextNote: (id, updates) => {
+        set(state => {
+          const n = state.canvasTextNotes[id]
+          if (n) Object.assign(n, updates)
+        })
+      },
+
+      deleteCanvasTextNote: (id) => {
+        set(state => {
+          delete state.canvasTextNotes[id]
+          state.canvasTextNoteOrder = state.canvasTextNoteOrder.filter(x => x !== id)
+          if (state.selectedCanvasTextNoteId === id) state.selectedCanvasTextNoteId = null
+          if (state.editingCanvasTextNoteId === id) state.editingCanvasTextNoteId = null
+        })
       },
 
       setActiveTool: (tool) => {
@@ -347,19 +442,35 @@ export const useBlueprintStore = create<BlueprintState>()(
         set(state => { state.gridEnabled = enabled })
       },
 
+      startDrawingStroke: (point) => {
+        set(state => {
+          const snap = snapPointToGrid(point)
+          state.drawingStrokes.push([snap])
+        })
+      },
+
       addDrawingVertex: (point) => {
-        set(state => { state.drawingVertices.push(point) })
+        set(state => {
+          const snap = snapPointToGrid(point)
+          const strokes = state.drawingStrokes
+          const last = strokes[strokes.length - 1]
+          if (!last) return
+          const prev = last[last.length - 1]
+          if (prev && prev.x === snap.x && prev.y === snap.y) return
+          last.push(snap)
+        })
       },
 
       finishDrawing: () => {
-        const { drawingVertices, addRoom } = get()
-        if (drawingVertices.length < 3) {
-          set(state => { state.drawingVertices = [] })
+        const { drawingStrokes, addRoom } = get()
+        const flat = drawingStrokes.flat()
+        if (flat.length < 3) {
+          set(state => { state.drawingStrokes = [] })
           return null
         }
-        const id = addRoom([...drawingVertices])
+        const id = addRoom([...flat])
         set(state => {
-          state.drawingVertices = []
+          state.drawingStrokes = []
           state.activeTool = 'select'
         })
         return id
@@ -367,7 +478,7 @@ export const useBlueprintStore = create<BlueprintState>()(
 
       cancelDrawing: () => {
         set(state => {
-          state.drawingVertices = []
+          state.drawingStrokes = []
           state.activeTool = 'select'
         })
       },
@@ -394,19 +505,19 @@ export const useBlueprintStore = create<BlueprintState>()(
           if (width <= 0 || height <= 0) return
           state.viewport.x = width / 2
           state.viewport.y = height / 2
-          state.viewport.scale = getDefaultBlueprintScaleForCanvasHeight(height)
+          state.viewport.scale = getDefaultBlueprintScaleForCanvasSize(width, height)
         })
       },
 
       /**
-       * Zoom in stappen van X% t.o.v. 100% (basis = `getDefaultBlueprintScaleForCanvasHeight`).
+       * Zoom in stappen van X% t.o.v. 100% (basis = `getDefaultBlueprintScaleForCanvasSize`).
        * Alleen viewport — hoort niet in undo-geschiedenis (zie temporal `equality`).
        */
       zoomViewportByPercentDelta: (deltaPercent: number) => {
         set(state => {
           const { width, height } = state.canvasSize
           if (width <= 0 || height <= 0) return
-          const base = getDefaultBlueprintScaleForCanvasHeight(height)
+          const base = getDefaultBlueprintScaleForCanvasSize(width, height)
           const cx = width / 2
           const cy = height / 2
           const oldScale = state.viewport.scale
@@ -430,6 +541,8 @@ export const useBlueprintStore = create<BlueprintState>()(
         rooms: state.rooms,
         roomOrder: state.roomOrder,
         elements: state.elements,
+        canvasTextNotes: state.canvasTextNotes,
+        canvasTextNoteOrder: state.canvasTextNoteOrder,
       }),
       /**
        * Zonder equality: elke `set` (viewport, selectie, pan, …) duwt een undo-stap,
@@ -470,6 +583,15 @@ export const useSnapEnabled = () =>
 
 export const useGridEnabled = () =>
   useBlueprintStore(state => state.gridEnabled)
+
+export const useCanvasTextNoteOrder = () =>
+  useBlueprintStore(state => state.canvasTextNoteOrder)
+
+export const useEditingCanvasTextNoteId = () =>
+  useBlueprintStore(state => state.editingCanvasTextNoteId)
+
+export const useSelectedCanvasTextNoteId = () =>
+  useBlueprintStore(state => state.selectedCanvasTextNoteId)
 
 // Module-level singleton for use in Konva event handlers (outside React)
 export const blueprintStore = useBlueprintStore

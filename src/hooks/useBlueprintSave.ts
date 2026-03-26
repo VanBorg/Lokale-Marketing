@@ -7,21 +7,25 @@ export function useBlueprintSave(projectId: string | null) {
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [isDirty, setIsDirty] = useState(false)
+  const [werkbladNotities, setWerkbladNotities] = useState('')
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const saveNow = useCallback(async () => {
+  const saveNow = useCallback(async (werkbladNotitiesOverride?: string) => {
     if (!projectId) return
     setIsSaving(true)
     try {
-      const { rooms, roomOrder, elements } = blueprintStore.getState()
+      const notes = werkbladNotitiesOverride ?? werkbladNotities
+      const { rooms, roomOrder, elements, canvasTextNotes, canvasTextNoteOrder } =
+        blueprintStore.getState()
       const roomDetailsState = useRoomDetailsStore.getState()
       await saveBlueprintData(projectId, {
-        blueprintDoc: { rooms, roomOrder, elements },
+        blueprintDoc: { rooms, roomOrder, elements, canvasTextNotes, canvasTextNoteOrder },
         roomDetails: roomDetailsState.getAllDetails(),
         etages: roomDetailsState.etages,
         dakbedekking: roomDetailsState.dakbedekking,
         dakoversteekhoogte: roomDetailsState.dakoversteekhoogte,
         lastSavedAt: new Date().toISOString(),
+        werkbladNotities: notes,
       })
       setLastSaved(new Date())
       setIsDirty(false)
@@ -30,7 +34,7 @@ export function useBlueprintSave(projectId: string | null) {
     } finally {
       setIsSaving(false)
     }
-  }, [projectId])
+  }, [projectId, werkbladNotities])
 
   const saveNowRef = useRef(saveNow)
   saveNowRef.current = saveNow
@@ -55,7 +59,10 @@ export function useBlueprintSave(projectId: string | null) {
   const loadProject = useCallback(async () => {
     if (!projectId) return
     const data = await loadBlueprintData(projectId)
-    if (!data) return
+    if (!data) {
+      setWerkbladNotities('')
+      return
+    }
 
     // Reset canvas store to this project and inject saved document state
     blueprintStore.getState().initProject(projectId)
@@ -63,6 +70,8 @@ export function useBlueprintSave(projectId: string | null) {
       rooms: data.blueprintDoc.rooms,
       roomOrder: data.blueprintDoc.roomOrder,
       elements: data.blueprintDoc.elements,
+      canvasTextNotes: data.blueprintDoc.canvasTextNotes ?? {},
+      canvasTextNoteOrder: data.blueprintDoc.canvasTextNoteOrder ?? [],
     })
     blueprintStore.getState().recenterViewportToOrigin()
 
@@ -73,8 +82,17 @@ export function useBlueprintSave(projectId: string | null) {
       data.dakbedekking,
       data.dakoversteekhoogte,
     )
+    setWerkbladNotities(data.werkbladNotities ?? '')
     setLastSaved(new Date(data.lastSavedAt))
   }, [projectId])
 
-  return { isSaving, lastSaved, isDirty, saveNow, loadProject }
+  return {
+    isSaving,
+    lastSaved,
+    isDirty,
+    saveNow,
+    loadProject,
+    werkbladNotities,
+    setWerkbladNotities,
+  }
 }

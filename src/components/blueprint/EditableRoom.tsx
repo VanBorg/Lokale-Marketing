@@ -40,6 +40,38 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
     blueprintStore.getState().select([roomId])
   }, [roomId])
 
+  /** Schrijven: alleen via onTap plaatsen — niet in onMouseDown (anders dubbel met Tap). */
+  const handleGroupPointerDown = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (activeTool === 'write') {
+        e.cancelBubble = true
+        return
+      }
+      handleSelect()
+    },
+    [activeTool, handleSelect],
+  )
+
+  const handleGroupTap = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+      if (activeTool === 'write') {
+        e.cancelBubble = true
+        const stage = stageRef.current
+        if (!stage) return
+        const pointer = stage.getPointerPosition()
+        if (!pointer) return
+        const scale = stage.scaleX()
+        blueprintStore.getState().addCanvasTextNote({
+          x: (pointer.x - stage.x()) / scale,
+          y: (pointer.y - stage.y()) / scale,
+        })
+        return
+      }
+      handleSelect()
+    },
+    [activeTool, stageRef, handleSelect],
+  )
+
   // Whole-room drag: pause undo history, use imperative updates
   const handleGroupDragStart = useCallback(() => {
     blueprintStore.temporal.getState().pause()
@@ -103,8 +135,8 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
     <Group
       ref={groupRef}
       draggable={allowRoomDrag}
-      onMouseDown={handleSelect}
-      onTap={handleSelect}
+      onMouseDown={handleGroupPointerDown}
+      onTap={handleGroupTap}
       onDragStart={handleGroupDragStart}
       onDragEnd={handleGroupDragEnd}
     >
