@@ -34,19 +34,23 @@ export default function StepPlafond({ roomId, onNext, onPrev }: StepPlafondProps
   return (
     <div className="space-y-3">
       {/* Read-only summary */}
-      <div className="rounded-lg bg-white/5 border border-dark-border px-3 py-2.5 space-y-1.5">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-light/40 mb-1">Samenvatting kamer</p>
+      <div className="space-y-1.5 rounded-lg border border-dark-border bg-white/5 px-3 py-2.5 theme-light:border-neutral-200 theme-light:bg-neutral-100">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 theme-light:text-neutral-600">
+          Samenvatting kamer
+        </p>
         <div className="flex justify-between text-xs">
-          <span className="text-light/50">Plafondtype</span>
-          <span className="text-light/70 capitalize">{room?.ceiling?.type ?? '—'}</span>
+          <span className="text-neutral-500 theme-light:text-neutral-600">Plafondtype</span>
+          <span className="text-neutral-300 capitalize theme-light:text-neutral-800">{room?.ceiling?.type ?? '—'}</span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-light/50">Wandhoogte</span>
-          <span className="text-light/70">{room ? `${room.wallHeight} cm` : '—'}</span>
+          <span className="text-neutral-500 theme-light:text-neutral-600">Wandhoogte</span>
+          <span className="text-neutral-300 theme-light:text-neutral-800">
+            {room ? `${room.wallHeight} cm` : '—'}
+          </span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-light/50">Plafondoppervlak</span>
-          <span className="text-light/70">{plafondM2} m²</span>
+          <span className="text-neutral-500 theme-light:text-neutral-600">Plafondoppervlak</span>
+          <span className="text-neutral-300 theme-light:text-neutral-800">{plafondM2} m²</span>
         </div>
       </div>
 
@@ -71,9 +75,9 @@ export default function StepPlafond({ roomId, onNext, onPrev }: StepPlafondProps
             type="checkbox"
             checked={systeemplafond}
             onChange={e => setSysteemplafond(e.target.checked)}
-            className="w-4 h-4 rounded border-dark-border accent-accent"
+            className="h-4 w-4 rounded border-dark-border accent-accent theme-light:border-neutral-300"
           />
-          <span className="text-sm text-light/80">Systeemplafond (verlaagd)</span>
+          <span className="text-sm text-neutral-300 theme-light:text-neutral-800">Systeemplafond (verlaagd)</span>
         </label>
         {systeemplafond && (
           <label className="flex flex-col gap-1 pl-6">
@@ -87,7 +91,7 @@ export default function StepPlafond({ roomId, onNext, onPrev }: StepPlafondProps
                 max={500}
                 onChange={e => setVerlaagdeHoogte(Number(e.target.value))}
               />
-              <span className="text-xs text-light/40 shrink-0">cm</span>
+              <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
             </div>
           </label>
         )}
@@ -155,7 +159,7 @@ export default function StepPlafond({ roomId, onNext, onPrev }: StepPlafondProps
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>

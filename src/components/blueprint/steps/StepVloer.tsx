@@ -69,13 +69,13 @@ export default function StepVloer({ roomId, onNext, onPrev }: Props) {
   if (!room) {
     return (
       <div className="space-y-4">
-        <p className="text-xs text-light/50">
+        <p className="text-xs text-neutral-400 theme-light:text-neutral-600">
           Plaats eerst een kamer in stap 1 voordat je de vloer kunt invullen.
         </p>
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>
@@ -136,7 +136,7 @@ export default function StepVloer({ roomId, onNext, onPrev }: Props) {
               max={100}
               onChange={e => patch({ dikte: Number(e.target.value) })}
             />
-            <span className="text-xs text-light/40 shrink-0">cm</span>
+            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
           </div>
         </label>
 
@@ -145,7 +145,7 @@ export default function StepVloer({ roomId, onNext, onPrev }: Props) {
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"
-              className="rounded border-dark-border"
+              className="rounded border-dark-border theme-light:border-neutral-300"
               checked={data.vloerverwarming}
               onChange={e => patch({ vloerverwarming: e.target.checked })}
             />
@@ -154,7 +154,7 @@ export default function StepVloer({ roomId, onNext, onPrev }: Props) {
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"
-              className="rounded border-dark-border"
+              className="rounded border-dark-border theme-light:border-neutral-300"
               checked={data.vochtkeringNodig}
               onChange={e => patch({ vochtkeringNodig: e.target.checked })}
             />
@@ -192,7 +192,7 @@ export default function StepVloer({ roomId, onNext, onPrev }: Props) {
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>

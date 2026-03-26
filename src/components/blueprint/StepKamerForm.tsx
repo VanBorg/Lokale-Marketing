@@ -1,10 +1,9 @@
-import { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { RotateCw } from 'lucide-react'
 import { blueprintStore } from '../../store/blueprintStore'
 import {
   axisAlignedBBoxSize,
   generateShapeVertices,
-  formatNlDecimal,
 } from '../../utils/blueprintGeometry'
 import type { Point, ShapeType, RoofType } from '../../utils/blueprintGeometry'
 import type { RoomCeiling } from '../../store/blueprintStore'
@@ -27,140 +26,6 @@ function rotateVertices90CCW(verts: Point[]): Point[] {
   return verts.map(p => ({ x: p.y, y: -p.x }))
 }
 
-/** Zelfde stap als wandlengte in het metrische rooster (5 cm). */
-const METER_FIELD_NUDGE_CM = 5
-
-/** Eerste herhaling na ingedrukt houden; daarna interval voor “door-scrollen”. */
-const METER_REPEAT_DELAY_MS = 420
-const METER_REPEAT_INTERVAL_MS = 55
-
-/** Inline SVG’s — voorkomt bundel/tree-shake issues met named Lucide-exports. */
-function MeterChevronUpIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M18 15 12 9 6 15" />
-    </svg>
-  )
-}
-
-function MeterChevronDownIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M6 9 12 15 18 9" />
-    </svg>
-  )
-}
-
-function MeterRepeatButton({
-  onTick,
-  'aria-label': ariaLabel,
-  children,
-}: {
-  onTick: () => void
-  'aria-label': string
-  children: ReactNode
-}) {
-  const btnClass =
-    'flex items-center justify-center py-0.5 text-light/50 hover:text-light hover:bg-light/[0.06] transition-colors select-none touch-manipulation'
-  /** DOM timer handles are numeric; Node typings can make `setTimeout` return `Timeout` (build fails). */
-  const delayRef = useRef<number | null>(null)
-  const intervalRef = useRef<number | null>(null)
-  const tickRef = useRef(onTick)
-  tickRef.current = onTick
-
-  const stop = useCallback(() => {
-    if (delayRef.current != null) {
-      clearTimeout(delayRef.current)
-      delayRef.current = null
-    }
-    if (intervalRef.current != null) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-  }, [])
-
-  const start = useCallback(() => {
-    tickRef.current()
-    stop()
-    delayRef.current = window.setTimeout(() => {
-      intervalRef.current = window.setInterval(() => tickRef.current(), METER_REPEAT_INTERVAL_MS)
-    }, METER_REPEAT_DELAY_MS)
-  }, [stop])
-
-  useEffect(() => () => stop(), [stop])
-
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (e.pointerType === 'mouse' && e.button !== 0) return
-      e.preventDefault()
-      start()
-      const onRelease = () => {
-        stop()
-        window.removeEventListener('pointerup', onRelease)
-        window.removeEventListener('pointercancel', onRelease)
-      }
-      window.addEventListener('pointerup', onRelease)
-      window.addEventListener('pointercancel', onRelease)
-    },
-    [start, stop],
-  )
-
-  return (
-    <button
-      type="button"
-      className={btnClass}
-      aria-label={ariaLabel}
-      onPointerDown={onPointerDown}
-      onKeyDown={ev => {
-        if (ev.key === 'Enter' || ev.key === ' ') {
-          ev.preventDefault()
-          tickRef.current()
-        }
-      }}
-    >
-      {children}
-    </button>
-  )
-}
-
-function MeterArrowButtons({ onUp, onDown }: { onUp: () => void; onDown: () => void }) {
-  return (
-    <div
-      className="flex flex-col shrink-0 w-7 border border-dark-border rounded-md overflow-hidden divide-y divide-dark-border"
-      role="group"
-      aria-label="Waarde aanpassen"
-    >
-      <MeterRepeatButton onTick={onUp} aria-label="Verhogen">
-        <MeterChevronUpIcon className="shrink-0" />
-      </MeterRepeatButton>
-      <MeterRepeatButton onTick={onDown} aria-label="Verlagen">
-        <MeterChevronDownIcon className="shrink-0" />
-      </MeterRepeatButton>
-    </div>
-  )
-}
 
 const ROOF_OPTIONS: { id: RoofType; label: string; icon: string }[] = [
   { id: 'plat',         label: 'Plat',     icon: '▬' },
@@ -194,6 +59,8 @@ export interface StepKamerFormProps {
   /** True if user dragged preview / edited walls — rotate must transform vertices, not reset to preset. */
   canvasPreviewEdited?: boolean
   onCanvasPreviewChange?: (vertices: Point[]) => void
+  /** When set, the form is in edit mode for an existing placed room. */
+  editRoomId?: string | null
 }
 
 export default function StepKamerForm({
@@ -207,16 +74,14 @@ export default function StepKamerForm({
   onDepthChange,
   currentPreviewVertices,
   parentPreviewVertices,
+  editRoomId,
 }: StepKamerFormProps) {
   const [shape, setShape] = useState<ShapeType>('rechthoek')
   const [localWidth, setLocalWidth] = useState(controlledWidth ?? 400)
   const [localDepth, setLocalDepth] = useState(controlledDepth ?? 300)
 
-  const roomWidth = controlledWidth ?? localWidth
-  const roomDepth = controlledDepth ?? localDepth
-
-  const setRoomWidth = (w: number) => { setLocalWidth(w); onWidthChange?.(w) }
-  const setRoomDepth = (d: number) => { setLocalDepth(d); onDepthChange?.(d) }
+  const roomWidth = editRoomId ? localWidth : (controlledWidth ?? localWidth)
+  const roomDepth = editRoomId ? localDepth : (controlledDepth ?? localDepth)
 
   const [roomName, setRoomName]         = useState('')
   const [wallHeight, setWallHeight]     = useState(250)
@@ -233,69 +98,103 @@ export default function StepKamerForm({
   const [ceilingRidgeHeight, setCeilingRidgeHeight] = useState(350)
   const [cassetteGrid, setCassetteGrid]         = useState('60×60 cm')
 
-  /** Tekstvelden voor breedte/diepte in meters (NL), bron blijft cm. */
-  const [widthDraftM, setWidthDraftM] = useState<string | null>(null)
-  const [depthDraftM, setDepthDraftM] = useState<string | null>(null)
-
   const [rotationSteps, setRotationSteps] = useState(0) // 0–3, elke stap = 90° CW (alleen preset-modus)
   const rotationStepsRef = useRef(rotationSteps)
   rotationStepsRef.current = rotationSteps
 
-  const cmFromMetersInput = (raw: string): number | null => {
-    const m = parseFloat(raw.trim().replace(',', '.'))
-    if (Number.isNaN(m)) return null
-    return Math.round(Math.min(5000, Math.max(50, m * 100)))
-  }
+  // ─── Edit mode: load room data when editRoomId changes ─────────────────
 
-  const commitWidthM = () => {
-    if (widthDraftM === null) return
-    const raw = widthDraftM.trim()
-    setWidthDraftM(null)
-    if (raw === '') return
-    const cm = cmFromMetersInput(raw)
-    if (cm !== null) {
-      setRoomWidth(cm)
-      onPreviewChange?.(
-        rotateVerticesBySteps(generateShapeVertices(shape, cm, roomDepth), rotationStepsRef.current),
-      )
+  useEffect(() => {
+    if (!editRoomId) return
+    const room = blueprintStore.getState().rooms[editRoomId]
+    if (!room) return
+
+    setShape((room.shape as ShapeType | undefined) ?? 'rechthoek')
+    const w = room.planWidthCm ?? axisAlignedBBoxSize(room.vertices).w
+    const h = room.planDepthCm ?? axisAlignedBBoxSize(room.vertices).h
+    setLocalWidth(w)
+    setLocalDepth(h)
+    setRoomName(room.name)
+    setWallHeight(room.wallHeight)
+    setRoofType(room.roofType)
+    setRoofPeakHeight(room.roofPeakHeight ?? 150)
+
+    if (room.wallHeights && room.wallHeights.length > 0) {
+      setWallHeightMode('per-wall')
+      setPerWallHeights(room.wallHeights)
+    } else {
+      setWallHeightMode('uniform')
+      setPerWallHeights([])
     }
-  }
 
-  const commitDepthM = () => {
-    if (depthDraftM === null) return
-    const raw = depthDraftM.trim()
-    setDepthDraftM(null)
-    if (raw === '') return
-    const cm = cmFromMetersInput(raw)
-    if (cm !== null) {
-      setRoomDepth(cm)
-      onPreviewChange?.(
-        rotateVerticesBySteps(generateShapeVertices(shape, roomWidth, cm), rotationStepsRef.current),
-      )
+    if (room.ceiling) {
+      setCeilingType(room.ceiling.type)
+      setCeilingHeight(room.ceiling.height)
+      if (room.ceiling.ridgeHeight != null) setCeilingRidgeHeight(room.ceiling.ridgeHeight)
+      if (room.ceiling.cassetteGrid) setCassetteGrid(room.ceiling.cassetteGrid)
+    } else {
+      setCeilingType('vlak')
+      setCeilingHeight(250)
     }
-  }
 
-  const nudgeWidthCm = (deltaCm: number) => {
-    setWidthDraftM(null)
-    const base =
-      widthDraftM !== null ? (cmFromMetersInput(widthDraftM) ?? roomWidth) : roomWidth
-    const next = Math.min(5000, Math.max(50, base + deltaCm))
-    setRoomWidth(next)
-    onPreviewChange?.(
-      rotateVerticesBySteps(generateShapeVertices(shape, next, roomDepth), rotationStepsRef.current),
-    )
-  }
+    setRotationSteps(0)
+  }, [editRoomId])
 
-  const nudgeDepthCm = (deltaCm: number) => {
-    setDepthDraftM(null)
-    const base =
-      depthDraftM !== null ? (cmFromMetersInput(depthDraftM) ?? roomDepth) : roomDepth
-    const next = Math.min(5000, Math.max(50, base + deltaCm))
-    setRoomDepth(next)
-    onPreviewChange?.(
-      rotateVerticesBySteps(generateShapeVertices(shape, roomWidth, next), rotationStepsRef.current),
-    )
-  }
+  // ─── Edit mode: apply dimension/shape change to the placed room ─────────
+
+  /**
+   * Scales or regenerates the room's vertices while keeping the room centred at
+   * its current world position.  All arithmetic is relative to the centroid so
+   * neither scaling nor shape-changes move the room on the plattegrond.
+   * Single store update → single undo entry.
+   */
+  const applyEditDimensions = useCallback((newShape: ShapeType, newW: number, newD: number) => {
+    if (!editRoomId) return
+    const room = blueprintStore.getState().rooms[editRoomId]
+    if (!room) return
+
+    const { w: oldW, h: oldH } = axisAlignedBBoxSize(room.vertices)
+    const shapeChanged = newShape !== ((room.shape as ShapeType | undefined) ?? 'rechthoek')
+
+    // Preserve the current centroid so the room doesn't jump on the plattegrond
+    const n = room.vertices.length
+    const cx = room.vertices.reduce((s, v) => s + v.x, 0) / n
+    const cy = room.vertices.reduce((s, v) => s + v.y, 0) / n
+
+    let newVertices: Point[]
+    if (shapeChanged || oldW <= 0 || oldH <= 0) {
+      // Regenerate from shape preset (vertices at origin) then translate to centroid
+      const raw = generateShapeVertices(newShape, newW, newD)
+      newVertices = raw.map(v => ({ x: v.x + cx, y: v.y + cy }))
+    } else {
+      // Scale each vertex relative to centroid so the room stays in place
+      newVertices = room.vertices.map(v => ({
+        x: cx + (v.x - cx) * (newW / oldW),
+        y: cy + (v.y - cy) * (newD / oldH),
+      }))
+    }
+
+    const bbox = axisAlignedBBoxSize(newVertices)
+    blueprintStore.getState().updateRoom(editRoomId, {
+      shape: newShape,
+      vertices: newVertices,
+      planWidthCm: bbox.w,
+      planDepthCm: bbox.h,
+    })
+  }, [editRoomId])
+
+  /** Edit mode: update non-geometry room metadata in the store. */
+  const applyEditMeta = useCallback((updates: {
+    name?: string
+    wallHeight?: number
+    wallHeights?: number[]
+    roofType?: RoofType
+    roofPeakHeight?: number
+    ceiling?: RoomCeiling
+  }) => {
+    if (!editRoomId) return
+    blueprintStore.getState().updateRoom(editRoomId, updates)
+  }, [editRoomId])
 
   const generatedBase = useMemo(
     () => generateShapeVertices(shape, roomWidth, roomDepth),
@@ -313,8 +212,9 @@ export default function StepKamerForm({
       ? parentPreviewVertices
       : formRotated
 
-  // Sync preset vanuit formulier — niet tijdens canvas-sleep (dimension props volgen dan de sleep).
+  // Sync preset vanuit formulier — niet tijdens canvas-sleep en niet in edit mode.
   useEffect(() => {
+    if (editRoomId) return
     if (canvasPreviewEdited) return
     onPreviewChange?.(
       rotateVerticesBySteps(
@@ -322,22 +222,42 @@ export default function StepKamerForm({
         rotationStepsRef.current,
       ),
     )
-  }, [shape, roomWidth, roomDepth, onPreviewChange, canvasPreviewEdited])
+  }, [shape, roomWidth, roomDepth, onPreviewChange, canvasPreviewEdited, editRoomId])
 
   // Alleen preset-modus: rotatie via steps syncen.
   useEffect(() => {
+    if (editRoomId) return
     if (canvasPreviewEdited) return
     onPreviewChange?.(formRotated)
-  }, [canvasPreviewEdited, formRotated, onPreviewChange])
+  }, [canvasPreviewEdited, formRotated, onPreviewChange, editRoomId])
 
   const handleSwitchToPerWall = () => {
-    setPerWallHeights(Array(previewVertices.length).fill(wallHeight))
+    const newHeights = Array(previewVertices.length).fill(wallHeight)
+    setPerWallHeights(newHeights)
     setWallHeightMode('per-wall')
+    if (editRoomId) applyEditMeta({ wallHeights: newHeights })
   }
 
   const handleSwitchToUniform = () => {
     setWallHeightMode('uniform')
+    if (editRoomId) applyEditMeta({ wallHeights: [] })
   }
+
+  // ─── Ceiling helper ───────────────────────────────────────────────────────
+
+  const buildCeiling = (
+    type: RoomCeiling['type'],
+    height: number,
+    ridgeHeight: number,
+    grid: string,
+  ): RoomCeiling => ({
+    type,
+    height,
+    ...(type !== 'vlak' && type !== 'cassette' ? { ridgeHeight } : {}),
+    ...(type === 'cassette' ? { cassetteGrid: grid } : {}),
+  })
+
+  // ─── Add mode: place new room ─────────────────────────────────────────────
 
   const handlePlace = useCallback(() => {
     /** BlueprintPage-preview wint; anders BuilderPanel-state; anders preset. */
@@ -351,14 +271,7 @@ export default function StepKamerForm({
 
     const { w: planWidthCm, h: planDepthCm } = axisAlignedBBoxSize(vertices)
 
-    const ceiling: RoomCeiling = {
-      type: ceilingType,
-      height: ceilingHeight,
-      ...(ceilingType !== 'vlak' && ceilingType !== 'cassette'
-        ? { ridgeHeight: ceilingRidgeHeight }
-        : {}),
-      ...(ceilingType === 'cassette' ? { cassetteGrid } : {}),
-    }
+    const ceiling: RoomCeiling = buildCeiling(ceilingType, ceilingHeight, ceilingRidgeHeight, cassetteGrid)
 
     const id = blueprintStore.getState().addRoom(vertices, {
       name: roomName || 'Ruimte',
@@ -382,14 +295,28 @@ export default function StepKamerForm({
   const showPeakHeight = roofType !== 'plat' && roofType !== 'platband'
   const ceilingNeedsRidge = ceilingType === 'schuin' || ceilingType === 'gewelfd' || ceilingType === 'open-kap'
 
+  // ─── Shared render ────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-3">
+
+      {/* Edit mode indicator */}
+      {editRoomId && (
+        <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/10 px-2 py-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">Kamer bewerken</span>
+        </div>
+      )}
+
       <RoomShapePicker
         selected={shape}
         onSelect={s => {
           setShape(s)
           setRotationSteps(0)
-          onPreviewChange?.(rotateVerticesBySteps(generateShapeVertices(s, roomWidth, roomDepth), 0))
+          if (editRoomId) {
+            applyEditDimensions(s, roomWidth, roomDepth)
+          } else {
+            onPreviewChange?.(rotateVerticesBySteps(generateShapeVertices(s, roomWidth, roomDepth), 0))
+          }
         }}
       />
 
@@ -397,14 +324,34 @@ export default function StepKamerForm({
         <button
           type="button"
           onClick={() => {
-            if (canvasPreviewEdited && parentPreviewVertices && parentPreviewVertices.length >= 3) {
+            if (editRoomId) {
+              const room = blueprintStore.getState().rooms[editRoomId]
+              if (room) {
+                // Rotate around centroid so the room stays in place on the plattegrond
+                const n = room.vertices.length
+                const cx = room.vertices.reduce((s, v) => s + v.x, 0) / n
+                const cy = room.vertices.reduce((s, v) => s + v.y, 0) / n
+                const newVerts = room.vertices.map(v => {
+                  const dx = v.x - cx; const dy = v.y - cy
+                  return { x: cx + dy, y: cy - dx } // 90° CCW around centroid
+                })
+                const bbox = axisAlignedBBoxSize(newVerts)
+                blueprintStore.getState().updateRoom(editRoomId, {
+                  vertices: newVerts,
+                  planWidthCm: bbox.w,
+                  planDepthCm: bbox.h,
+                })
+                setLocalWidth(bbox.w)
+                setLocalDepth(bbox.h)
+              }
+            } else if (canvasPreviewEdited && parentPreviewVertices && parentPreviewVertices.length >= 3) {
               onCanvasPreviewChange?.(rotateVertices90CCW(parentPreviewVertices))
             } else {
               setRotationSteps(prev => (prev + 3) % 4)
             }
           }}
           title="Links draaien"
-          className="flex w-full items-center justify-center gap-1.5 text-xs text-light/50 hover:text-light border border-dark-border hover:border-accent/40 rounded-lg px-3 py-2 transition-all duration-150"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dark-border px-3 py-2 text-xs text-neutral-400 transition-all duration-150 hover:border-accent/40 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:bg-white theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           <RotateCw size={12} className="shrink-0 -scale-x-100" />
           Links
@@ -412,93 +359,52 @@ export default function StepKamerForm({
         <button
           type="button"
           onClick={() => {
-            if (canvasPreviewEdited && parentPreviewVertices && parentPreviewVertices.length >= 3) {
+            if (editRoomId) {
+              const room = blueprintStore.getState().rooms[editRoomId]
+              if (room) {
+                // Rotate around centroid so the room stays in place on the plattegrond
+                const n = room.vertices.length
+                const cx = room.vertices.reduce((s, v) => s + v.x, 0) / n
+                const cy = room.vertices.reduce((s, v) => s + v.y, 0) / n
+                const newVerts = room.vertices.map(v => {
+                  const dx = v.x - cx; const dy = v.y - cy
+                  return { x: cx - dy, y: cy + dx } // 90° CW around centroid
+                })
+                const bbox = axisAlignedBBoxSize(newVerts)
+                blueprintStore.getState().updateRoom(editRoomId, {
+                  vertices: newVerts,
+                  planWidthCm: bbox.w,
+                  planDepthCm: bbox.h,
+                })
+                setLocalWidth(bbox.w)
+                setLocalDepth(bbox.h)
+              }
+            } else if (canvasPreviewEdited && parentPreviewVertices && parentPreviewVertices.length >= 3) {
               onCanvasPreviewChange?.(rotateVertices90CW(parentPreviewVertices))
             } else {
               setRotationSteps(prev => (prev + 1) % 4)
             }
           }}
           title="Rechts draaien"
-          className="flex w-full items-center justify-center gap-1.5 text-xs text-light/50 hover:text-light border border-dark-border hover:border-accent/40 rounded-lg px-3 py-2 transition-all duration-150"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dark-border px-3 py-2 text-xs text-neutral-400 transition-all duration-150 hover:border-accent/40 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:bg-white theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           <RotateCw size={12} className="shrink-0" />
           Rechts
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1">
-          <span className="ui-label">Breedte (m)</span>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              inputMode="decimal"
-              className="ui-input text-sm py-1.5 flex-1 min-w-0 tabular-nums"
-              title="Breedte in meters (bijv. 4,00); pijltjes omhoog/omlaag: ±5 cm"
-              value={widthDraftM !== null ? widthDraftM : formatNlDecimal(roomWidth / 100, 2)}
-              onFocus={() => setWidthDraftM(formatNlDecimal(roomWidth / 100, 2))}
-              onChange={e => setWidthDraftM(e.target.value)}
-              onBlur={commitWidthM}
-              onKeyDown={e => {
-                if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  nudgeWidthCm(METER_FIELD_NUDGE_CM)
-                } else if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  nudgeWidthCm(-METER_FIELD_NUDGE_CM)
-                } else if (e.key === 'Enter') {
-                  e.preventDefault()
-                  commitWidthM()
-                  ;(e.target as HTMLInputElement).blur()
-                }
-              }}
-            />
-            <MeterArrowButtons
-              onUp={() => nudgeWidthCm(METER_FIELD_NUDGE_CM)}
-              onDown={() => nudgeWidthCm(-METER_FIELD_NUDGE_CM)}
-            />
-            <span className="text-xs text-light/40 shrink-0">m</span>
-          </div>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="ui-label">Diepte (m)</span>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              inputMode="decimal"
-              className="ui-input text-sm py-1.5 flex-1 min-w-0 tabular-nums"
-              title="Diepte in meters (bijv. 3,00); pijltjes omhoog/omlaag: ±5 cm"
-              value={depthDraftM !== null ? depthDraftM : formatNlDecimal(roomDepth / 100, 2)}
-              onFocus={() => setDepthDraftM(formatNlDecimal(roomDepth / 100, 2))}
-              onChange={e => setDepthDraftM(e.target.value)}
-              onBlur={commitDepthM}
-              onKeyDown={e => {
-                if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  nudgeDepthCm(METER_FIELD_NUDGE_CM)
-                } else if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  nudgeDepthCm(-METER_FIELD_NUDGE_CM)
-                } else if (e.key === 'Enter') {
-                  e.preventDefault()
-                  commitDepthM()
-                  ;(e.target as HTMLInputElement).blur()
-                }
-              }}
-            />
-            <MeterArrowButtons
-              onUp={() => nudgeDepthCm(METER_FIELD_NUDGE_CM)}
-              onDown={() => nudgeDepthCm(-METER_FIELD_NUDGE_CM)}
-            />
-            <span className="text-xs text-light/40 shrink-0">m</span>
-          </div>
-        </label>
-      </div>
-
       <label className="flex flex-col gap-1">
-        <span className="ui-label">Naam ruimte</span>
-        <input type="text" className="ui-input text-sm py-1.5" value={roomName} placeholder="bijv. Woonkamer"
-          onChange={e => setRoomName(e.target.value)} />
+        <span className="ui-label">Naam</span>
+        <input
+          type="text"
+          className="ui-input text-sm py-1.5"
+          value={roomName}
+          placeholder="bijv. Woonkamer"
+          onChange={e => setRoomName(e.target.value)}
+          onBlur={e => {
+            if (editRoomId) applyEditMeta({ name: e.target.value })
+          }}
+        />
       </label>
 
       {/* Wall height — uniform / per-wall */}
@@ -513,7 +419,7 @@ export default function StepKamerForm({
                 'px-2 py-0.5 transition-colors',
                 wallHeightMode === 'uniform'
                   ? 'bg-accent text-white'
-                  : 'text-light/50 hover:text-light',
+                  : 'text-neutral-400 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900',
               ].join(' ')}
             >
               Gelijk
@@ -525,7 +431,7 @@ export default function StepKamerForm({
                 'px-2 py-0.5 border-l border-dark-border transition-colors',
                 wallHeightMode === 'per-wall'
                   ? 'bg-accent text-white'
-                  : 'text-light/50 hover:text-light',
+                  : 'text-neutral-400 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900',
               ].join(' ')}
             >
               Per wand
@@ -535,15 +441,27 @@ export default function StepKamerForm({
 
         {wallHeightMode === 'uniform' ? (
           <div className="flex items-center gap-2">
-            <input type="number" className="ui-input text-sm py-1.5 flex-1" value={wallHeight} min={100} max={600}
-              onChange={e => setWallHeight(Number(e.target.value))} />
-            <span className="text-xs text-light/40 shrink-0">cm</span>
+            <input
+              type="number"
+              className="ui-input text-sm py-1.5 flex-1"
+              value={wallHeight}
+              min={100}
+              max={600}
+              onChange={e => {
+                const v = Number(e.target.value)
+                setWallHeight(v)
+                if (editRoomId) applyEditMeta({ wallHeight: v })
+              }}
+            />
+            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-x-2 gap-y-1">
             {Array.from({ length: previewVertices.length }, (_, i) => (
               <label key={i} className="flex items-center gap-1">
-                <span className="text-[10px] text-light/50 w-6 shrink-0">W{i + 1}</span>
+                <span className="w-6 shrink-0 text-[10px] text-neutral-500 theme-light:text-neutral-600">
+                  W{i + 1}
+                </span>
                 <input
                   type="number"
                   className="ui-input text-xs py-1 flex-1 min-w-0"
@@ -554,6 +472,7 @@ export default function StepKamerForm({
                     const next = [...perWallHeights]
                     next[i] = Number(e.target.value)
                     setPerWallHeights(next)
+                    if (editRoomId) applyEditMeta({ wallHeights: next })
                   }}
                 />
               </label>
@@ -570,12 +489,15 @@ export default function StepKamerForm({
             <button
               key={roof.id}
               type="button"
-              onClick={() => setRoofType(roof.id)}
+              onClick={() => {
+                setRoofType(roof.id)
+                if (editRoomId) applyEditMeta({ roofType: roof.id })
+              }}
               className={[
                 'flex flex-col items-center gap-0.5 p-2 rounded-lg border text-xs transition-all duration-150',
                 roofType === roof.id
                   ? 'border-accent bg-accent/10 text-accent'
-                  : 'border-dark-border bg-dark text-light/50 hover:text-light hover:border-accent/40',
+                  : 'border-dark-border bg-dark text-neutral-400 hover:border-accent/40 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:bg-neutral-50 theme-light:text-neutral-700 theme-light:hover:text-neutral-900',
               ].join(' ')}
             >
               <span className="text-base leading-none">{roof.icon}</span>
@@ -594,9 +516,13 @@ export default function StepKamerForm({
             value={roofPeakHeight}
             min={10}
             max={1000}
-            onChange={e => setRoofPeakHeight(Number(e.target.value))}
+            onChange={e => {
+              const v = Number(e.target.value)
+              setRoofPeakHeight(v)
+              if (editRoomId) applyEditMeta({ roofPeakHeight: v })
+            }}
           />
-          <span className="text-[10px] text-light/30">
+          <span className="text-[10px] text-neutral-500 theme-light:text-neutral-600">
             Hoogte boven de muren tot het hoogste punt
           </span>
         </label>
@@ -610,12 +536,15 @@ export default function StepKamerForm({
             <button
               key={c.id}
               type="button"
-              onClick={() => setCeilingType(c.id)}
+              onClick={() => {
+                setCeilingType(c.id)
+                if (editRoomId) applyEditMeta({ ceiling: buildCeiling(c.id, ceilingHeight, ceilingRidgeHeight, cassetteGrid) })
+              }}
               className={[
                 'flex flex-col items-center gap-0.5 p-2 rounded-lg border text-xs transition-all duration-150',
                 ceilingType === c.id
                   ? 'border-accent bg-accent/10 text-accent'
-                  : 'border-dark-border bg-dark text-light/50 hover:text-light hover:border-accent/40',
+                  : 'border-dark-border bg-dark text-neutral-400 hover:border-accent/40 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:bg-neutral-50 theme-light:text-neutral-700 theme-light:hover:text-neutral-900',
               ].join(' ')}
             >
               <span className="text-base leading-none">{c.icon}</span>
@@ -628,12 +557,15 @@ export default function StepKamerForm({
             <button
               key={c.id}
               type="button"
-              onClick={() => setCeilingType(c.id)}
+              onClick={() => {
+                setCeilingType(c.id)
+                if (editRoomId) applyEditMeta({ ceiling: buildCeiling(c.id, ceilingHeight, ceilingRidgeHeight, cassetteGrid) })
+              }}
               className={[
                 'flex flex-col items-center gap-0.5 p-2 rounded-lg border text-xs transition-all duration-150',
                 ceilingType === c.id
                   ? 'border-accent bg-accent/10 text-accent'
-                  : 'border-dark-border bg-dark text-light/50 hover:text-light hover:border-accent/40',
+                  : 'border-dark-border bg-dark text-neutral-400 hover:border-accent/40 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:bg-neutral-50 theme-light:text-neutral-700 theme-light:hover:text-neutral-900',
               ].join(' ')}
             >
               <span className="text-base leading-none">{c.icon}</span>
@@ -647,20 +579,50 @@ export default function StepKamerForm({
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
               <span className="ui-label">Hoogte laag (cm)</span>
-              <input type="number" className="ui-input text-xs py-1" value={ceilingHeight} min={100} max={600}
-                onChange={e => setCeilingHeight(Number(e.target.value))} />
+              <input
+                type="number"
+                className="ui-input text-xs py-1"
+                value={ceilingHeight}
+                min={100}
+                max={600}
+                onChange={e => {
+                  const v = Number(e.target.value)
+                  setCeilingHeight(v)
+                  if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, v, ceilingRidgeHeight, cassetteGrid) })
+                }}
+              />
             </label>
             <label className="flex flex-col gap-1">
               <span className="ui-label">Hoogte hoog (cm)</span>
-              <input type="number" className="ui-input text-xs py-1" value={ceilingRidgeHeight} min={100} max={1000}
-                onChange={e => setCeilingRidgeHeight(Number(e.target.value))} />
+              <input
+                type="number"
+                className="ui-input text-xs py-1"
+                value={ceilingRidgeHeight}
+                min={100}
+                max={1000}
+                onChange={e => {
+                  const v = Number(e.target.value)
+                  setCeilingRidgeHeight(v)
+                  if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, ceilingHeight, v, cassetteGrid) })
+                }}
+              />
             </label>
           </div>
         ) : (
           <label className="flex flex-col gap-1">
             <span className="ui-label">Plafond hoogte (cm)</span>
-            <input type="number" className="ui-input text-xs py-1" value={ceilingHeight} min={100} max={600}
-              onChange={e => setCeilingHeight(Number(e.target.value))} />
+            <input
+              type="number"
+              className="ui-input text-xs py-1"
+              value={ceilingHeight}
+              min={100}
+              max={600}
+              onChange={e => {
+                const v = Number(e.target.value)
+                setCeilingHeight(v)
+                if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, v, ceilingRidgeHeight, cassetteGrid) })
+              }}
+            />
           </label>
         )}
 
@@ -670,7 +632,11 @@ export default function StepKamerForm({
             <select
               className="ui-input text-xs py-1"
               value={cassetteGrid}
-              onChange={e => setCassetteGrid(e.target.value)}
+              onChange={e => {
+                const v = e.target.value
+                setCassetteGrid(v)
+                if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, ceilingHeight, ceilingRidgeHeight, v) })
+              }}
             >
               {CASSETTE_GRIDS.map(g => (
                 <option key={g} value={g}>{g}</option>
@@ -680,13 +646,22 @@ export default function StepKamerForm({
         )}
       </div>
 
-      <button
-        onClick={handlePlace}
-        className="w-full mt-1 px-4 py-2 text-sm bg-accent text-white font-semibold rounded-lg
-          hover:bg-accent/90 transition-colors"
-      >
-        Plaatsen op plattegrond ↓
-      </button>
+      {/* Add mode: place button. Edit mode: changes are live — no button needed. */}
+      {!editRoomId && (
+        <button
+          onClick={handlePlace}
+          className="w-full mt-1 px-4 py-2 text-sm bg-accent text-white font-semibold rounded-lg
+            hover:bg-accent/90 transition-colors"
+        >
+          Plaatsen op plattegrond ↓
+        </button>
+      )}
+
+      {editRoomId && (
+        <p className="pt-1 text-center text-[10px] text-neutral-500 theme-light:text-neutral-600">
+          Wijzigingen worden direct doorgevoerd op de plattegrond.
+        </p>
+      )}
     </div>
   )
 }

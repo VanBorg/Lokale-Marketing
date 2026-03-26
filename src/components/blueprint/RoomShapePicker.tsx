@@ -82,11 +82,12 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
             onClick={() => onSelect(s.id)}
             title={s.label}
             className={[
-              'flex flex-col items-center gap-1 p-2 rounded-lg border transition-all duration-150',
-              'bg-dark hover:bg-dark-hover text-light/70 hover:text-light',
+              'flex flex-col items-center gap-1 rounded-lg border p-2 transition-all duration-150',
+              'bg-dark text-neutral-300 hover:bg-dark-hover hover:text-neutral-100',
+              'theme-light:bg-neutral-50 theme-light:text-neutral-700 theme-light:hover:bg-neutral-100 theme-light:hover:text-neutral-900',
               isSelected
                 ? 'border-accent text-accent shadow-[0_0_0_1px_#35B4D3]'
-                : 'border-dark-border',
+                : 'border-dark-border theme-light:border-neutral-300',
             ].join(' ')}
           >
             <svg

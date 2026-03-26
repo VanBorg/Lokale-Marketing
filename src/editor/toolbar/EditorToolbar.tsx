@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
   Clipboard,
@@ -13,20 +13,25 @@ import {
   Ruler,
   Undo2,
 } from 'lucide-react'
-import ProjectStatusSelect from '../project/ProjectStatusSelect'
-import { Button } from '../ui'
-import KlantgegevensModal from './KlantgegevensModal'
+import ProjectStatusSelect from '../../components/project/ProjectStatusSelect'
+import { Button } from '../../components/ui'
+import KlantgegevensModal from '../../components/blueprint/KlantgegevensModal'
 import type { Project } from '../../lib/database.types'
 import {
   blueprintStore,
   getDefaultBlueprintScaleForCanvasHeight,
-  useActiveTool,
   useBlueprintStore,
   useViewport,
 } from '../../store/blueprintStore'
+import { useToolbarState } from './useToolbarState'
 
 function ToolbarDivider() {
-  return <div className="h-5 w-px shrink-0 bg-light/[0.08]" aria-hidden />
+  return (
+    <div
+      className="h-5 w-px shrink-0 bg-neutral-700/60 theme-light:bg-neutral-200"
+      aria-hidden
+    />
+  )
 }
 
 export interface EditorToolbarProps {
@@ -77,19 +82,12 @@ export default function EditorToolbar({
     setNameEditing(false)
   }, [nameDraft, project.name, onUpdateProject])
 
-  /** Placeholder — nog niet gekoppeld aan snap/raster op de canvas */
-  const [snapOn, setSnapOn] = useState(true)
-  const [gridOn, setGridOn] = useState(false)
-  /** Meet-tool is alleen UI; canvas blijft op select */
-  const [measureMode, setMeasureMode] = useState(false)
+  const { activeTool, snapEnabled, gridEnabled, setActiveTool, setSnapEnabled, setGridEnabled } =
+    useToolbarState()
 
   const viewport = useViewport()
   const canvasSize = useBlueprintStore(s => s.canvasSize)
-  const storeTool = useActiveTool()
-  const baseScale = useMemo(
-    () => getDefaultBlueprintScaleForCanvasHeight(Math.max(canvasSize.height, 1)),
-    [canvasSize.height],
-  )
+  const baseScale = getDefaultBlueprintScaleForCanvasHeight(Math.max(canvasSize.height, 1))
   const zoomPercentLabel = Math.max(1, Math.round((viewport.scale / baseScale) * 100))
 
   const onZoomOut = useCallback(() => {
@@ -102,15 +100,12 @@ export default function EditorToolbar({
     blueprintStore.getState().recenterViewportToOrigin()
   }, [])
 
-  const setCanvasTool = useCallback((tool: 'select' | 'draw' | 'measure') => {
-    if (tool === 'measure') {
-      setMeasureMode(true)
-      blueprintStore.getState().setActiveTool('select')
-      return
-    }
-    setMeasureMode(false)
-    blueprintStore.getState().setActiveTool(tool === 'draw' ? 'draw' : 'select')
-  }, [])
+  const setCanvasTool = useCallback(
+    (tool: 'select' | 'draw' | 'measure') => {
+      setActiveTool(tool)
+    },
+    [setActiveTool],
+  )
 
   const onExport = useCallback(() => {
     setOverflowOpen(false)
@@ -149,7 +144,7 @@ export default function EditorToolbar({
 
   const toolBtn = (active: boolean) =>
     [
-      'ui-icon-button shrink-0 transition-all duration-200',
+      'editor-toolbar-icon-btn shrink-0 transition-all duration-200',
       active
         ? 'bg-accent/15 text-accent ring-1 ring-accent/40 hover:bg-accent/20 hover:text-accent'
         : '',
@@ -157,18 +152,18 @@ export default function EditorToolbar({
 
   const toggleBtn = (on: boolean) =>
     [
-      'ui-icon-button shrink-0 transition-all duration-200',
-      on ? 'bg-accent/15 text-accent ring-1 ring-accent/40' : 'opacity-80',
+      'editor-toolbar-icon-btn shrink-0 transition-all duration-200',
+      on ? 'bg-accent/15 text-accent ring-1 ring-accent/40' : 'opacity-80 theme-light:opacity-100',
     ].join(' ')
 
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-dark-border bg-[#0f0f0f] px-3">
+      <div className="editor-toolbar-bar flex h-12 shrink-0 items-center gap-1.5 border-b border-neutral-800 bg-neutral-950 px-3 theme-light:border-neutral-200 theme-light:bg-white">
         {/* Groep 1 — project-identiteit */}
         <button
           type="button"
           onClick={onBack}
-          className="ui-icon-button shrink-0"
+          className="editor-toolbar-icon-btn shrink-0"
           title="Terug naar projecten"
           aria-label="Terug naar projecten"
         >
@@ -189,14 +184,14 @@ export default function EditorToolbar({
                   setNameEditing(false)
                 }
               }}
-              className="min-w-0 max-w-full rounded border border-accent/50 bg-dark-card px-2 py-0.5 text-sm font-bold text-light outline-none focus:border-accent"
+              className="min-w-0 max-w-full rounded border border-accent/50 bg-dark-card px-2 py-0.5 text-sm font-bold text-light outline-none focus:border-accent theme-light:bg-white theme-light:text-neutral-900"
               aria-label="Projectnaam"
             />
           ) : (
             <button
               type="button"
               onClick={() => setNameEditing(true)}
-              className="min-w-0 truncate text-left text-sm font-bold text-light transition-colors hover:text-accent"
+              className="min-w-0 truncate text-left text-sm font-bold text-neutral-100 transition-colors hover:text-accent theme-light:text-neutral-900 theme-light:hover:text-accent"
               title="Projectnaam bewerken"
             >
               {project.name}
@@ -217,7 +212,7 @@ export default function EditorToolbar({
           type="button"
           onClick={onUndo}
           disabled={!canUndo}
-          className="ui-icon-button disabled:cursor-not-allowed disabled:opacity-30"
+          className="editor-toolbar-icon-btn disabled:cursor-not-allowed disabled:opacity-30"
           title="Ongedaan maken (Ctrl+Z)"
           aria-label="Ongedaan maken"
         >
@@ -227,7 +222,7 @@ export default function EditorToolbar({
           type="button"
           onClick={onRedo}
           disabled={!canRedo}
-          className="ui-icon-button disabled:cursor-not-allowed disabled:opacity-30"
+          className="editor-toolbar-icon-btn disabled:cursor-not-allowed disabled:opacity-30"
           title="Opnieuw (Ctrl+Y)"
           aria-label="Opnieuw uitvoeren"
         >
@@ -240,7 +235,7 @@ export default function EditorToolbar({
         <button
           type="button"
           onClick={onZoomOut}
-          className="ui-icon-button shrink-0"
+          className="editor-toolbar-icon-btn shrink-0"
           title="Uitzoomen (−10%)"
           aria-label="Uitzoomen"
         >
@@ -249,7 +244,7 @@ export default function EditorToolbar({
         <button
           type="button"
           onClick={onZoomReset}
-          className="min-w-[3rem] shrink-0 rounded-lg px-2 py-1 text-center text-xs font-medium tabular-nums text-light/80 transition-colors duration-200 hover:bg-dark-card hover:text-light"
+          className="min-w-[3rem] shrink-0 rounded-lg px-2 py-1 text-center text-xs font-medium tabular-nums text-neutral-300 transition-colors duration-200 hover:bg-neutral-800 hover:text-neutral-100 theme-light:text-neutral-700 theme-light:hover:bg-neutral-100 theme-light:hover:text-neutral-900"
           title="100% — standaardzoom (centreer op oorsprong, zelfde als S)"
         >
           {zoomPercentLabel}%
@@ -257,7 +252,7 @@ export default function EditorToolbar({
         <button
           type="button"
           onClick={onZoomIn}
-          className="ui-icon-button shrink-0"
+          className="editor-toolbar-icon-btn shrink-0"
           title="Inzoomen (+10%)"
           aria-label="Inzoomen"
         >
@@ -265,21 +260,21 @@ export default function EditorToolbar({
         </button>
         <button
           type="button"
-          onClick={() => setSnapOn(s => !s)}
-          className={toggleBtn(snapOn)}
-          title={snapOn ? 'Snap uit' : 'Snap aan'}
+          onClick={() => setSnapEnabled(!snapEnabled)}
+          className={toggleBtn(snapEnabled)}
+          title={snapEnabled ? 'Snap uit' : 'Snap aan'}
           aria-label="Snap"
-          aria-pressed={snapOn}
+          aria-pressed={snapEnabled}
         >
           <Magnet size={15} />
         </button>
         <button
           type="button"
-          onClick={() => setGridOn(g => !g)}
-          className={toggleBtn(gridOn)}
-          title={gridOn ? 'Raster uit' : 'Raster aan'}
+          onClick={() => setGridEnabled(!gridEnabled)}
+          className={toggleBtn(gridEnabled)}
+          title={gridEnabled ? 'Raster uit' : 'Raster aan'}
           aria-label="Raster"
-          aria-pressed={gridOn}
+          aria-pressed={gridEnabled}
         >
           <Grid3x3 size={15} />
         </button>
@@ -290,30 +285,30 @@ export default function EditorToolbar({
         <button
           type="button"
           onClick={() => setCanvasTool('select')}
-          className={toolBtn(storeTool === 'select' && !measureMode)}
+          className={toolBtn(activeTool === 'select')}
           title="Selectie"
           aria-label="Selectie"
-          aria-pressed={storeTool === 'select' && !measureMode}
+          aria-pressed={activeTool === 'select'}
         >
           <MousePointer2 size={15} />
         </button>
         <button
           type="button"
           onClick={() => setCanvasTool('draw')}
-          className={toolBtn(storeTool === 'draw')}
+          className={toolBtn(activeTool === 'draw')}
           title="Tekenen"
           aria-label="Tekenen"
-          aria-pressed={storeTool === 'draw'}
+          aria-pressed={activeTool === 'draw'}
         >
           <Pencil size={15} />
         </button>
         <button
           type="button"
           onClick={() => setCanvasTool('measure')}
-          className={toolBtn(measureMode)}
-          title="Meten (binnenkort)"
+          className={toolBtn(activeTool === 'measure')}
+          title="Meten"
           aria-label="Meten"
-          aria-pressed={measureMode}
+          aria-pressed={activeTool === 'measure'}
         >
           <Ruler size={15} />
         </button>
@@ -324,22 +319,26 @@ export default function EditorToolbar({
         {/* Groep 5 — opslagstatus */}
         <div className="flex shrink-0 items-center gap-2">
           {isDirty && !isSaving && (
-            <span className="text-[10px] text-light/40">Niet opgeslagen</span>
+            <span className="text-[10px] text-neutral-500 theme-light:text-neutral-500">
+              Niet opgeslagen
+            </span>
           )}
           {lastSaved && !isDirty && (
-            <span className="text-[10px] text-light/30">
+            <span className="text-[10px] text-neutral-500 theme-light:text-neutral-500">
               Opgeslagen{' '}
               {lastSaved.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
           {isSaving && (
-            <span className="text-[10px] text-light/40">Bezig met opslaan…</span>
+            <span className="text-[10px] text-neutral-500 theme-light:text-neutral-500">
+              Bezig met opslaan…
+            </span>
           )}
           <button
             type="button"
             onClick={onSaveNow}
             disabled={isSaving || !isDirty}
-            className="ui-icon-button disabled:cursor-not-allowed disabled:opacity-30"
+            className="editor-toolbar-icon-btn disabled:cursor-not-allowed disabled:opacity-30"
             title="Opslaan (Ctrl+S)"
             aria-label="Opslaan"
           >
@@ -367,7 +366,7 @@ export default function EditorToolbar({
             type="button"
             onClick={copySavedTime}
             disabled={!lastSaved}
-            className="ui-icon-button disabled:cursor-not-allowed disabled:opacity-30"
+            className="editor-toolbar-icon-btn disabled:cursor-not-allowed disabled:opacity-30"
             title="Kopieer opslagtijd"
             aria-label="Kopieer opslagtijd"
           >
@@ -382,7 +381,7 @@ export default function EditorToolbar({
           variant="ghost"
           size="sm"
           onClick={() => setShowKlant(true)}
-          className="shrink-0 gap-1.5 text-xs"
+          className="shrink-0 gap-1.5 text-xs text-neutral-300 hover:text-neutral-100 theme-light:text-neutral-700 theme-light:hover:text-neutral-900 theme-light:hover:bg-neutral-100"
           title="Klantgegevens"
         >
           <span aria-hidden>👤</span>
@@ -396,7 +395,7 @@ export default function EditorToolbar({
           <button
             type="button"
             onClick={() => setOverflowOpen(o => !o)}
-            className="ui-icon-button"
+            className="editor-toolbar-icon-btn"
             title="Meer opties"
             aria-label="Meer opties"
             aria-expanded={overflowOpen}
@@ -406,13 +405,13 @@ export default function EditorToolbar({
           </button>
           {overflowOpen && (
             <div
-              className="absolute right-0 top-full z-50 mt-1 min-w-[12rem] rounded-lg border border-dark-border bg-dark-card py-1 shadow-lg"
+              className="absolute right-0 top-full z-50 mt-1 min-w-[12rem] rounded-lg border border-neutral-800 bg-neutral-950 py-1 shadow-lg theme-light:border-neutral-200 theme-light:bg-white"
               role="menu"
             >
               <button
                 type="button"
                 role="menuitem"
-                className="w-full px-3 py-2 text-left text-sm text-light/90 transition-colors duration-200 hover:bg-dark hover:text-light"
+                className="w-full px-3 py-2 text-left text-sm text-neutral-200 transition-colors duration-200 hover:bg-neutral-900 hover:text-neutral-100 theme-light:text-neutral-800 theme-light:hover:bg-neutral-100 theme-light:hover:text-neutral-900"
                 onClick={onExport}
               >
                 Exporteren
@@ -420,12 +419,12 @@ export default function EditorToolbar({
               <button
                 type="button"
                 role="menuitem"
-                className="w-full px-3 py-2 text-left text-sm text-light/90 transition-colors duration-200 hover:bg-dark hover:text-light"
+                className="w-full px-3 py-2 text-left text-sm text-neutral-200 transition-colors duration-200 hover:bg-neutral-900 hover:text-neutral-100 theme-light:text-neutral-800 theme-light:hover:bg-neutral-100 theme-light:hover:text-neutral-900"
                 onClick={onSettings}
               >
                 Instellingen
               </button>
-              <div className="my-1 h-px bg-dark-border" />
+              <div className="my-1 h-px bg-neutral-800 theme-light:bg-neutral-200" />
               <button
                 type="button"
                 role="menuitem"
@@ -442,7 +441,7 @@ export default function EditorToolbar({
         <button
           type="button"
           onClick={onOpenShortcuts}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-light/50 transition-all duration-200 hover:bg-dark-card hover:text-light"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-neutral-400 transition-all duration-200 hover:bg-neutral-800 hover:text-neutral-100 theme-light:text-neutral-600 theme-light:hover:bg-neutral-100 theme-light:hover:text-neutral-900"
           title="Sneltoetsen"
           aria-label="Sneltoetsen tonen"
         >

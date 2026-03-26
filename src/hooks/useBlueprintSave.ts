@@ -9,23 +9,6 @@ export function useBlueprintSave(projectId: string | null) {
   const [isDirty, setIsDirty] = useState(false)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Mark dirty when blueprintStore changes; auto-save after 3 s of inactivity
-  useEffect(() => {
-    if (!projectId) return
-    const unsub = blueprintStore.subscribe(() => {
-      setIsDirty(true)
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
-      autoSaveTimerRef.current = setTimeout(() => {
-        saveNow()
-      }, 3000)
-    })
-    return () => {
-      unsub()
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
-
   const saveNow = useCallback(async () => {
     if (!projectId) return
     setIsSaving(true)
@@ -47,6 +30,26 @@ export function useBlueprintSave(projectId: string | null) {
     } finally {
       setIsSaving(false)
     }
+  }, [projectId])
+
+  const saveNowRef = useRef(saveNow)
+  saveNowRef.current = saveNow
+
+  // Mark dirty when blueprintStore changes; auto-save after 3 s of inactivity
+  useEffect(() => {
+    if (!projectId) return
+    const unsub = blueprintStore.subscribe(() => {
+      setIsDirty(true)
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = setTimeout(() => {
+        void saveNowRef.current()
+      }, 3000)
+    })
+    return () => {
+      if (typeof unsub === 'function') unsub()
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
   const loadProject = useCallback(async () => {

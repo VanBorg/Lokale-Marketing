@@ -47,22 +47,24 @@ export default function Breadcrumb() {
 
   return (
     <nav
-      className="flex min-w-0 max-w-md flex-wrap items-center gap-x-1 gap-y-0.5 text-sm text-light/40"
+      className="flex min-w-0 max-w-md flex-wrap items-center gap-x-1 gap-y-0.5 text-sm text-neutral-500 theme-light:text-neutral-600"
       aria-label="Broodkruimel"
     >
       {crumbs.map((crumb, i) => (
         <span key={`${crumb.label}-${i}`} className="flex min-w-0 items-center gap-1">
-          {i > 0 && <ChevronRight size={13} className="shrink-0 text-light/25" aria-hidden />}
+          {i > 0 && (
+            <ChevronRight size={13} className="shrink-0 text-neutral-600 theme-light:text-neutral-400" aria-hidden />
+          )}
           {crumb.to ? (
             <Link
               to={crumb.to}
-              className="shrink-0 border-b border-transparent pb-0.5 transition-colors hover:text-light"
+              className="shrink-0 border-b border-transparent pb-0.5 transition-colors hover:text-neutral-200 theme-light:hover:text-neutral-900"
             >
               {crumb.label}
             </Link>
           ) : (
             <span
-              className="truncate border-b border-accent pb-0.5 font-medium text-light/85"
+              className="truncate border-b border-accent pb-0.5 font-medium text-neutral-100 theme-light:text-neutral-900"
               aria-current="page"
             >
               {crumb.label}

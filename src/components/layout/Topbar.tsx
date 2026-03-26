@@ -12,7 +12,7 @@ export default function Topbar() {
       <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-6">
         <Link
           to="/dashboard"
-          className="flex shrink-0 items-center gap-1 no-underline text-inherit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-dark"
+          className="flex shrink-0 items-center gap-1 no-underline text-inherit rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 theme-light:focus-visible:ring-offset-white"
           title="Pixel Blueprint — Dashboard"
         >
           <BlauwdrukMarkIcon size={22} compact />

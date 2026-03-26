@@ -86,13 +86,13 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
   if (!room) {
     return (
       <div className="space-y-4">
-        <p className="text-xs text-light/50">
+        <p className="text-xs text-neutral-400 theme-light:text-neutral-600">
           Plaats eerst een kamer in stap 1 voordat je de wanden kunt invullen.
         </p>
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>
@@ -108,10 +108,12 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
           return (
             <div
               key={i}
-              className="rounded-lg border border-dark-border bg-white/[0.02] p-2.5 space-y-2"
+              className="space-y-2 rounded-lg border border-dark-border bg-neutral-900/20 p-2.5 theme-light:border-neutral-200 theme-light:bg-neutral-100"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-light">Wand {i + 1}</span>
+                <span className="text-xs font-semibold text-neutral-200 theme-light:text-neutral-900">
+                  Wand {i + 1}
+                </span>
                 <span className="text-[10px] font-medium text-accent tabular-nums">
                   {formatNlDecimal(metric.areaSqM, 2)} m²
                 </span>
@@ -143,7 +145,7 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
                     max={100}
                     onChange={e => updateWall(i, { thickness: Number(e.target.value) })}
                   />
-                  <span className="text-xs text-light/40 shrink-0">cm</span>
+                  <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
                 </div>
               </label>
 
@@ -152,7 +154,7 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
-                    className="rounded border-dark-border"
+                    className="rounded border-dark-border theme-light:border-neutral-300"
                     checked={wall.loadBearing}
                     onChange={e => updateWall(i, { loadBearing: e.target.checked })}
                   />
@@ -161,7 +163,7 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
-                    className="rounded border-dark-border"
+                    className="rounded border-dark-border theme-light:border-neutral-300"
                     checked={wall.exterior}
                     onChange={e => updateWall(i, { exterior: e.target.checked })}
                   />
@@ -170,7 +172,7 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
-                    className="rounded border-dark-border"
+                    className="rounded border-dark-border theme-light:border-neutral-300"
                     checked={wall.wetRoom}
                     onChange={e => updateWall(i, { wetRoom: e.target.checked })}
                   />
@@ -183,8 +185,8 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
       </div>
 
       {/* Totaal */}
-      <div className="rounded-lg border border-dark-border bg-white/[0.02] px-3 py-2 flex items-center justify-between">
-        <span className="text-xs text-light/60">Totaal wandoppervlak</span>
+      <div className="flex items-center justify-between rounded-lg border border-dark-border bg-neutral-900/20 px-3 py-2 theme-light:border-neutral-200 theme-light:bg-neutral-100">
+        <span className="text-xs text-neutral-400 theme-light:text-neutral-600">Totaal wandoppervlak</span>
         <span className="text-sm font-semibold text-accent tabular-nums">
           {formatNlDecimal(totalSqM, 2)} m²
         </span>
@@ -210,7 +212,7 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>

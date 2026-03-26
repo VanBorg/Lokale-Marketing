@@ -1,13 +1,19 @@
 import { memo, useRef, useCallback } from 'react'
 import { Group, Line, Circle } from 'react-konva'
 import type Konva from 'konva'
-import { useBlueprintStore, useSelectedIds, blueprintStore } from '../../store/blueprintStore'
+import {
+  useBlueprintStore,
+  useSelectedIds,
+  useActiveTool,
+  blueprintStore,
+} from '../../store/blueprintStore'
 import {
   snapPointToGrid,
   findVertexSnap,
   isVertexPinnedByGeometryWallLock,
 } from '../../utils/blueprintGeometry'
 import { useTheme } from '../../hooks/useTheme'
+import { snapValue } from '../../editor/canvas/useCanvasControls'
 import WallLabels from './WallLabels'
 
 interface EditableRoomProps {
@@ -24,6 +30,7 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
   const room = useBlueprintStore(s => s.rooms[roomId])
   const selectedIds = useSelectedIds()
   const isSelected = selectedIds.includes(roomId)
+  const activeTool = useActiveTool()
 
   const { theme } = useTheme()
   const isLight = theme === 'light'
@@ -46,20 +53,32 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
     blueprintStore.getState().select([roomId])
   }, [roomId])
 
-  const handleGroupDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
-    const group = e.target as Konva.Group
-    const dx = group.x()
-    const dy = group.y()
-    group.position({ x: 0, y: 0 })
+  const handleGroupDragEnd = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      const group = e.target as Konva.Group
+      let dx = group.x()
+      let dy = group.y()
+      group.position({ x: 0, y: 0 })
 
-    const store = blueprintStore.getState()
-    const currentRoom = store.rooms[roomId]
-    if (!currentRoom) return
+      const store = blueprintStore.getState()
+      const currentRoom = store.rooms[roomId]
+      if (!currentRoom) return
 
-    const newVertices = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
-    store.updateRoomVertices(roomId, newVertices)
-    blueprintStore.temporal.getState().resume()
-  }, [roomId])
+      // Snap the moved first vertex to grid; derive dx/dy from that
+      if (store.snapEnabled && currentRoom.vertices.length > 0) {
+        const v0 = currentRoom.vertices[0]
+        const snappedX = snapValue(v0.x + dx, true)
+        const snappedY = snapValue(v0.y + dy, true)
+        dx = snappedX - v0.x
+        dy = snappedY - v0.y
+      }
+
+      const newVertices = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
+      store.updateRoomVertices(roomId, newVertices)
+      blueprintStore.temporal.getState().resume()
+    },
+    [roomId],
+  )
 
   // Vertex drag
   const handleVertexDragMove = useCallback(
@@ -69,7 +88,8 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
       const room = store.rooms[roomId]
       if (!room) return
 
-      let pt = snapPointToGrid({ x: circle.x(), y: circle.y() })
+      const raw = { x: circle.x(), y: circle.y() }
+      let pt = store.snapEnabled ? snapPointToGrid(raw) : raw
 
       // Vertex-to-vertex snap against other rooms
       const otherRooms = Object.values(store.rooms).filter(r => r.id !== roomId)
@@ -94,11 +114,12 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
   const handleVertexDragEnd = useCallback(
     (index: number, e: Konva.KonvaEventObject<DragEvent>) => {
       const circle = e.target as Konva.Circle
-      let pt = snapPointToGrid({ x: circle.x(), y: circle.y() })
-
       const store = blueprintStore.getState()
       const room = store.rooms[roomId]
       if (!room) return
+
+      const raw = { x: circle.x(), y: circle.y() }
+      let pt = store.snapEnabled ? snapPointToGrid(raw) : raw
 
       const otherRooms = Object.values(store.rooms).filter(r => r.id !== roomId)
       const snapped = findVertexSnap(pt, otherRooms)
@@ -119,8 +140,8 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
   const flatPoints = room.vertices.flatMap(v => [v.x, v.y])
   const n = room.vertices.length
   const geometryLockedWalls = room.lockedWalls ?? []
-  /** Hele kamer slepen verplaatst alle wanden — conflicteert met muur-locatie-slot. */
-  const allowRoomDrag = isSelected && geometryLockedWalls.length === 0
+  /** Only allow drag when select tool is active and no geometry locks are set. */
+  const allowRoomDrag = isSelected && geometryLockedWalls.length === 0 && activeTool === 'select'
 
   return (
     <Group

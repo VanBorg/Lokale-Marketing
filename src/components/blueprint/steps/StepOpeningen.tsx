@@ -25,7 +25,7 @@ function OpeningRow({ item, onChange, onRemove }: OpeningRowProps) {
     onChange({ ...item, [key]: value })
 
   return (
-    <div className="flex items-center gap-1.5 py-1.5 border-b border-dark-border last:border-0">
+    <div className="flex items-center gap-1.5 border-b border-dark-border py-1.5 last:border-0 theme-light:border-neutral-200">
       <select
         className="ui-input text-xs py-1 w-24 shrink-0"
         value={item.type}
@@ -142,14 +142,14 @@ export default function StepOpeningen({ roomId, onNext, onPrev }: StepOpeningenP
         <button
           type="button"
           onClick={() => addItem('deur')}
-          className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-dark-border text-light/70 hover:text-light hover:border-accent/50 transition-colors duration-200"
+          className="flex-1 rounded-lg border border-dark-border px-3 py-1.5 text-xs font-medium text-neutral-400 transition-colors duration-200 hover:border-accent/50 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:text-neutral-700 theme-light:hover:text-neutral-900"
         >
           + Deur toevoegen
         </button>
         <button
           type="button"
           onClick={() => addItem('raam')}
-          className="flex-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-dark-border text-light/70 hover:text-light hover:border-accent/50 transition-colors duration-200"
+          className="flex-1 rounded-lg border border-dark-border px-3 py-1.5 text-xs font-medium text-neutral-400 transition-colors duration-200 hover:border-accent/50 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:text-neutral-700 theme-light:hover:text-neutral-900"
         >
           + Raam toevoegen
         </button>
@@ -158,18 +158,22 @@ export default function StepOpeningen({ roomId, onNext, onPrev }: StepOpeningenP
       {/* Column headers */}
       {items.length > 0 && (
         <div className="flex items-center gap-1.5 px-0.5">
-          <span className="text-[10px] text-light/30 w-24 shrink-0">Type</span>
-          <span className="text-[10px] text-light/30 flex-1">B × H (cm)</span>
-          <span className="text-[10px] text-light/30 w-10 shrink-0 text-center">#</span>
+          <span className="w-24 shrink-0 text-[10px] text-neutral-500 theme-light:text-neutral-600">Type</span>
+          <span className="flex-1 text-[10px] text-neutral-500 theme-light:text-neutral-600">B × H (cm)</span>
+          <span className="w-10 shrink-0 text-center text-[10px] text-neutral-500 theme-light:text-neutral-600">
+            #
+          </span>
           <span className="w-6 shrink-0" />
         </div>
       )}
 
       {/* Items list */}
       {items.length === 0 ? (
-        <p className="text-xs text-light/30 text-center py-4">Nog geen openingen toegevoegd</p>
+        <p className="py-4 text-center text-xs text-neutral-500 theme-light:text-neutral-600">
+          Nog geen openingen toegevoegd
+        </p>
       ) : (
-        <div className="rounded-lg border border-dark-border px-2">
+        <div className="rounded-lg border border-dark-border px-2 theme-light:border-neutral-200">
           {items.map(item => (
             <OpeningRow
               key={item.id}
@@ -183,14 +187,14 @@ export default function StepOpeningen({ roomId, onNext, onPrev }: StepOpeningenP
 
       {/* Totals */}
       {items.length > 0 && (
-        <div className="rounded-lg bg-white/5 border border-dark-border px-3 py-2 space-y-1">
+        <div className="space-y-1 rounded-lg border border-dark-border bg-white/5 px-3 py-2 theme-light:border-neutral-200 theme-light:bg-neutral-100">
           <div className="flex justify-between text-xs">
-            <span className="text-light/50">Totaal raamoppervlak</span>
-            <span className="text-light/70">{raamOpp.toFixed(2)} m²</span>
+            <span className="text-neutral-500 theme-light:text-neutral-600">Totaal raamoppervlak</span>
+            <span className="text-neutral-300 theme-light:text-neutral-800">{raamOpp.toFixed(2)} m²</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-light/50">Totaal deuropeningen</span>
-            <span className="text-light/70">{deurOpp.toFixed(2)} m²</span>
+            <span className="text-neutral-500 theme-light:text-neutral-600">Totaal deuropeningen</span>
+            <span className="text-neutral-300 theme-light:text-neutral-800">{deurOpp.toFixed(2)} m²</span>
           </div>
         </div>
       )}
@@ -212,7 +216,7 @@ export default function StepOpeningen({ roomId, onNext, onPrev }: StepOpeningenP
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>

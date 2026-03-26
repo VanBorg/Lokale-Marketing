@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react'
-import { Stage, Layer, Circle, Line, Group } from 'react-konva'
+import { Stage, Layer, Circle, Line, Group, Text } from 'react-konva'
 import type Konva from 'konva'
 import {
   blueprintStore,
@@ -8,29 +8,37 @@ import {
   useActiveTool,
   useViewport,
   useSnapGuides,
+  useGridEnabled,
 } from '../../store/blueprintStore'
+import type { Point } from '../../store/blueprintStore'
 import { snapPointToGrid } from '../../utils/blueprintGeometry'
 import { useTheme } from '../../hooks/useTheme'
-import EditableRoom from './EditableRoom'
-import SnapGuides from './SnapGuides'
+import EditableRoom from '../../components/blueprint/EditableRoom'
+import SnapGuides from '../../components/blueprint/SnapGuides'
 
 const MINOR_GRID = 200   // 2 m in world units (cm)
 const MAJOR_GRID = 1000  // 10 m in world units (cm)
-/** Origin cross: 6 m total per axis (2× previous); half = 1.5 × minor grid step (300 cm) */
-const ORIGIN_CROSS_HALF = MINOR_GRID * 1.5 // 300 cm
+/** Origin cross: 6 m total per axis; half = 1.5 × minor grid step (300 cm) */
+const ORIGIN_CROSS_HALF = MINOR_GRID * 1.5
 const ORIGIN_GLOW_OUTER = Math.round(ORIGIN_CROSS_HALF * 1.1)
 const ORIGIN_GLOW_MID = Math.round(ORIGIN_CROSS_HALF * 1.05)
 
-/** After project open, RO often fires many times as layout settles — recentre on each until quiet, then clear flag. */
+/** 1 px = 0.01 m (canvas world unit is cm) */
+const CM_TO_M = 0.01
+
+/** After project open, RO often fires many times as layout settles — recentre on each until quiet. */
 const RECENTER_AFTER_OPEN_MS = 150
 
-export default function BlueprintCanvas() {
+interface MeasureLine {
+  start: Point
+  end: Point
+}
+
+export default function PixelCanvas() {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
 
-  // Start at 0×0 — Stage is not rendered until ResizeObserver gives us real dimensions
   const [size, setSize] = useState({ width: 0, height: 0 })
-  /** Keeps cursor `grabbing` during pan (viewport updates would otherwise reset inline style) */
   const [isPanningUi, setIsPanningUi] = useState(false)
 
   const roomIds = useRoomIds()
@@ -38,10 +46,23 @@ export default function BlueprintCanvas() {
   const activeTool = useActiveTool()
   const viewport = useViewport()
   const snapGuides = useSnapGuides()
+  const gridEnabled = useGridEnabled()
   const { theme } = useTheme()
   const isLight = theme === 'light'
 
-  // Origin cross: light backgrounds need darker cyan/teal; slightly wider strokes for visibility
+  // ── Measure tool state ─────────────────────────────────────────────────────
+  const [measureStart, setMeasureStart] = useState<Point | null>(null)
+  const [measureLine, setMeasureLine] = useState<MeasureLine | null>(null)
+
+  // Reset measure state when switching away from measure tool
+  useEffect(() => {
+    if (activeTool !== 'measure') {
+      setMeasureStart(null)
+      setMeasureLine(null)
+    }
+  }, [activeTool])
+
+  // ── Theme colours ──────────────────────────────────────────────────────────
   const originCross = isLight
     ? {
         underlay: 'rgba(14,116,144,0.42)',
@@ -76,21 +97,18 @@ export default function BlueprintCanvas() {
         swRing: 3.5,
       }
 
-  // Grid: use ThemeContext (not classList) so toggling theme updates the SVG immediately.
-  // Both modes: strong enough contrast on bg-dark / light surfaces.
   const minorColor = isLight ? 'rgba(0,0,0,0.32)' : 'rgba(255,255,255,0.32)'
   const majorColor = isLight ? 'rgba(0,0,0,0.58)' : 'rgba(255,255,255,0.58)'
   const minorStrokeW = 1
   const majorStrokeW = isLight ? 1.45 : 1.55
 
+  // ── Pan state ──────────────────────────────────────────────────────────────
   const isPanning = useRef(false)
   const panStart = useRef({ x: 0, y: 0 })
   const spaceDown = useRef(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
-  /** Draw-tool: left-drag only pans after moving past this distance (px) */
   const panPointerStart = useRef<{ x: number; y: number } | null>(null)
   const suppressNextClickRef = useRef(false)
-  /** True while opening a project: keep recentring on each size tick until layout settles (same as S). */
   const needsRecenterForProjectRef = useRef(true)
   const lastProjectIdRef = useRef<string | null>(null)
   const recenterSettledTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -103,9 +121,6 @@ export default function BlueprintCanvas() {
     }, RECENTER_AFTER_OPEN_MS)
   }, [])
 
-  // When projectId changes, RO may not fire (same size), so sync measure + recenter (same as S).
-  // Do not clear needsRecenter here: RO may fire repeatedly while the shell widens — we recentre on each
-  // until RECENTER_AFTER_OPEN_MS after the last resize tick (see scheduleRecenterSettled).
   useLayoutEffect(() => {
     if (!projectId) {
       if (recenterSettledTimerRef.current) {
@@ -137,7 +152,6 @@ export default function BlueprintCanvas() {
     }
   }, [projectId, scheduleRecenterSettled])
 
-  // Single ResizeObserver — only writer for size + canvasSize (contentRect).
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -184,7 +198,7 @@ export default function BlueprintCanvas() {
     }
   }, [])
 
-  // Wheel zoom — zelfde 10%-stappen als toolbar / toetsenbord (centre-fixed via store)
+  // Wheel zoom
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault()
     if (size.width <= 0 || size.height <= 0) return
@@ -234,12 +248,14 @@ export default function BlueprintCanvas() {
       if (e.evt.button === 0 && e.target === stageRef.current) {
         store.clearSelection()
 
-        if (tool !== 'draw') {
+        if (tool !== 'draw' && tool !== 'measure') {
           attachWindowPanListeners(e.evt.clientX, e.evt.clientY)
           return
         }
 
-        panPointerStart.current = { x: e.evt.clientX, y: e.evt.clientY }
+        if (tool === 'draw') {
+          panPointerStart.current = { x: e.evt.clientX, y: e.evt.clientY }
+        }
       }
     },
     [attachWindowPanListeners],
@@ -266,7 +282,7 @@ export default function BlueprintCanvas() {
     if (!isPanning.current) panPointerStart.current = null
   }, [])
 
-  // Click on stage background — place drawing vertex
+  // ── Stage click handler ────────────────────────────────────────────────────
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target !== stageRef.current) return
     if (isPanning.current) return
@@ -274,19 +290,38 @@ export default function BlueprintCanvas() {
       suppressNextClickRef.current = false
       return
     }
-    const store = blueprintStore.getState()
-    if (store.activeTool !== 'draw') return
 
+    const store = blueprintStore.getState()
     const stage = stageRef.current!
     const pointer = stage.getPointerPosition()
     if (!pointer) return
     const scale = stage.scaleX()
-    const worldPt = {
+    const worldPt: Point = {
       x: (pointer.x - stage.x()) / scale,
       y: (pointer.y - stage.y()) / scale,
     }
-    store.addDrawingVertex(snapPointToGrid(worldPt))
-  }, [])
+
+    // Draw tool — place vertex
+    if (store.activeTool === 'draw') {
+      store.addDrawingVertex(snapPointToGrid(worldPt))
+      return
+    }
+
+    // Measure tool — two clicks define a line; third resets
+    if (store.activeTool === 'measure') {
+      if (!measureStart) {
+        setMeasureStart(worldPt)
+        setMeasureLine(null)
+      } else if (!measureLine) {
+        setMeasureLine({ start: measureStart, end: worldPt })
+        setMeasureStart(null)
+      } else {
+        setMeasureStart(null)
+        setMeasureLine(null)
+      }
+      return
+    }
+  }, [measureStart, measureLine])
 
   const handleStageDblClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target !== stageRef.current) return
@@ -298,22 +333,36 @@ export default function BlueprintCanvas() {
 
   const hasSize = size.width > 0 && size.height > 0
 
+  // ── Measure label helpers ──────────────────────────────────────────────────
+  const measureDistanceM = measureLine
+    ? Math.sqrt(
+        (measureLine.end.x - measureLine.start.x) ** 2 +
+          (measureLine.end.y - measureLine.start.y) ** 2,
+      ) * CM_TO_M
+    : 0
+
+  const measureMidX = measureLine ? (measureLine.start.x + measureLine.end.x) / 2 : 0
+  const measureMidY = measureLine ? (measureLine.start.y + measureLine.end.y) / 2 : 0
+
+  // ── Cursor ─────────────────────────────────────────────────────────────────
+  const cursorStyle = isPanningUi
+    ? 'grabbing'
+    : spaceHeld
+      ? 'grab'
+      : activeTool === 'draw' || activeTool === 'measure'
+        ? 'crosshair'
+        : activeTool === 'select'
+          ? 'default'
+          : 'grab'
+
   return (
     <div
       ref={containerRef}
       className="relative w-full h-full bg-dark overflow-hidden"
-      style={{
-        cursor: isPanningUi
-          ? 'grabbing'
-          : spaceHeld
-            ? 'grab'
-            : activeTool === 'draw'
-              ? 'crosshair'
-              : 'grab',
-      }}
+      style={{ cursor: cursorStyle }}
     >
-      {/* SVG grid — fills 100% of container, zooms/pans with viewport */}
-      {hasSize && (() => {
+      {/* SVG grid — only visible when gridEnabled */}
+      {hasSize && gridEnabled && (() => {
         const minorPx = MINOR_GRID * viewport.scale
         const majorPx = MAJOR_GRID * viewport.scale
         const patMinorX = ((viewport.x % minorPx) + minorPx) % minorPx
@@ -379,7 +428,7 @@ export default function BlueprintCanvas() {
           onClick={handleStageClick}
           onDblClick={handleStageDblClick}
         >
-          {/* Layer 0: World origin (0,0) — accent kruis (plattegrond) */}
+          {/* Layer 0: World origin (0,0) — accent cross */}
           <Layer listening={false}>
             <Group>
               <Line
@@ -469,7 +518,70 @@ export default function BlueprintCanvas() {
             ))}
           </Layer>
 
-          {/* Layer 3: UI overlays — snap guides only */}
+          {/* Layer 2: Measure tool overlay */}
+          <Layer listening={false}>
+            {/* Start point indicator */}
+            {measureStart && (
+              <Circle
+                x={measureStart.x}
+                y={measureStart.y}
+                radius={5}
+                fill="#f59e0b"
+                stroke="#fff"
+                strokeWidth={1.5}
+              />
+            )}
+
+            {/* Measurement line + label */}
+            {measureLine && (
+              <Group>
+                <Line
+                  points={[
+                    measureLine.start.x,
+                    measureLine.start.y,
+                    measureLine.end.x,
+                    measureLine.end.y,
+                  ]}
+                  stroke="#f59e0b"
+                  strokeWidth={1.5}
+                  dash={[6 / viewport.scale, 4 / viewport.scale]}
+                />
+                <Circle
+                  x={measureLine.start.x}
+                  y={measureLine.start.y}
+                  radius={4}
+                  fill="#f59e0b"
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                />
+                <Circle
+                  x={measureLine.end.x}
+                  y={measureLine.end.y}
+                  radius={4}
+                  fill="#f59e0b"
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                />
+                {/* Distance label — unscaled so it stays readable at all zoom levels */}
+                <Text
+                  x={measureMidX}
+                  y={measureMidY - 18 / viewport.scale}
+                  text={`${measureDistanceM.toFixed(2)} m`}
+                  fontSize={12 / viewport.scale}
+                  fontStyle="bold"
+                  fill="#f59e0b"
+                  stroke="#0c0c12"
+                  strokeWidth={3 / viewport.scale}
+                  fillAfterStrokeEnabled
+                  align="center"
+                  offsetX={0}
+                  listening={false}
+                />
+              </Group>
+            )}
+          </Layer>
+
+          {/* Layer 3: UI overlays — snap guides */}
           <Layer listening={false}>
             <SnapGuides guides={snapGuides} />
           </Layer>

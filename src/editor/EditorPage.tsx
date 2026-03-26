@@ -1,24 +1,38 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { blueprintStore, useBlueprintStore } from '../../store/blueprintStore'
-import EditorToolbar from './EditorToolbar'
-import ShortcutsModal from './ShortcutsModal'
-import { useBlueprintSave } from '../../hooks/useBlueprintSave'
-import type { Project } from '../../lib/database.types'
+import { blueprintStore, useBlueprintStore } from '../store/blueprintStore'
+import { useBlueprintSave } from '../hooks/useBlueprintSave'
+import ShortcutsModal from '../components/blueprint/ShortcutsModal'
+import EditorToolbar from './toolbar/EditorToolbar'
+import type { Project } from '../lib/database.types'
 
-interface BlueprintTopBarProps {
+interface EditorPageProps {
   project: Project
   onUpdateProject: (updates: Partial<Project>) => void
   onTabChange: (tab: string) => void
+  /** The main content area (3-column layout or just PixelCanvas) */
+  children: ReactNode
 }
 
-export default function BlueprintTopBar({ project, onUpdateProject, onTabChange: _onTabChange }: BlueprintTopBarProps) {
+/**
+ * Full-page shell: renders the full-width EditorToolbar at the top,
+ * then `children` fills the remaining height (the column layout).
+ * Owning the toolbar here ensures it always spans 100% of the page width.
+ */
+export default function EditorPage({ project, onUpdateProject, children }: EditorPageProps) {
   const navigate = useNavigate()
   const [showShortcuts, setShowShortcuts] = useState(false)
-  const { isSaving, lastSaved, isDirty, saveNow } = useBlueprintSave(project.id)
-
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
+  const { isSaving, lastSaved, isDirty, saveNow, loadProject } = useBlueprintSave(project.id)
+
+  useEffect(() => {
+    blueprintStore.getState().initProject(project.id)
+  }, [project.id])
+
+  useEffect(() => {
+    loadProject()
+  }, [project.id, loadProject])
 
   useEffect(() => {
     const sync = () => {
@@ -51,7 +65,7 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
   }
 
   return (
-    <>
+    <div className="flex flex-col w-full h-full overflow-hidden">
       <EditorToolbar
         project={project}
         onUpdateProject={onUpdateProject}
@@ -67,9 +81,10 @@ export default function BlueprintTopBar({ project, onUpdateProject, onTabChange:
         onResetBlueprint={resetBlueprint}
         onOpenShortcuts={() => setShowShortcuts(true)}
       />
+      {children}
       {showShortcuts && (
         <ShortcutsModal onClose={() => setShowShortcuts(false)} />
       )}
-    </>
+    </div>
   )
 }

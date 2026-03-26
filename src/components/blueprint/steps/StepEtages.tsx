@@ -55,7 +55,10 @@ export default function StepEtages({ onNext, onPrev }: StepEtagesProps) {
       {/* Etages list */}
       <div className="space-y-2">
         {etages.map((etage, index) => (
-          <div key={etage.id} className="border border-dark-border rounded-lg p-3 space-y-2">
+          <div
+            key={etage.id}
+            className="space-y-2 rounded-lg border border-dark-border p-3 theme-light:border-neutral-200"
+          >
             <div className="flex items-center justify-between gap-2">
               <label className="flex flex-col gap-1 flex-1 min-w-0">
                 <span className="ui-label">Naam</span>
@@ -112,7 +115,7 @@ export default function StepEtages({ onNext, onPrev }: StepEtagesProps) {
       <button
         type="button"
         onClick={addEtage}
-        className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-dark-border text-light/70 hover:text-light hover:border-accent/50 transition-colors duration-200"
+        className="w-full rounded-lg border border-dark-border px-3 py-1.5 text-xs font-medium text-neutral-400 transition-colors duration-200 hover:border-accent/50 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:text-neutral-700 theme-light:hover:text-neutral-900"
       >
         + Etage toevoegen
       </button>
@@ -149,7 +152,7 @@ export default function StepEtages({ onNext, onPrev }: StepEtagesProps) {
               max={300}
               onChange={e => setDakoversteekhoogte(Number(e.target.value))}
             />
-            <span className="text-xs text-light/40 shrink-0">cm</span>
+            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
           </div>
         </label>
       </div>
@@ -166,7 +169,7 @@ export default function StepEtages({ onNext, onPrev }: StepEtagesProps) {
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>

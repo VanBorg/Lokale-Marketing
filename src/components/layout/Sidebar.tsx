@@ -13,7 +13,7 @@ function sortByUpdatedDesc(a: Project, b: Project) {
 }
 
 const sectionHeaderClass =
-  'text-[10px] font-semibold uppercase tracking-wider text-light/42 theme-light:text-light/58 px-3 pt-3 pb-1';
+  'px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 theme-light:text-neutral-500';
 
 function ProjectSidebarRow({
   project,
@@ -51,7 +51,7 @@ function ProjectSidebarRow({
         <span className="truncate font-medium">{project.name}</span>
         {project.client_name ? (
           <span
-            className={`truncate text-xs ${isActive ? 'text-accent/70' : 'text-light/50'}`}
+            className={`truncate text-xs ${isActive ? 'text-accent/80' : 'text-neutral-500 theme-light:text-neutral-500'}`}
           >
             {project.client_name}
           </span>
@@ -105,7 +105,9 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
           className={`ui-sidebar-toggle ${isOpen ? 'justify-start gap-2 px-3' : ''}`}
         >
           <ArrowLeft size={16} />
-          {isOpen ? <span className="text-sm font-medium text-light/70">Terug</span> : null}
+          {isOpen ? (
+            <span className="text-sm font-medium text-neutral-300 theme-light:text-neutral-600">Terug</span>
+          ) : null}
         </button>
       )}
 
@@ -121,19 +123,19 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
       {isOpen && (
         <div
-          className="mx-2 my-2 h-px shrink-0 bg-dark-border"
+          className="mx-2 my-2 h-px shrink-0 bg-neutral-800 theme-light:bg-neutral-200"
           aria-hidden
           role="separator"
         />
       )}
 
       <div
-        className={`shrink-0 border-b border-dark-border ${
+        className={`shrink-0 border-b border-neutral-800 theme-light:border-neutral-200 ${
           isOpen ? 'px-3 py-1.5' : 'flex justify-center py-2'
         }`}
       >
         {isOpen ? (
-          <span className="text-xs font-semibold uppercase tracking-wider text-light/45 theme-light:text-light/62">
+          <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500 theme-light:text-neutral-500">
             Snelle links
           </span>
         ) : (
@@ -150,9 +152,9 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2">
         {loading ? (
           <>
-            <div className="mx-2 mb-2 h-8 animate-pulse rounded bg-dark-card" />
-            <div className="mx-2 mb-2 h-8 animate-pulse rounded bg-dark-card" />
-            <div className="mx-2 mb-2 h-8 animate-pulse rounded bg-dark-card" />
+            <div className="mx-2 mb-2 h-8 animate-pulse rounded bg-neutral-800 theme-light:bg-neutral-200" />
+            <div className="mx-2 mb-2 h-8 animate-pulse rounded bg-neutral-800 theme-light:bg-neutral-200" />
+            <div className="mx-2 mb-2 h-8 animate-pulse rounded bg-neutral-800 theme-light:bg-neutral-200" />
           </>
         ) : projects.length === 0 ? (
           <div className="flex flex-1 items-center justify-center px-2 py-6">
@@ -178,7 +180,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
           <div className="flex flex-col gap-0.5">
             <div className={sectionHeaderClass}>Favorieten</div>
             {favorites.length === 0 ? (
-              <p className="text-xs text-light/38 theme-light:text-light/55 px-3 py-1">
+              <p className="px-3 py-1 text-xs text-neutral-500 theme-light:text-neutral-500">
                 Geen favorieten
               </p>
             ) : (

@@ -14,9 +14,8 @@ import {
 } from '../../utils/blueprintGeometry'
 import type { Point } from '../../utils/blueprintGeometry'
 import { useBlueprintKeyboard } from '../../hooks/useBlueprintKeyboard'
-import { useBlueprintSave } from '../../hooks/useBlueprintSave'
-import BlueprintTopBar from './BlueprintTopBar'
-import BlueprintCanvas from './BlueprintCanvas'
+import EditorPage from '../../editor/EditorPage'
+import PixelCanvas from '../../editor/canvas/PixelCanvas'
 import BuilderPanel from './BuilderPanel'
 import RoomPreviewCanvas from './RoomPreviewCanvas'
 import WallList from './WallList'
@@ -66,16 +65,6 @@ function clonePreviewSnapshot(s: PreviewSnapshot): PreviewSnapshot {
 const KAMER_OVERVIEW_EDGE_PADDING_PX = 76
 
 export default function BlueprintPage({ project, onUpdateProject, onTabChange }: BlueprintPageProps) {
-  useEffect(() => {
-    blueprintStore.getState().initProject(project.id)
-  }, [project.id])
-
-  const { loadProject } = useBlueprintSave(project.id)
-
-  useEffect(() => {
-    loadProject()
-  }, [project.id, loadProject])
-
   useBlueprintKeyboard()
 
   const [previewVertices, setPreviewVertices] = useState<Point[]>([])
@@ -262,17 +251,15 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const showMuren = (previewVertices.length >= 3 && !selectedRoom) || roomOrder.length > 0
 
   return (
-    <div className="flex flex-col w-full h-full overflow-hidden">
-      <BlueprintTopBar
-        project={project}
-        onUpdateProject={onUpdateProject}
-        onTabChange={onTabChange}
-      />
-
+    <EditorPage
+      project={project}
+      onUpdateProject={onUpdateProject}
+      onTabChange={onTabChange}
+    >
       <div className="flex flex-1 min-h-0">
         {/* Column 1 — Plattegrond */}
         <div className="flex-[5] min-w-0 min-h-0 relative overflow-hidden flex flex-col">
-          <BlueprintCanvas />
+          <PixelCanvas />
 
           {selectedRoom && (
             <div className="absolute top-3 left-3 z-20 flex items-center gap-2 bg-dark-card border border-dark-border rounded-lg px-3 py-2 shadow-lg pointer-events-auto">
@@ -445,10 +432,11 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
             onDepthChange={setPreviewDepth}
             onActiveStepChange={setBuilderStep}
             parentPreviewVertices={previewVertices}
+            selectedRoomId={selectedRoomId}
           />
         </div>
 
       </div>
-    </div>
+    </EditorPage>
   )
 }

@@ -53,7 +53,7 @@ export interface FloorElement {
   label?: string
 }
 
-export type ActiveTool = 'select' | 'draw' | 'pan' | 'add-deur' | 'add-raam' | 'add-trap' | 'add-kast' | 'add-overig'
+export type ActiveTool = 'select' | 'draw' | 'measure' | 'pan' | 'add-deur' | 'add-raam' | 'add-trap' | 'add-kast' | 'add-overig'
 
 export interface Viewport {
   x: number
@@ -80,6 +80,8 @@ interface BlueprintState extends BlueprintDoc {
   projectId: string | null
   selectedIds: string[]
   activeTool: ActiveTool
+  snapEnabled: boolean
+  gridEnabled: boolean
   drawingVertices: Point[]
   viewport: Viewport
   activeRoomDraft: Partial<Room> | null
@@ -104,6 +106,8 @@ interface BlueprintState extends BlueprintDoc {
   select: (ids: string[]) => void
   clearSelection: () => void
   setActiveTool: (tool: ActiveTool) => void
+  setSnapEnabled: (enabled: boolean) => void
+  setGridEnabled: (enabled: boolean) => void
   addDrawingVertex: (point: Point) => void
   finishDrawing: () => string | null
   cancelDrawing: () => void
@@ -123,7 +127,7 @@ interface BlueprintState extends BlueprintDoc {
 const DEFAULT_FILL = 'rgba(53,180,211,0.08)'
 const DEFAULT_WALL_HEIGHT = 250
 
-/** Same as `MINOR_GRID` in BlueprintCanvas — one minor square = 2 m in world space (cm). */
+/** Same as `MINOR_GRID` in PixelCanvas — one minor square = 2 m in world space (cm). */
 export const BLUEPRINT_MINOR_GRID_CM = 200
 
 /**
@@ -176,6 +180,8 @@ export const useBlueprintStore = create<BlueprintState>()(
       projectId: null,
       selectedIds: [],
       activeTool: 'select',
+      snapEnabled: true,
+      gridEnabled: false,
       drawingVertices: [],
       viewport: DEFAULT_VIEWPORT,
       activeRoomDraft: null,
@@ -313,7 +319,7 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.selectedIds = []
           state.activeTool = 'select'
           state.drawingVertices = []
-          // Viewport is owned by BlueprintCanvas (centre on world 0,0). Do not reset to 0,0 here —
+          // Viewport is owned by PixelCanvas (centre on world 0,0). Do not reset to 0,0 here —
           // parent useEffect runs after child ResizeObserver and would wipe a correct centre.
           state.activeRoomDraft = null
           state.snapGuides = []
@@ -331,6 +337,14 @@ export const useBlueprintStore = create<BlueprintState>()(
 
       setActiveTool: (tool) => {
         set(state => { state.activeTool = tool })
+      },
+
+      setSnapEnabled: (enabled) => {
+        set(state => { state.snapEnabled = enabled })
+      },
+
+      setGridEnabled: (enabled) => {
+        set(state => { state.gridEnabled = enabled })
       },
 
       addDrawingVertex: (point) => {
@@ -450,6 +464,12 @@ export const useViewport = () =>
 
 export const useSnapGuides = () =>
   useBlueprintStore(state => state.snapGuides)
+
+export const useSnapEnabled = () =>
+  useBlueprintStore(state => state.snapEnabled)
+
+export const useGridEnabled = () =>
+  useBlueprintStore(state => state.gridEnabled)
 
 // Module-level singleton for use in Konva event handlers (outside React)
 export const blueprintStore = useBlueprintStore

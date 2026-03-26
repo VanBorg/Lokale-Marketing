@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { Point } from '../../utils/blueprintGeometry'
 import StepKamerForm from './StepKamerForm'
 import StepPlafond from './steps/StepPlafond'
@@ -38,31 +38,36 @@ function AccordionHeader({ index, label, isActive, isCompleted, isLocked, onClic
       onClick={isLocked ? undefined : onClick}
       disabled={isLocked}
       className={[
-        'w-full flex items-center justify-between px-3 py-2 text-left transition-colors duration-150',
+        'flex w-full items-center justify-between px-3 py-2 text-left transition-colors duration-150',
         isActive
-          ? 'text-white border-l-2 border-accent bg-accent/5'
+          ? 'border-l-2 border-accent bg-accent/10 text-accent theme-light:bg-accent/[0.12]'
           : isCompleted
-          ? 'text-white/60 hover:text-white/80 border-l-2 border-transparent cursor-pointer'
-          : 'text-white/30 cursor-not-allowed border-l-2 border-transparent',
+          ? 'cursor-pointer border-l-2 border-transparent text-neutral-400 hover:text-neutral-200 theme-light:text-neutral-800 theme-light:hover:text-neutral-950'
+          : 'cursor-not-allowed border-l-2 border-transparent text-neutral-500/55 theme-light:text-neutral-400',
       ].join(' ')}
     >
       <div className="flex items-center gap-3">
-        <span className={[
-          'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
-          isActive
-            ? 'bg-accent text-white'
-            : isCompleted
-            ? 'bg-accent/20 text-accent'
-            : 'bg-white/10 text-white/30',
-        ].join(' ')}>
+        <span
+          className={[
+            'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+            isActive
+              ? 'bg-accent text-white'
+              : isCompleted
+              ? 'bg-accent/25 text-accent'
+              : 'bg-neutral-700 text-neutral-400 theme-light:bg-neutral-200 theme-light:text-neutral-600',
+          ].join(' ')}
+        >
           {isCompleted && !isActive ? '✓' : index + 1}
         </span>
-        <span className="font-medium text-sm">{label}</span>
+        <span className="text-sm font-medium">{label}</span>
       </div>
       {!isLocked && (
         <svg
-          className={`w-4 h-4 transition-transform duration-200 ${isActive ? 'rotate-180' : ''}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isActive ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -84,6 +89,8 @@ interface BuilderPanelProps {
   onDepthChange?: (d: number) => void
   onActiveStepChange?: (step: number) => void
   parentPreviewVertices?: Point[]
+  /** Room currently selected on the plattegrond; drives edit mode. */
+  selectedRoomId?: string | null
 }
 
 export default function BuilderPanel({
@@ -96,6 +103,7 @@ export default function BuilderPanel({
   onDepthChange,
   onActiveStepChange,
   parentPreviewVertices,
+  selectedRoomId,
 }: BuilderPanelProps) {
   const [activeStep, setActiveStep] = useState(0)
 
@@ -104,7 +112,47 @@ export default function BuilderPanel({
   }, [activeStep, onActiveStepChange])
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
   const [lastRoomId, setLastRoomId] = useState<string | null>(null)
+  const [isEditingExisting, setIsEditingExisting] = useState(false)
   const [currentPreviewVertices, setCurrentPreviewVertices] = useState<Point[]>([])
+
+  // Refs to read latest values without causing effect re-runs
+  const lastRoomIdRef = useRef<string | null>(null)
+  lastRoomIdRef.current = lastRoomId
+  const isEditingExistingRef = useRef(false)
+  isEditingExistingRef.current = isEditingExisting
+  /** Set by handleStepKamerNext to prevent the selectedRoomId effect from overriding the placement flow. */
+  const justPlacedIdRef = useRef<string | null>(null)
+
+  // ─── Sync canvas selection → builder ──────────────────────────────────
+  useEffect(() => {
+    if (!selectedRoomId) {
+      // Selection cleared while editing → reset to new-room mode
+      if (isEditingExistingRef.current) {
+        setIsEditingExisting(false)
+        setLastRoomId(null)
+        setCompletedSteps([])
+        setActiveStep(0)
+      }
+      return
+    }
+
+    // Ignore the select([id]) that happens immediately after placement
+    if (selectedRoomId === justPlacedIdRef.current) {
+      justPlacedIdRef.current = null
+      return
+    }
+
+    // Already in edit mode for this exact room — no change needed.
+    // (Only skip when isEditingExisting is true; if it's false the room was just
+    // placed and not yet in edit mode, so we must still switch over.)
+    if (selectedRoomId === lastRoomIdRef.current && isEditingExistingRef.current) return
+
+    // New or previously-placed room selected → load it into the builder
+    setLastRoomId(selectedRoomId)
+    setIsEditingExisting(true)
+    setCompletedSteps([0, 1, 2, 3, 4, 5])
+    setActiveStep(0)
+  }, [selectedRoomId])
 
   const handlePreviewChange = useCallback((vertices: Point[]) => {
     setCurrentPreviewVertices(vertices)
@@ -121,7 +169,10 @@ export default function BuilderPanel({
   }, [])
 
   const handleStepKamerNext = useCallback((roomId: string) => {
+    // Mark as just-placed so the selectedRoomId effect won't trigger edit mode
+    justPlacedIdRef.current = roomId
     setLastRoomId(roomId)
+    setIsEditingExisting(false)
     setCompletedSteps(prev => {
       const next = [...prev]
       if (!next.includes(0)) next.push(0)
@@ -160,9 +211,9 @@ export default function BuilderPanel({
   }, [])
 
   return (
-    <div className="flex flex-col min-h-full bg-dark-card">
-      <div className="px-3 py-2 border-b border-dark-border">
-        <h2 className="text-[10px] font-semibold uppercase tracking-wider text-light/40">
+    <div className="flex min-h-full flex-col bg-dark-card theme-light:bg-white">
+      <div className="border-b border-dark-border px-3 py-2 theme-light:border-neutral-200">
+        <h2 className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 theme-light:text-neutral-600">
           Bouwer
         </h2>
       </div>
@@ -175,7 +226,7 @@ export default function BuilderPanel({
           : index > activeStep && !isCompleted
 
         return (
-          <div key={step} className="border-b border-dark-border">
+          <div key={step} className="border-b border-dark-border theme-light:border-neutral-200">
             <AccordionHeader
               index={index}
               label={step}
@@ -203,6 +254,7 @@ export default function BuilderPanel({
                       onDepthChange={onDepthChange}
                       currentPreviewVertices={currentPreviewVertices}
                       parentPreviewVertices={parentPreviewVertices}
+                      editRoomId={isEditingExisting ? lastRoomId : null}
                     />
                   </div>
                 )}

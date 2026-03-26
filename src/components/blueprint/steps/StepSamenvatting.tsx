@@ -14,9 +14,9 @@ interface SummaryRowProps {
 
 function SummaryRow({ label, value }: SummaryRowProps) {
   return (
-    <div className="flex justify-between items-baseline gap-2 py-1.5 border-b border-dark-border last:border-0">
-      <span className="text-xs text-light/50">{label}</span>
-      <span className="text-xs text-light/80 font-medium text-right">{value}</span>
+    <div className="flex items-baseline justify-between gap-2 border-b border-dark-border py-1.5 last:border-0 theme-light:border-neutral-200">
+      <span className="text-xs text-neutral-500 theme-light:text-neutral-600">{label}</span>
+      <span className="text-right text-xs font-medium text-neutral-200 theme-light:text-neutral-900">{value}</span>
     </div>
   )
 }
@@ -44,11 +44,13 @@ export default function StepSamenvatting({ roomId, onFinalize, onPrev }: StepSam
   if (!room) {
     return (
       <div className="space-y-4">
-        <p className="text-xs text-light/40 text-center py-4">Nog geen kamer aangemaakt. Ga terug naar stap 1.</p>
+        <p className="py-4 text-center text-xs text-neutral-500 theme-light:text-neutral-600">
+          Nog geen kamer aangemaakt. Ga terug naar stap 1.
+        </p>
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>
@@ -63,10 +65,12 @@ export default function StepSamenvatting({ roomId, onFinalize, onPrev }: StepSam
 
   return (
     <div className="space-y-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-light/40">Overzicht kamer</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 theme-light:text-neutral-600">
+        Overzicht kamer
+      </p>
 
       {/* Summary table */}
-      <div className="rounded-lg border border-dark-border px-3 py-1">
+      <div className="rounded-lg border border-dark-border px-3 py-1 theme-light:border-neutral-200">
         <SummaryRow label="Naam" value={room.name} />
         <SummaryRow label="Vorm" value={shapeName} />
         <SummaryRow label="Vloeroppervlak" value={`${floorM2.toFixed(2)} m²`} />
@@ -81,7 +85,7 @@ export default function StepSamenvatting({ roomId, onFinalize, onPrev }: StepSam
       {/* Ready for quote block */}
       <div className="rounded-lg border border-accent/30 bg-accent/5 px-3 py-3 space-y-1">
         <p className="text-xs font-semibold text-accent">Klaar voor offerte</p>
-        <p className="text-xs text-light/60 leading-relaxed">
+        <p className="text-xs leading-relaxed text-neutral-400 theme-light:text-neutral-700">
           Deze kamer is volledig ingevuld. Je kunt nu de materiaallijst en offerte genereren vanuit het dashboard.
         </p>
       </div>
@@ -98,7 +102,7 @@ export default function StepSamenvatting({ roomId, onFinalize, onPrev }: StepSam
         <button
           type="button"
           onClick={onPrev}
-          className="w-full px-4 py-2 text-xs text-light/50 hover:text-light transition-colors duration-200"
+          className="w-full px-4 py-2 text-xs text-neutral-400 transition-colors duration-200 hover:text-neutral-200 theme-light:text-neutral-600 theme-light:hover:text-neutral-900"
         >
           ← Vorige
         </button>
