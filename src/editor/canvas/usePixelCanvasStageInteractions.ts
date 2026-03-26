@@ -61,14 +61,28 @@ export function usePixelCanvasStageInteractions({
     (e: Konva.KonvaEventObject<WheelEvent>) => {
       e.evt.preventDefault()
       if (size.width <= 0 || size.height <= 0) return
-      const direction = e.evt.deltaY < 0 ? 1 : -1
-      blueprintStore.getState().zoomViewportByPercentDelta(direction * 10)
+      const ev = e.evt
+      // Ctrl/Meta + wiel: zoomen (zoals trackpad pinch in de browser). Zonder: canvas pannen.
+      if (ev.ctrlKey || ev.metaKey) {
+        const direction = ev.deltaY < 0 ? 1 : -1
+        blueprintStore.getState().zoomViewportByPercentDelta(direction * 10)
+        return
+      }
+      const vp = blueprintStore.getState().viewport
+      blueprintStore.getState().setViewport({
+        x: vp.x - ev.deltaX,
+        y: vp.y - ev.deltaY,
+      })
     },
     [size.width, size.height],
   )
 
   const attachWindowPanListeners = useCallback(
-    (startClientX: number, startClientY: number) => {
+    (
+      startClientX: number,
+      startClientY: number,
+      opts?: { clearSelectionOnClickIfNoMove?: boolean },
+    ) => {
       isPanning.current = true
       setIsPanningUi(true)
       panStart.current = { x: startClientX, y: startClientY }
@@ -82,11 +96,18 @@ export function usePixelCanvasStageInteractions({
         blueprintStore.getState().setViewport({ x: vp.x + dx, y: vp.y + dy })
       }
 
-      const onUp = () => {
+      const onUp = (ev: MouseEvent) => {
         window.removeEventListener('mousemove', onMove)
         window.removeEventListener('mouseup', onUp)
         isPanning.current = false
         setIsPanningUi(false)
+        if (opts?.clearSelectionOnClickIfNoMove) {
+          const dx = ev.clientX - startClientX
+          const dy = ev.clientY - startClientY
+          if (Math.hypot(dx, dy) < 5) {
+            blueprintStore.getState().clearSelection()
+          }
+        }
       }
 
       window.addEventListener('mousemove', onMove)
@@ -185,6 +206,7 @@ export function usePixelCanvasStageInteractions({
         const store = blueprintStore.getState()
         if (!marqueeActive) {
           store.clearSelection()
+          store.setActiveTool('pan')
           suppressNextClickRef.current = true
           return
         }
@@ -206,6 +228,7 @@ export function usePixelCanvasStageInteractions({
           selectedDrawingStrokeIndices: hits.strokeIndices,
           selectedMeasureLineIds: hits.measureLineIds,
         })
+        store.setActiveTool('pan')
         suppressNextClickRef.current = true
       }
 
@@ -233,7 +256,18 @@ export function usePixelCanvasStageInteractions({
 
       if (e.evt.button === 0 && e.target === stageRef.current) {
         if (tool === 'select') {
-          attachMarqueeListeners(e.evt.clientX, e.evt.clientY)
+          if (e.evt.shiftKey) {
+            attachMarqueeListeners(e.evt.clientX, e.evt.clientY)
+          } else {
+            attachWindowPanListeners(e.evt.clientX, e.evt.clientY, {
+              clearSelectionOnClickIfNoMove: true,
+            })
+          }
+          return
+        }
+
+        if (tool === 'pan') {
+          attachWindowPanListeners(e.evt.clientX, e.evt.clientY)
           return
         }
 

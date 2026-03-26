@@ -84,6 +84,9 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         return
       }
       // Selectie gebeurt op PointerDown; hier geen applyRoomSelection (voorkomt dubbele Ctrl/Shift-toggle bij tap).
+      if (activeTool === 'select') {
+        blueprintStore.getState().setActiveTool('pan')
+      }
     },
     [activeTool, stageRef],
   )

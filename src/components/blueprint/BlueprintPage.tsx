@@ -9,7 +9,6 @@ import {
   applyWallLengthRespectingLocks,
   axisAlignedBBoxSize,
   formatNlDecimal,
-  polygonArea,
   wallLength,
 } from '../../utils/blueprintGeometry'
 import type { Point } from '../../utils/blueprintGeometry'
@@ -18,6 +17,7 @@ import EditorPage from '../../editor/EditorPage'
 import PixelCanvas from '../../editor/canvas/PixelCanvas'
 import BuilderPanel from './BuilderPanel'
 import RoomPreviewCanvas from './RoomPreviewCanvas'
+import RoomListOverlay from './RoomListOverlay'
 import WallList from './WallList'
 import type { Project } from '../../lib/database.types'
 
@@ -218,12 +218,6 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
     setCanvasHoveredWallIndex(null)
   }, [selectedRoomId])
 
-  const handleDelete = () => {
-    if (!selectedRoomId) return
-    blueprintStore.getState().deleteRoom(selectedRoomId)
-    blueprintStore.getState().clearSelection()
-  }
-
   const handleDeleteCanvasTextNote = () => {
     const store = blueprintStore.getState()
     if (store.editingCanvasTextNoteId) return
@@ -302,32 +296,10 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
         <div className="flex-[5] min-w-0 min-h-0 relative overflow-hidden flex flex-col">
           <PixelCanvas />
 
-          {selectedRoom && (
-            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 bg-dark-card border border-dark-border rounded-lg px-3 py-2 shadow-lg pointer-events-auto">
-              <span className="text-xs font-semibold text-light">{selectedRoom.name}</span>
-              <span className="text-xs text-light/40">
-                {formatNlDecimal(polygonArea(selectedRoom.vertices) / 10000, 1)} m²
-              </span>
-              <div className="w-px h-4 bg-dark-border mx-0.5" />
-              <button
-                onClick={() => blueprintStore.getState().clearSelection()}
-                className="text-xs text-light/50 hover:text-light transition-colors"
-                title="Deselecteer"
-              >
-                ✕
-              </button>
-              <button
-                onClick={handleDelete}
-                className="text-xs text-red-400/70 hover:text-red-400 transition-colors"
-                title="Verwijder kamer"
-              >
-                Verwijder
-              </button>
-            </div>
-          )}
+          <RoomListOverlay />
 
           {selectedCanvasNote && !selectedRoom && (
-            <div className="absolute top-3 left-3 z-20 flex max-w-[min(100%,20rem)] items-center gap-2 bg-dark-card border border-dark-border rounded-lg px-3 py-2 shadow-lg pointer-events-auto">
+            <div className="absolute bottom-3 left-3 z-20 flex max-w-[min(100%,20rem)] items-center gap-2 bg-dark-card border border-dark-border rounded-lg px-3 py-2 shadow-lg pointer-events-auto">
               <span className="truncate text-xs font-semibold text-light" title={selectedCanvasNote.text}>
                 {selectedCanvasNote.text.trim() ? selectedCanvasNote.text.trim().split('\n')[0] : 'Tekstnotitie'}
               </span>

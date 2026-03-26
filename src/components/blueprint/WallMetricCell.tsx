@@ -32,7 +32,8 @@ export default function WallMetricCell({
 
   useEffect(() => {
     if (isActive && cellRef.current) {
-      cellRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      // 'auto' avoids long smooth-scroll fighting the scroll parent during hover/selection updates.
+      cellRef.current.scrollIntoView({ behavior: 'auto', block: 'nearest' })
     }
   }, [isActive])
 

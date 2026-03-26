@@ -431,7 +431,22 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
               listening={false}
             />
 
-            {/* Clickable wall hit zones — locked walls shown in orange */}
+            {/*
+              Full-stage hit catcher below wall lines: clears canvas→list hover when the pointer
+              is in the room interior (not on a wall strip). Per-wall onMouseLeave(null) caused
+              null↔index thrashing every frame along edges and re-rendered the whole Kamerkaart.
+            */}
+            <Rect
+              x={0}
+              y={0}
+              width={width}
+              height={height}
+              fill="transparent"
+              listening
+              onMouseEnter={() => onHoverWall?.(null)}
+            />
+
+            {/* Clickable wall hit zones — locked walls shown in orange (above the catcher) */}
             {screenVerts.map((sv, i) => {
               const next = screenVerts[(i + 1) % n]
               const locked = isWallLocked(i)
@@ -444,7 +459,6 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
                   hitStrokeWidth={14}
                   onClick={() => handleWallClick(i)}
                   onMouseEnter={() => onHoverWall?.(i)}
-                  onMouseLeave={() => onHoverWall?.(null)}
                 />
               )
             })}

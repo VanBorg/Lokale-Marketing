@@ -215,12 +215,19 @@ export const BLUEPRINT_MINOR_GRID_CM = 200
 export const TARGET_VISIBLE_MINOR_SQUARES_HORIZONTAL = 10
 export const TARGET_VISIBLE_MINOR_SQUARES_VERTICAL = 8
 
+/**
+ * Maximum zoom-out: at most this many 2 m blocks visible across/down the canvas.
+ * 15 left + 15 right = 30 wide; 10 up + 10 down = 20 tall.
+ */
+export const MAX_VISIBLE_MINOR_SQUARES_HORIZONTAL = 30
+export const MAX_VISIBLE_MINOR_SQUARES_VERTICAL = 20
+
 const TARGET_VISIBLE_WORLD_WIDTH_CM =
   TARGET_VISIBLE_MINOR_SQUARES_HORIZONTAL * BLUEPRINT_MINOR_GRID_CM
 const TARGET_VISIBLE_WORLD_HEIGHT_CM =
   TARGET_VISIBLE_MINOR_SQUARES_VERTICAL * BLUEPRINT_MINOR_GRID_CM
 
-const VIEW_SCALE_MIN = 0.1
+const VIEW_SCALE_MIN = 0.01
 const VIEW_SCALE_MAX = 8
 
 function clampViewScale(n: number): number {
@@ -239,6 +246,18 @@ export function getDefaultBlueprintScaleForCanvasSize(widthPx: number, heightPx:
   const scaleW = widthPx / TARGET_VISIBLE_WORLD_WIDTH_CM
   const scaleH = heightPx / TARGET_VISIBLE_WORLD_HEIGHT_CM
   return clampViewScale(Math.max(scaleW, scaleH))
+}
+
+/**
+ * Minimum scale for a canvas: the zoom floor that ensures the viewport never
+ * shows more than MAX_VISIBLE_MINOR_SQUARES_HORIZONTAL × MAX_VISIBLE_MINOR_SQUARES_VERTICAL blocks.
+ * Both axes must stay within the limit, so we take the larger (more restrictive) of the two.
+ */
+export function getMinBlueprintScaleForCanvasSize(widthPx: number, heightPx: number): number {
+  if (widthPx <= 0 || heightPx <= 0) return VIEW_SCALE_MIN
+  const maxWorldW = MAX_VISIBLE_MINOR_SQUARES_HORIZONTAL * BLUEPRINT_MINOR_GRID_CM
+  const maxWorldH = MAX_VISIBLE_MINOR_SQUARES_VERTICAL * BLUEPRINT_MINOR_GRID_CM
+  return Math.max(widthPx / maxWorldW, heightPx / maxWorldH, VIEW_SCALE_MIN)
 }
 
 const DEFAULT_VIEWPORT: Viewport = {
@@ -815,12 +834,14 @@ export const useBlueprintStore = create<BlueprintState>()(
           const { width, height } = state.canvasSize
           if (width <= 0 || height <= 0) return
           const base = getDefaultBlueprintScaleForCanvasSize(width, height)
+          const minScale = getMinBlueprintScaleForCanvasSize(width, height)
           const cx = width / 2
           const cy = height / 2
           const oldScale = state.viewport.scale
           const currentPercent = (oldScale / base) * 100
-          const nextPercent = Math.max(10, Math.min(800, currentPercent + deltaPercent))
-          const next = clampViewScale(base * (nextPercent / 100))
+          const minPercent = (minScale / base) * 100
+          const nextPercent = Math.max(minPercent, Math.min(800, currentPercent + deltaPercent))
+          const next = Math.min(VIEW_SCALE_MAX, Math.max(minScale, base * (nextPercent / 100)))
           const worldX = (cx - state.viewport.x) / oldScale
           const worldY = (cy - state.viewport.y) / oldScale
           state.viewport.scale = next

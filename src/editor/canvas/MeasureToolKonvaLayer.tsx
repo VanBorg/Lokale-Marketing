@@ -100,6 +100,9 @@ function MeasureLineVisual({
     } else {
       store.selectMeasureLine(id)
     }
+    if (store.activeTool === 'select') {
+      store.setActiveTool('pan')
+    }
   }
 
   return (

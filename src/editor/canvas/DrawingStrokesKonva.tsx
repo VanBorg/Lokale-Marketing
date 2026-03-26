@@ -45,6 +45,9 @@ export default function DrawingStrokesKonva({
               } else {
                 store.selectDrawingStroke(si)
               }
+              if (store.activeTool === 'select') {
+                store.setActiveTool('pan')
+              }
             }}
           />
         ) : null,

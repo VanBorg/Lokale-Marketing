@@ -57,16 +57,16 @@ export default function CanvasTextNotes({
           const evt = e.evt as MouseEvent
           if (evt.ctrlKey || evt.metaKey) {
             store.toggleCanvasTextNoteInSelection(id)
-            return
-          }
-          if (evt.shiftKey) {
+          } else if (evt.shiftKey) {
             store.addCanvasTextNoteToSelection(id)
+          } else if (store.selectedCanvasTextNoteIds.includes(id)) {
             return
+          } else {
+            store.selectCanvasTextNote(id)
           }
-          if (store.selectedCanvasTextNoteIds.includes(id)) {
-            return
+          if (activeTool === 'select') {
+            store.setActiveTool('pan')
           }
-          store.selectCanvasTextNote(id)
         }
 
         return (

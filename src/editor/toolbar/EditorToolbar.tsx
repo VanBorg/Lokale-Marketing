@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Clipboard,
   Grid3x3,
+  Hand,
   Magnet,
   Minus,
   MoreVertical,
@@ -153,7 +154,7 @@ export default function EditorToolbar({
     void navigator.clipboard?.writeText(text)
   }, [lastSaved])
 
-  const toolSegmentIndex =
+  const canvasToolSegmentIndex =
     activeTool === 'select'
       ? 0
       : activeTool === 'draw'
@@ -162,7 +163,7 @@ export default function EditorToolbar({
           ? 2
           : activeTool === 'measure'
             ? 3
-            : 2
+            : null
 
   const segmentToolBtn = (active: boolean) =>
     [
@@ -173,8 +174,6 @@ export default function EditorToolbar({
         ? 'text-white'
         : 'text-neutral-400 hover:text-neutral-100 theme-light:text-neutral-600 theme-light:hover:text-neutral-900',
     ].join(' ')
-
-  const toolBtn = segmentToolBtn
 
   const toggleBtn = (on: boolean) =>
     [
@@ -307,59 +306,101 @@ export default function EditorToolbar({
 
         <ToolbarDivider />
 
-        {/* Groep 4 — canvas-tools: één groep met dunne rand; zachte vulling op selectie */}
-        <div
-          className="relative flex h-8 min-w-[9rem] shrink-0 items-stretch overflow-hidden rounded-lg border border-neutral-600/85 bg-neutral-900/45 theme-light:border-neutral-300 theme-light:bg-neutral-100/95"
-          role="group"
-          aria-label="Canvas-gereedschap"
-        >
+        {/* Groep 4 — canvas-tools + werkblad-notitie (blijft zichtbaar; niet achter rechterkolom) */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setActiveTool('pan')}
+            className={[
+              'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-0',
+              activeTool === 'pan'
+                ? 'border-accent/50 bg-accent/15 text-accent ring-1 ring-accent/40'
+                : 'border-neutral-600/85 bg-neutral-900/45 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 theme-light:border-neutral-300 theme-light:bg-neutral-100/95 theme-light:text-neutral-700 theme-light:hover:bg-neutral-200',
+            ].join(' ')}
+            title="Hand — canvas verplaatsen (pan)"
+            aria-label="Canvas verplaatsen"
+            aria-pressed={activeTool === 'pan'}
+          >
+            <Hand size={15} />
+          </button>
           <div
-            className="pointer-events-none absolute inset-y-0 left-0 rounded-none bg-accent/40 transition-transform duration-200 ease-out theme-light:bg-accent/45"
-            style={{
-              width: 'calc(100% / 4)',
-              transform: `translateX(${toolSegmentIndex * 100}%)`,
-            }}
-            aria-hidden
-          />
+            className="relative flex h-8 min-w-[9rem] shrink-0 items-stretch overflow-hidden rounded-lg border border-neutral-600/85 bg-neutral-900/45 theme-light:border-neutral-300 theme-light:bg-neutral-100/95"
+            role="group"
+            aria-label="Tekenen en selecteren"
+          >
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 rounded-none bg-accent/40 transition-transform duration-200 ease-out theme-light:bg-accent/45"
+              style={{
+                width: 'calc(100% / 4)',
+                transform:
+                  canvasToolSegmentIndex === null
+                    ? 'translateX(0)'
+                    : `translateX(${canvasToolSegmentIndex * 100}%)`,
+                opacity: canvasToolSegmentIndex === null ? 0 : 1,
+              }}
+              aria-hidden
+            />
+            <button
+              type="button"
+              onClick={() => setCanvasTool('select')}
+              className={`${segmentToolBtn(activeTool === 'select')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
+              title="Selecteren — klik op kamers en objecten; Shift ingedrukt + slepen op leeg vlak voor een selectiekader. Op leeg vlak slepen verplaatst het beeld."
+              aria-label="Selecteren"
+              aria-pressed={activeTool === 'select'}
+            >
+              <MousePointer2 size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCanvasTool('draw')}
+              className={`${segmentToolBtn(activeTool === 'draw')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
+              title="Tekenen"
+              aria-label="Tekenen"
+              aria-pressed={activeTool === 'draw'}
+            >
+              <Pencil size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCanvasTool('write')}
+              className={`${segmentToolBtn(activeTool === 'write')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
+              title="Schrijven"
+              aria-label="Schrijven"
+              aria-pressed={activeTool === 'write'}
+            >
+              <Type size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCanvasTool('measure')}
+              className={segmentToolBtn(activeTool === 'measure')}
+              title="Meten"
+              aria-label="Meten"
+              aria-pressed={activeTool === 'measure'}
+            >
+              <Ruler size={15} />
+            </button>
+          </div>
           <button
             type="button"
-            onClick={() => setCanvasTool('select')}
-            className={`${segmentToolBtn(activeTool === 'select')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
-            title="Selectie"
-            aria-label="Selectie"
-            aria-pressed={activeTool === 'select'}
+            onClick={() => setShowNotitie(true)}
+            className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-0 theme-light:border-neutral-300 ${
+              werkbladNotities.trim().length > 0
+                ? 'border-accent/50 bg-accent/10 text-accent ring-1 ring-accent/35 theme-light:bg-accent/10'
+                : 'border-neutral-600/85 bg-neutral-900/45 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 theme-light:bg-neutral-100/95 theme-light:text-neutral-700 theme-light:hover:bg-neutral-200'
+            }`}
+            title="Werkblad-notities"
+            aria-label="Werkblad-notities openen"
           >
-            <MousePointer2 size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setCanvasTool('draw')}
-            className={`${segmentToolBtn(activeTool === 'draw')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
-            title="Tekenen"
-            aria-label="Tekenen"
-            aria-pressed={activeTool === 'draw'}
-          >
-            <Pencil size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setCanvasTool('write')}
-            className={`${segmentToolBtn(activeTool === 'write')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
-            title="Schrijven"
-            aria-label="Schrijven"
-            aria-pressed={activeTool === 'write'}
-          >
-            <Type size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setCanvasTool('measure')}
-            className={segmentToolBtn(activeTool === 'measure')}
-            title="Meten"
-            aria-label="Meten"
-            aria-pressed={activeTool === 'measure'}
-          >
-            <Ruler size={15} />
+            <span className="relative inline-flex" aria-hidden>
+              <StickyNote size={15} />
+              {werkbladNotities.trim().length > 0 && (
+                <span
+                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent ring-2 ring-neutral-950 theme-light:ring-white"
+                  aria-hidden
+                />
+              )}
+            </span>
           </button>
         </div>
 
