@@ -20,8 +20,8 @@ export default function RoomListOverlay() {
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
 
   function handleSelect(id: string) {
-    if (selectedId === id) return
     blueprintStore.getState().select([id])
+    blueprintStore.getState().requestWallListExpandForRoom(id)
   }
 
   function handleDeselect() {

@@ -127,6 +127,9 @@ interface BlueprintState extends BlueprintDoc {
   activeRoomDraft: Partial<Room> | null
   snapGuides: SnapGuide[]
   canvasSize: { width: number; height: number }
+  /** Sync: klik op Kamers-overlay/zijbalk → WallList onder Kamerkaart opent deze kamer. */
+  wallListExpandSeq: number
+  wallListExpandRoomId: string | null
 
   // Actions — document (undo-able)
   addRoom: (vertices: Point[], meta?: Partial<Omit<Room, 'id' | 'vertices'>>) => string
@@ -198,6 +201,7 @@ interface BlueprintState extends BlueprintDoc {
   /** Zoom t.o.v. 100% = standaardschaal voor canvas (breedte+hoogte); `deltaPercent` bijv. +10 / −10 per stap. */
   zoomViewportByPercentDelta: (deltaPercent: number) => void
   zoomViewportAtCenter: (direction: 'in' | 'out') => void
+  requestWallListExpandForRoom: (roomId: string) => void
 }
 
 // ─── Default values ────────────────────────────────────────────────────────
@@ -299,6 +303,8 @@ export const useBlueprintStore = create<BlueprintState>()(
       activeRoomDraft: null,
       snapGuides: [],
       canvasSize: { width: 800, height: 600 },
+      wallListExpandSeq: 0,
+      wallListExpandRoomId: null,
 
       // ── Document actions ──────────────────────────────────────────────
 
@@ -481,8 +487,17 @@ export const useBlueprintStore = create<BlueprintState>()(
           // parent useEffect runs after child ResizeObserver and would wipe a correct centre.
           state.activeRoomDraft = null
           state.snapGuides = []
+          state.wallListExpandSeq = 0
+          state.wallListExpandRoomId = null
         })
         useBlueprintStore.temporal.getState().clear()
+      },
+
+      requestWallListExpandForRoom: (roomId: string) => {
+        set(state => {
+          state.wallListExpandSeq += 1
+          state.wallListExpandRoomId = roomId
+        })
       },
 
       select: (ids) => {

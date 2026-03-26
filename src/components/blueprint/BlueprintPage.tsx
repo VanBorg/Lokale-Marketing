@@ -94,7 +94,8 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const roomOrder      = useBlueprintStore(s => s.roomOrder)
   const rooms          = useBlueprintStore(s => s.rooms)
 
-  const showingNewPreview = builderStep === 0 && previewVertices.length >= 3
+  // When a room is selected we never show the stale new-room draft — always prefer the placed room.
+  const showingNewPreview = builderStep === 0 && previewVertices.length >= 3 && !selectedRoom
   /** Alleen nieuwe-kamer-preview (geen geselecteerde plattegrond-kamer), anders Kamerkaart → temporal. */
   const isPreviewDraftUndoActive = showingNewPreview && !selectedRoom
 

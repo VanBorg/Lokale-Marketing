@@ -77,44 +77,30 @@ export function usePixelCanvasStageInteractions({
     [size.width, size.height],
   )
 
-  const attachWindowPanListeners = useCallback(
-    (
-      startClientX: number,
-      startClientY: number,
-      opts?: { clearSelectionOnClickIfNoMove?: boolean },
-    ) => {
-      isPanning.current = true
-      setIsPanningUi(true)
-      panStart.current = { x: startClientX, y: startClientY }
+  const attachWindowPanListeners = useCallback((startClientX: number, startClientY: number) => {
+    isPanning.current = true
+    setIsPanningUi(true)
+    panStart.current = { x: startClientX, y: startClientY }
 
-      const onMove = (ev: MouseEvent) => {
-        if (!isPanning.current) return
-        const dx = ev.clientX - panStart.current.x
-        const dy = ev.clientY - panStart.current.y
-        panStart.current = { x: ev.clientX, y: ev.clientY }
-        const vp = blueprintStore.getState().viewport
-        blueprintStore.getState().setViewport({ x: vp.x + dx, y: vp.y + dy })
-      }
+    const onMove = (ev: MouseEvent) => {
+      if (!isPanning.current) return
+      const dx = ev.clientX - panStart.current.x
+      const dy = ev.clientY - panStart.current.y
+      panStart.current = { x: ev.clientX, y: ev.clientY }
+      const vp = blueprintStore.getState().viewport
+      blueprintStore.getState().setViewport({ x: vp.x + dx, y: vp.y + dy })
+    }
 
-      const onUp = (ev: MouseEvent) => {
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', onUp)
-        isPanning.current = false
-        setIsPanningUi(false)
-        if (opts?.clearSelectionOnClickIfNoMove) {
-          const dx = ev.clientX - startClientX
-          const dy = ev.clientY - startClientY
-          if (Math.hypot(dx, dy) < 5) {
-            blueprintStore.getState().clearSelection()
-          }
-        }
-      }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      isPanning.current = false
+      setIsPanningUi(false)
+    }
 
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', onUp)
-    },
-    [],
-  )
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [])
 
   const attachDrawStrokeListeners = useCallback((startWorld: Point) => {
     const clientToWorld = (cx: number, cy: number): Point | null => {
@@ -206,7 +192,6 @@ export function usePixelCanvasStageInteractions({
         const store = blueprintStore.getState()
         if (!marqueeActive) {
           store.clearSelection()
-          store.setActiveTool('pan')
           suppressNextClickRef.current = true
           return
         }
@@ -228,7 +213,6 @@ export function usePixelCanvasStageInteractions({
           selectedDrawingStrokeIndices: hits.strokeIndices,
           selectedMeasureLineIds: hits.measureLineIds,
         })
-        store.setActiveTool('pan')
         suppressNextClickRef.current = true
       }
 
@@ -255,19 +239,10 @@ export function usePixelCanvasStageInteractions({
       }
 
       if (e.evt.button === 0 && e.target === stageRef.current) {
-        if (tool === 'select') {
-          if (e.evt.shiftKey) {
-            attachMarqueeListeners(e.evt.clientX, e.evt.clientY)
-          } else {
-            attachWindowPanListeners(e.evt.clientX, e.evt.clientY, {
-              clearSelectionOnClickIfNoMove: true,
-            })
-          }
-          return
-        }
-
-        if (tool === 'pan') {
-          attachWindowPanListeners(e.evt.clientX, e.evt.clientY)
+        // Select + Hand: op leeg vlak slepen = selectiekader. Hand: pannen doe je met
+        // scrollwiel, Spatie+sleep of middelste muisknop (zie ook space/middle hierboven).
+        if (tool === 'select' || tool === 'pan') {
+          attachMarqueeListeners(e.evt.clientX, e.evt.clientY)
           return
         }
 

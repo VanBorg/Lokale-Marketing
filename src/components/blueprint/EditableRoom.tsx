@@ -83,10 +83,6 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         })
         return
       }
-      // Selectie gebeurt op PointerDown; hier geen applyRoomSelection (voorkomt dubbele Ctrl/Shift-toggle bij tap).
-      if (activeTool === 'select') {
-        blueprintStore.getState().setActiveTool('pan')
-      }
     },
     [activeTool, stageRef],
   )
@@ -157,8 +153,9 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
   if (!room) return null
 
   const flatPoints = room.vertices.flatMap(v => [v.x, v.y])
-  /** Only allow drag when select tool is active. */
-  const allowRoomDrag = isSelected && activeTool === 'select'
+  /** Drag alleen met Select of Hand (na selectie), zodat je met Hand kunt pannen/scrollen maar geselecteerde kamers kunt verschuiven. */
+  const allowRoomDrag =
+    isSelected && (activeTool === 'select' || activeTool === 'pan')
 
   return (
     <Group

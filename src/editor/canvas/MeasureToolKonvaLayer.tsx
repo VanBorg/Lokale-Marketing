@@ -100,9 +100,6 @@ function MeasureLineVisual({
     } else {
       store.selectMeasureLine(id)
     }
-    if (store.activeTool === 'select') {
-      store.setActiveTool('pan')
-    }
   }
 
   return (
@@ -179,7 +176,7 @@ export default function MeasureToolKonvaLayer({
   activeTool,
   viewportScale,
 }: MeasureToolKonvaLayerProps) {
-  const canPickMeasure = activeTool === 'select'
+  const canPickMeasure = activeTool === 'select' || activeTool === 'pan'
   const draftLine = measureDraft
     ? { start: measureDraft.start, end: measureDraft.hover }
     : null

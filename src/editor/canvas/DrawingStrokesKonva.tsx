@@ -15,7 +15,7 @@ export default function DrawingStrokesKonva({
   activeTool,
   selectedStrokeIndices,
 }: DrawingStrokesKonvaProps) {
-  const canPickStroke = activeTool === 'select'
+  const canPickStroke = activeTool === 'select' || activeTool === 'pan'
   const selSet = new Set(selectedStrokeIndices)
 
   return (
@@ -44,9 +44,6 @@ export default function DrawingStrokesKonva({
                 return
               } else {
                 store.selectDrawingStroke(si)
-              }
-              if (store.activeTool === 'select') {
-                store.setActiveTool('pan')
               }
             }}
           />

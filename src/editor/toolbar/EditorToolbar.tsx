@@ -317,7 +317,7 @@ export default function EditorToolbar({
                 ? 'border-accent/50 bg-accent/15 text-accent ring-1 ring-accent/40'
                 : 'border-neutral-600/85 bg-neutral-900/45 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 theme-light:border-neutral-300 theme-light:bg-neutral-100/95 theme-light:text-neutral-700 theme-light:hover:bg-neutral-200',
             ].join(' ')}
-            title="Hand — canvas verplaatsen (pan)"
+            title="Hand — scroll om te pannen; Spatie of middelste knop om te slepen; klik/sleep op leeg vlak om te selecteren"
             aria-label="Canvas verplaatsen"
             aria-pressed={activeTool === 'pan'}
           >
@@ -344,7 +344,7 @@ export default function EditorToolbar({
               type="button"
               onClick={() => setCanvasTool('select')}
               className={`${segmentToolBtn(activeTool === 'select')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
-              title="Selecteren — klik op kamers en objecten; Shift ingedrukt + slepen op leeg vlak voor een selectiekader. Op leeg vlak slepen verplaatst het beeld."
+              title="Selecteren — klik op kamers en objecten; op leeg vlak slepen voor een selectiekader. Hand: zelfde selectie; pannen met scroll, Spatie of middelste knop."
               aria-label="Selecteren"
               aria-pressed={activeTool === 'select'}
             >

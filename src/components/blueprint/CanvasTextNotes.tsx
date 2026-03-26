@@ -64,9 +64,6 @@ export default function CanvasTextNotes({
           } else {
             store.selectCanvasTextNote(id)
           }
-          if (activeTool === 'select') {
-            store.setActiveTool('pan')
-          }
         }
 
         return (

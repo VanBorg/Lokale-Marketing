@@ -32,7 +32,10 @@ export default function RoomListPanel() {
             <button
               key={id}
               type="button"
-              onClick={() => blueprintStore.getState().select([id])}
+              onClick={() => {
+                blueprintStore.getState().select([id])
+                blueprintStore.getState().requestWallListExpandForRoom(id)
+              }}
               className={[
                 'flex w-full items-center gap-2 px-3 py-2 text-left transition-all duration-150',
                 isSelected
