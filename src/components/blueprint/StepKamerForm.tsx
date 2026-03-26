@@ -167,6 +167,15 @@ export default function StepKamerForm({
 
     const { w: oldW, h: oldH } = axisAlignedBBoxSize(room.vertices)
     const shapeChanged = newShape !== ((room.shape as ShapeType | undefined) ?? 'rechthoek')
+    const curW = room.planWidthCm ?? oldW
+    const curH = room.planDepthCm ?? oldH
+    if (
+      !shapeChanged &&
+      Math.round(newW) === Math.round(curW) &&
+      Math.round(newD) === Math.round(curH)
+    ) {
+      return
+    }
 
     // Preserve the current centroid so the room doesn't jump on the plattegrond
     const n = room.vertices.length
@@ -466,7 +475,10 @@ export default function StepKamerForm({
           placeholder="bijv. Woonkamer"
           onChange={e => setRoomName(e.target.value)}
           onBlur={e => {
-            if (editRoomId) applyEditMeta({ name: e.target.value })
+            if (!editRoomId) return
+            const name = e.target.value
+            const room = blueprintStore.getState().rooms[editRoomId]
+            if (room && room.name !== name) applyEditMeta({ name })
           }}
         />
       </label>

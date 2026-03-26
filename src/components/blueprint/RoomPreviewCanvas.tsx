@@ -92,6 +92,10 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
   const scaleRef       = useRef(1)
   const localVertsRef  = useRef(localVerts)
   const suppressVerticesFromPropsRef = useRef(false)
+  /** Voorkomt dubbele store-commit als we net bij pointer-up al onChange hebben aangeroepen. */
+  const suppressEndPointerSyncOnChangeRef = useRef(false)
+  /** Laatste vertices uit pointer-move (state/ref kunnen bij mouseup nog niet gecommit zijn). */
+  const lastDragVerticesRef = useRef<Point[] | null>(null)
   const verticesPropRef = useRef(vertices)
   verticesPropRef.current = vertices
 
@@ -109,6 +113,7 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
         if (!loc || loc.length < 3) return
         if (!fromProps || fromProps.length !== loc.length) {
           setLocalVerts(loc.map(p => ({ ...p })))
+          suppressEndPointerSyncOnChangeRef.current = false
           return
         }
         let d2 = 0
@@ -122,8 +127,11 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
         } else {
           const snap = loc.map(p => ({ ...p }))
           setLocalVerts(snap)
-          onChange?.(snap)
+          if (!suppressEndPointerSyncOnChangeRef.current) {
+            onChange?.(snap)
+          }
         }
+        suppressEndPointerSyncOnChangeRef.current = false
       })
     })
   }
@@ -263,13 +271,18 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
         lockedLens,
       )
       const newVerts = origVerts.map((v, i) => (i === cornerIdx ? constrained : { ...v }))
+      lastDragVerticesRef.current = newVerts
       setLocalVerts(newVerts)
-      onChange?.(newVerts)
     }
 
     const onUp = () => {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      suppressEndPointerSyncOnChangeRef.current = true
+      const raw = lastDragVerticesRef.current
+      lastDragVerticesRef.current = null
+      const finalVerts = (raw ?? localVertsRef.current).map(p => ({ ...p }))
+      onChange?.(finalVerts)
       endPointerDragSync()
     }
     window.addEventListener('mousemove', onMove)
@@ -344,16 +357,19 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
       for (let i = 0; i < n; i++) {
         if (isVertexPinned(i)) newVerts[i] = { ...origVerts[i] }
       }
+      lastDragVerticesRef.current = newVerts
       setLocalVerts(newVerts)
-      onChange?.(newVerts)
     }
 
     const onUp = () => {
-      const cur = localVertsRef.current
+      const cur = lastDragVerticesRef.current ?? localVertsRef.current
+      lastDragVerticesRef.current = null
       const cxs = cur.map(v => v.x)
       const cys = cur.map(v => v.y)
       const newW = Math.max(50, Math.round((Math.max(...cxs) - Math.min(...cxs)) / 5) * 5)
       const newD = Math.max(50, Math.round((Math.max(...cys) - Math.min(...cys)) / 5) * 5)
+      suppressEndPointerSyncOnChangeRef.current = true
+      onChange?.(cur.map(p => ({ ...p })))
       onDimensionChange?.(newW, newD)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)

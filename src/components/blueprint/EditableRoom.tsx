@@ -72,9 +72,12 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
     [activeTool, stageRef, handleSelect],
   )
 
-  // Whole-room drag: pause undo history, use imperative updates
+  /**
+   * Whole-room drag: Konva verplaatst de groep visueel; pas bij dragEnd schrijven we vertices.
+   * Geen temporal.pause() — zundo slaat bij isTracking:false geen stappen op, waardoor de
+   * enige updateRoomVertices na de sleep ontbrak in de undo-geschiedenis.
+   */
   const handleGroupDragStart = useCallback(() => {
-    blueprintStore.temporal.getState().pause()
     blueprintStore.getState().select([roomId])
   }, [roomId])
 
@@ -84,6 +87,12 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
       let dx = group.x()
       let dy = group.y()
       group.position({ x: 0, y: 0 })
+
+      // Konva kan dragEnd afvuren na klik op een al geselecteerde kamer (nul verplaatsing).
+      // updateRoomVertices zou dan toch Immer muteren → valse undo-stap; overslaan.
+      if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
+        return
+      }
 
       const store = blueprintStore.getState()
       const currentRoom = store.rooms[roomId]
@@ -120,7 +129,6 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
 
       const newVertices = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
       store.updateRoomVertices(roomId, newVertices)
-      blueprintStore.temporal.getState().resume()
     },
     [roomId],
   )

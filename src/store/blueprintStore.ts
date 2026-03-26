@@ -680,6 +680,8 @@ export const useBlueprintStore = create<BlueprintState>()(
         past.rooms === current.rooms &&
         past.roomOrder === current.roomOrder &&
         past.elements === current.elements &&
+        past.canvasTextNotes === current.canvasTextNotes &&
+        past.canvasTextNoteOrder === current.canvasTextNoteOrder &&
         past.measureLines === current.measureLines,
       limit: 50,
     },

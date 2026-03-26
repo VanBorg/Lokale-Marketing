@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Redo2, Undo2 } from 'lucide-react'
 import {
   blueprintStore,
@@ -95,7 +95,19 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const rooms          = useBlueprintStore(s => s.rooms)
 
   const showingNewPreview = builderStep === 0 && previewVertices.length >= 3
-  const isPreviewDraftUndoActive = builderStep === 0 && (!selectedRoom || showingNewPreview)
+  /** Alleen nieuwe-kamer-preview (geen geselecteerde plattegrond-kamer), anders Kamerkaart → temporal. */
+  const isPreviewDraftUndoActive = showingNewPreview && !selectedRoom
+
+  const canTemporalUndo = useSyncExternalStore(
+    blueprintStore.temporal.subscribe,
+    () => blueprintStore.temporal.getState().pastStates.length > 0,
+    () => false,
+  )
+  const canTemporalRedo = useSyncExternalStore(
+    blueprintStore.temporal.subscribe,
+    () => blueprintStore.temporal.getState().futureStates.length > 0,
+    () => false,
+  )
 
   const stateRef = useRef({
     previewVertices,
@@ -159,6 +171,16 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
       return future.slice(1)
     })
   }, [isPreviewDraftUndoActive])
+
+  const handleKamerkaartUndo = useCallback(() => {
+    if (isPreviewDraftUndoActive) previewUndo()
+    else blueprintStore.temporal.getState().undo()
+  }, [isPreviewDraftUndoActive, previewUndo])
+
+  const handleKamerkaartRedo = useCallback(() => {
+    if (isPreviewDraftUndoActive) previewRedo()
+    else blueprintStore.temporal.getState().redo()
+  }, [isPreviewDraftUndoActive, previewRedo])
 
   useEffect(() => {
     if (!isPreviewDraftUndoActive) {
@@ -333,29 +355,65 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
         <div className="flex-[3] min-w-0 min-h-0 border-l border-dark-border bg-dark flex flex-col overflow-y-auto">
 
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-dark-border px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40 shrink-0">
               Kamerkaart
             </span>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
-                onClick={previewUndo}
-                disabled={!isPreviewDraftUndoActive || previewPast.length === 0}
-                className="ui-icon-button disabled:cursor-not-allowed disabled:opacity-30"
-                title="Ongedaan maken (alleen kamerkaart)"
-                aria-label="Ongedaan maken kamerkaart"
+                onClick={handleKamerkaartUndo}
+                disabled={
+                  isPreviewDraftUndoActive ? previewPast.length === 0 : !canTemporalUndo
+                }
+                className={[
+                  'inline-flex h-9 min-w-[9.5rem] items-center justify-center gap-2 rounded-lg border border-dark-border',
+                  'bg-dark-card px-4 text-sm font-medium text-light transition-all duration-200',
+                  'hover:border-accent/50 hover:bg-accent/[0.08] active:bg-accent/[0.05]',
+                  'disabled:pointer-events-none disabled:opacity-35',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-dark',
+                  'theme-light:border-neutral-300 theme-light:bg-white theme-light:focus-visible:ring-offset-white',
+                ].join(' ')}
+                title={
+                  isPreviewDraftUndoActive
+                    ? 'Ongedaan maken (kamerkaart-voorbeeld)'
+                    : 'Ongedaan maken (plattegrond)'
+                }
+                aria-label={
+                  isPreviewDraftUndoActive
+                    ? 'Ongedaan maken kamerkaart-voorbeeld'
+                    : 'Ongedaan maken plattegrond'
+                }
               >
-                <Undo2 size={15} />
+                <Undo2 size={16} className="shrink-0 text-accent" strokeWidth={2} aria-hidden />
+                Ongedaan
               </button>
               <button
                 type="button"
-                onClick={previewRedo}
-                disabled={!isPreviewDraftUndoActive || previewFuture.length === 0}
-                className="ui-icon-button disabled:cursor-not-allowed disabled:opacity-30"
-                title="Opnieuw (alleen kamerkaart)"
-                aria-label="Opnieuw kamerkaart"
+                onClick={handleKamerkaartRedo}
+                disabled={
+                  isPreviewDraftUndoActive ? previewFuture.length === 0 : !canTemporalRedo
+                }
+                className={[
+                  'inline-flex h-9 min-w-[9.5rem] items-center justify-center gap-2 rounded-lg border border-dark-border',
+                  'bg-dark-card px-4 text-sm font-medium text-light transition-all duration-200',
+                  'hover:border-accent/50 hover:bg-accent/[0.08] active:bg-accent/[0.05]',
+                  'disabled:pointer-events-none disabled:opacity-35',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-dark',
+                  'theme-light:border-neutral-300 theme-light:bg-white theme-light:focus-visible:ring-offset-white',
+                ].join(' ')}
+                title={
+                  isPreviewDraftUndoActive
+                    ? 'Opnieuw (kamerkaart-voorbeeld)'
+                    : 'Opnieuw (plattegrond)'
+                }
+                aria-label={
+                  isPreviewDraftUndoActive
+                    ? 'Opnieuw kamerkaart-voorbeeld'
+                    : 'Opnieuw plattegrond'
+                }
               >
-                <Redo2 size={15} />
+                <Redo2 size={16} className="shrink-0 text-accent" strokeWidth={2} aria-hidden />
+                Opnieuw
               </button>
             </div>
           </div>

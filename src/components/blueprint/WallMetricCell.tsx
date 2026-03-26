@@ -48,7 +48,8 @@ export default function WallMetricCell({
     if (raw === '') { setDraft(null); return }
     const meters = parseFloat(raw.replace(',', '.'))
     if (Number.isNaN(meters) || meters < 0.1) { setDraft(null); return }
-    onLengthChange(Math.max(10, Math.round(meters * 100)))
+    const nextCm = Math.max(10, Math.round(meters * 100))
+    if (nextCm !== lengthCm) onLengthChange(nextCm)
     setDraft(null)
   }
 
@@ -100,7 +101,7 @@ export default function WallMetricCell({
         onClick={e => e.stopPropagation()}
         onFocus={() => { if (!locked) setDraft(metersDisplay) }}
         onChange={e => { if (locked) return; setDraft(e.target.value) }}
-        onBlur={() => { setDraft(null) }}
+        onBlur={() => { commitDraft() }}
         onKeyDown={e => {
           if (locked) return
           e.stopPropagation()
