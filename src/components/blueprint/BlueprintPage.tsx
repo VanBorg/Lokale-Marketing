@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RotateCw } from 'lucide-react'
+import { Redo2, Undo2 } from 'lucide-react'
 import {
   blueprintStore,
   useBlueprintStore,
@@ -28,6 +28,41 @@ interface BlueprintPageProps {
   onTabChange: (tab: string) => void
 }
 
+/** Undo-stack alleen voor de kamer-preview (kolom 2), los van plattegrond temporal. */
+interface PreviewSnapshot {
+  vertices: Point[]
+  previewWidth: number
+  previewDepth: number
+  lockedWalls: number[]
+  canvasPreviewEdited: boolean
+}
+
+function snapshotFromRef(ref: {
+  previewVertices: Point[]
+  previewWidth: number
+  previewDepth: number
+  previewLockedWalls: number[]
+  canvasPreviewEdited: boolean
+}): PreviewSnapshot {
+  return {
+    vertices: ref.previewVertices.map(p => ({ ...p })),
+    previewWidth: ref.previewWidth,
+    previewDepth: ref.previewDepth,
+    lockedWalls: [...ref.previewLockedWalls],
+    canvasPreviewEdited: ref.canvasPreviewEdited,
+  }
+}
+
+function clonePreviewSnapshot(s: PreviewSnapshot): PreviewSnapshot {
+  return {
+    vertices: s.vertices.map(p => ({ ...p })),
+    previewWidth: s.previewWidth,
+    previewDepth: s.previewDepth,
+    lockedWalls: [...s.lockedWalls],
+    canvasPreviewEdited: s.canvasPreviewEdited,
+  }
+}
+
 const KAMER_OVERVIEW_EDGE_PADDING_PX = 76
 
 export default function BlueprintPage({ project, onUpdateProject, onTabChange }: BlueprintPageProps) {
@@ -44,9 +79,21 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   useBlueprintKeyboard()
 
   const [previewVertices, setPreviewVertices] = useState<Point[]>([])
+  /** True na slepen in preview / wandlengte; false na sync vanuit formulier — nodig om draaien niet naar preset te resetten. */
+  const [canvasPreviewEdited, setCanvasPreviewEdited] = useState(false)
   const [previewLockedWalls, setPreviewLockedWalls] = useState<number[]>([])
+  const [previewPast, setPreviewPast] = useState<PreviewSnapshot[]>([])
+  const [previewFuture, setPreviewFuture] = useState<PreviewSnapshot[]>([])
+  const skipPreviewHistoryRef = useRef(false)
   const [previewWidth, setPreviewWidth]  = useState(400)
   const [previewDepth, setPreviewDepth]  = useState(300)
+  const [builderStep, setBuilderStep] = useState(0)
+  const [selectedWallIndex, setSelectedWallIndex] = useState<number | null>(null)
+  const [hoveredWall, setHoveredWall] = useState<{ roomKey: string; wallIndex: number } | null>(null)
+  const [canvasHoveredWallIndex, setCanvasHoveredWallIndex] = useState<number | null>(null)
+  const previewRoomKey = 'preview'
+  const previewWrapRef = useRef<HTMLDivElement>(null)
+  const [previewStageSize, setPreviewStageSize] = useState({ w: 280, h: 248 })
 
   const selectedIds    = useSelectedIds()
   const selectedRoomId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -54,13 +101,83 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const roomOrder      = useBlueprintStore(s => s.roomOrder)
   const rooms          = useBlueprintStore(s => s.rooms)
 
-  const [selectedWallIndex, setSelectedWallIndex] = useState<number | null>(null)
-  const [hoveredWall, setHoveredWall] = useState<{ roomKey: string; wallIndex: number } | null>(null)
-  const [canvasHoveredWallIndex, setCanvasHoveredWallIndex] = useState<number | null>(null)
+  const showingNewPreview = builderStep === 0 && previewVertices.length >= 3
+  const isPreviewDraftUndoActive = builderStep === 0 && (!selectedRoom || showingNewPreview)
 
-  const previewRoomKey = 'preview'
-  const previewWrapRef = useRef<HTMLDivElement>(null)
-  const [previewStageSize, setPreviewStageSize] = useState({ w: 280, h: 248 })
+  const stateRef = useRef({
+    previewVertices,
+    previewWidth,
+    previewDepth,
+    previewLockedWalls,
+    canvasPreviewEdited,
+  })
+  stateRef.current = {
+    previewVertices,
+    previewWidth,
+    previewDepth,
+    previewLockedWalls,
+    canvasPreviewEdited,
+  }
+
+  const pushPreviewHistory = useCallback(() => {
+    if (skipPreviewHistoryRef.current) return
+    if (!isPreviewDraftUndoActive) return
+    const snap = snapshotFromRef(stateRef.current)
+    setPreviewPast(p => [...p.slice(-49), snap])
+    setPreviewFuture([])
+  }, [isPreviewDraftUndoActive])
+
+  const previewUndo = useCallback(() => {
+    if (!isPreviewDraftUndoActive) return
+    setPreviewPast(past => {
+      if (past.length === 0) return past
+      const prevSnap = past[past.length - 1]
+      const currentSnap = snapshotFromRef(stateRef.current)
+      skipPreviewHistoryRef.current = true
+      setPreviewFuture(f => [clonePreviewSnapshot(currentSnap), ...f])
+      setPreviewVertices(prevSnap.vertices.map(p => ({ ...p })))
+      setPreviewWidth(prevSnap.previewWidth)
+      setPreviewDepth(prevSnap.previewDepth)
+      setPreviewLockedWalls([...prevSnap.lockedWalls])
+      setCanvasPreviewEdited(prevSnap.canvasPreviewEdited)
+      setTimeout(() => {
+        skipPreviewHistoryRef.current = false
+      }, 0)
+      return past.slice(0, -1)
+    })
+  }, [isPreviewDraftUndoActive])
+
+  const previewRedo = useCallback(() => {
+    if (!isPreviewDraftUndoActive) return
+    setPreviewFuture(future => {
+      if (future.length === 0) return future
+      const nextSnap = future[0]
+      const currentSnap = snapshotFromRef(stateRef.current)
+      skipPreviewHistoryRef.current = true
+      setPreviewPast(p => [...p, clonePreviewSnapshot(currentSnap)])
+      setPreviewVertices(nextSnap.vertices.map(p => ({ ...p })))
+      setPreviewWidth(nextSnap.previewWidth)
+      setPreviewDepth(nextSnap.previewDepth)
+      setPreviewLockedWalls([...nextSnap.lockedWalls])
+      setCanvasPreviewEdited(nextSnap.canvasPreviewEdited)
+      setTimeout(() => {
+        skipPreviewHistoryRef.current = false
+      }, 0)
+      return future.slice(1)
+    })
+  }, [isPreviewDraftUndoActive])
+
+  useEffect(() => {
+    if (!isPreviewDraftUndoActive) {
+      setPreviewPast([])
+      setPreviewFuture([])
+    }
+  }, [isPreviewDraftUndoActive])
+
+  useEffect(() => {
+    setPreviewPast([])
+    setPreviewFuture([])
+  }, [project.id])
 
   useEffect(() => {
     const el = previewWrapRef.current
@@ -90,38 +207,55 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
     blueprintStore.getState().clearSelection()
   }
 
-  const rotateRoom90 = () => {
-    if (!selectedRoom) return
-    const rotated = selectedRoom.vertices.map(v => ({ x: -v.y, y: v.x }))
-    blueprintStore.getState().updateRoomVertices(selectedRoom.id, rotated)
-  }
-
   const handleWallLengthChange = useCallback((roomId: string, wallIndex: number, value: number) => {
     blueprintStore.getState().setWallLength(roomId, wallIndex, Math.max(10, value))
   }, [])
 
   const togglePreviewLock = useCallback((wallIndex: number) => {
+    pushPreviewHistory()
     setPreviewLockedWalls(prev =>
       prev.includes(wallIndex) ? prev.filter(i => i !== wallIndex) : [...prev, wallIndex].sort((a, b) => a - b),
     )
-  }, [])
+  }, [pushPreviewHistory])
+
+  const applyPreviewFromForm = useCallback((v: Point[]) => {
+    pushPreviewHistory()
+    setCanvasPreviewEdited(false)
+    setPreviewVertices(v)
+  }, [pushPreviewHistory])
+
+  const applyPreviewFromCanvas = useCallback((v: Point[] | ((prev: Point[]) => Point[])) => {
+    pushPreviewHistory()
+    setCanvasPreviewEdited(true)
+    setPreviewVertices(v)
+  }, [pushPreviewHistory])
 
   const handlePreviewWallLengthChange = useCallback((wallIndex: number, value: number) => {
     if (previewLockedWalls.includes(wallIndex)) return
     const clamped = Math.max(10, value)
-    setPreviewVertices(prev =>
+    applyPreviewFromCanvas(prev =>
       applyWallLengthRespectingLocks(prev, wallIndex, clamped, previewLockedWalls),
     )
-  }, [previewLockedWalls])
+  }, [previewLockedWalls, applyPreviewFromCanvas])
 
-  const displayedRoomKey = selectedRoomId ?? previewRoomKey
+  /** Step 0: nieuwe preview in kolom 2 — ook bij geselecteerde kamer zodat rotatie zichtbaar blijft. */
+  const displayedRoomKey = showingNewPreview ? previewRoomKey : (selectedRoomId ?? previewRoomKey)
   const listHoverWallIndex =
     hoveredWall && hoveredWall.roomKey === displayedRoomKey ? hoveredWall.wallIndex : null
 
-  const planSpanW = selectedRoom
+  /** Bij nieuwe preview: span = bbox van echte vertices (zelfde als geplaatste kamer); anders springt de schaal bij wisselen Wanden ↔ Kamer. */
+  const previewBbox =
+    showingNewPreview && previewVertices.length >= 3
+      ? axisAlignedBBoxSize(previewVertices)
+      : null
+  const planSpanW = showingNewPreview
+    ? (previewBbox?.w ?? previewWidth)
+    : selectedRoom
     ? (selectedRoom.planWidthCm ?? axisAlignedBBoxSize(selectedRoom.vertices).w)
     : previewWidth
-  const planSpanH = selectedRoom
+  const planSpanH = showingNewPreview
+    ? (previewBbox?.h ?? previewDepth)
+    : selectedRoom
     ? (selectedRoom.planDepthCm ?? axisAlignedBBoxSize(selectedRoom.vertices).h)
     : previewDepth
 
@@ -168,7 +302,33 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
         {/* Column 2 — Kamer Overview */}
         <div className="flex-[3] min-w-0 min-h-0 border-l border-dark-border bg-dark flex flex-col overflow-y-auto">
 
-          <div className="px-3 py-2 border-b border-dark-border shrink-0" aria-hidden="true" />
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-dark-border px-3 py-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40">
+              Kamerkaart
+            </span>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={previewUndo}
+                disabled={!isPreviewDraftUndoActive || previewPast.length === 0}
+                className="ui-icon-button disabled:cursor-not-allowed disabled:opacity-30"
+                title="Ongedaan maken (alleen kamerkaart)"
+                aria-label="Ongedaan maken kamerkaart"
+              >
+                <Undo2 size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={previewRedo}
+                disabled={!isPreviewDraftUndoActive || previewFuture.length === 0}
+                className="ui-icon-button disabled:cursor-not-allowed disabled:opacity-30"
+                title="Opnieuw (alleen kamerkaart)"
+                aria-label="Opnieuw kamerkaart"
+              >
+                <Redo2 size={15} />
+              </button>
+            </div>
+          </div>
 
           <div
             ref={previewWrapRef}
@@ -178,35 +338,41 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
               edgePaddingPx={KAMER_OVERVIEW_EDGE_PADDING_PX}
               planSpanWidthCm={planSpanW}
               planSpanDepthCm={planSpanH}
-              vertices={selectedRoom ? selectedRoom.vertices : previewVertices}
-              onChange={selectedRoom
+              vertices={showingNewPreview ? previewVertices : (selectedRoom ? selectedRoom.vertices : previewVertices)}
+              onChange={showingNewPreview
+                ? applyPreviewFromCanvas
+                : selectedRoom
                 ? (verts) => blueprintStore.getState().updateRoomVertices(selectedRoom.id, verts)
-                : setPreviewVertices
+                : applyPreviewFromCanvas
               }
-              onDimensionChange={selectedRoom
-                ? undefined
-                : (w, d) => { setPreviewWidth(w); setPreviewDepth(d) }
+              onDimensionChange={showingNewPreview || !selectedRoom
+                ? (w, d) => {
+                    pushPreviewHistory()
+                    setPreviewWidth(w)
+                    setPreviewDepth(d)
+                  }
+                : undefined
               }
               width={previewStageSize.w}
               height={previewStageSize.h}
-              room={selectedRoom}
-              onToggleWallLock={selectedRoom
+              room={showingNewPreview ? null : selectedRoom}
+              onToggleWallLock={!showingNewPreview && selectedRoom
                 ? (wallIndex) => blueprintStore.getState().toggleWallLock(selectedRoom.id, wallIndex)
                 : undefined
               }
-              draftLockedWalls={selectedRoom ? undefined : previewLockedWalls}
-              onDraftToggleLock={selectedRoom ? undefined : togglePreviewLock}
+              draftLockedWalls={showingNewPreview || !selectedRoom ? previewLockedWalls : undefined}
+              onDraftToggleLock={showingNewPreview || !selectedRoom ? togglePreviewLock : undefined}
               selectedWallIndex={
-                selectedRoom
+                !showingNewPreview && selectedRoom
                   ? selectedWallIndex
                   : (previewVertices.length >= 3 ? selectedWallIndex : undefined)
               }
               onSelectWall={
-                selectedRoom
+                !showingNewPreview && selectedRoom
                   ? setSelectedWallIndex
                   : (previewVertices.length >= 3 ? setSelectedWallIndex : undefined)
               }
-              hideWallDetailPanel={!!selectedRoom || (previewVertices.length >= 3 && !selectedRoom)}
+              hideWallDetailPanel={(!showingNewPreview && !!selectedRoom) || (previewVertices.length >= 3 && (showingNewPreview || !selectedRoom))}
               listHoverWallIndex={listHoverWallIndex}
               onHoverWall={setCanvasHoveredWallIndex}
             />
@@ -265,29 +431,20 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
             />
           )}
 
-          {selectedRoom && (
-            <div className="px-3 py-2 border-t border-dark-border shrink-0">
-              <button
-                type="button"
-                onClick={rotateRoom90}
-                className="flex items-center gap-1.5 text-xs text-light/50 hover:text-light border border-dark-border hover:border-accent/40 rounded-lg px-3 py-1.5 transition-all duration-150"
-              >
-                <RotateCw size={12} />
-                Roteer 90°
-              </button>
-            </div>
-          )}
-
         </div>
 
         {/* Column 3 — Bouwer */}
         <div className="flex-[2] min-w-0 min-h-0 border-l border-dark-border overflow-y-auto">
           <BuilderPanel
-            onPreviewChange={setPreviewVertices}
+            onPreviewChange={applyPreviewFromForm}
+            onCanvasPreviewChange={applyPreviewFromCanvas}
+            canvasPreviewEdited={canvasPreviewEdited}
             previewWidth={previewWidth}
             previewDepth={previewDepth}
             onWidthChange={setPreviewWidth}
             onDepthChange={setPreviewDepth}
+            onActiveStepChange={setBuilderStep}
+            parentPreviewVertices={previewVertices}
           />
         </div>
 

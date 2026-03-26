@@ -1,12 +1,31 @@
 import { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react'
+import { RotateCw } from 'lucide-react'
 import { blueprintStore } from '../../store/blueprintStore'
 import {
+  axisAlignedBBoxSize,
   generateShapeVertices,
   formatNlDecimal,
 } from '../../utils/blueprintGeometry'
 import type { Point, ShapeType, RoofType } from '../../utils/blueprintGeometry'
 import type { RoomCeiling } from '../../store/blueprintStore'
 import RoomShapePicker from './RoomShapePicker'
+
+/** 90° CW in schermcoördinaten (y naar beneden): (x,y) → (-y, x) per stap. */
+function rotateVerticesBySteps(verts: Point[], steps: number): Point[] {
+  let v = verts
+  for (let i = 0; i < ((steps % 4) + 4) % 4; i++) {
+    v = v.map(p => ({ x: -p.y, y: p.x }))
+  }
+  return v
+}
+
+function rotateVertices90CW(verts: Point[]): Point[] {
+  return verts.map(p => ({ x: -p.y, y: p.x }))
+}
+
+function rotateVertices90CCW(verts: Point[]): Point[] {
+  return verts.map(p => ({ x: p.y, y: -p.x }))
+}
 
 /** Zelfde stap als wandlengte in het metrische rooster (5 cm). */
 const METER_FIELD_NUDGE_CM = 5
@@ -170,16 +189,24 @@ export interface StepKamerFormProps {
   onWidthChange?: (w: number) => void
   onDepthChange?: (d: number) => void
   currentPreviewVertices?: Point[]
+  /** BlueprintPage `previewVertices` — canvas + form single source of truth for placement. */
+  parentPreviewVertices?: Point[]
+  /** True if user dragged preview / edited walls — rotate must transform vertices, not reset to preset. */
+  canvasPreviewEdited?: boolean
+  onCanvasPreviewChange?: (vertices: Point[]) => void
 }
 
 export default function StepKamerForm({
   onNext,
   onPreviewChange,
+  onCanvasPreviewChange,
+  canvasPreviewEdited = false,
   controlledWidth,
   controlledDepth,
   onWidthChange,
   onDepthChange,
   currentPreviewVertices,
+  parentPreviewVertices,
 }: StepKamerFormProps) {
   const [shape, setShape] = useState<ShapeType>('rechthoek')
   const [localWidth, setLocalWidth] = useState(controlledWidth ?? 400)
@@ -210,6 +237,10 @@ export default function StepKamerForm({
   const [widthDraftM, setWidthDraftM] = useState<string | null>(null)
   const [depthDraftM, setDepthDraftM] = useState<string | null>(null)
 
+  const [rotationSteps, setRotationSteps] = useState(0) // 0–3, elke stap = 90° CW (alleen preset-modus)
+  const rotationStepsRef = useRef(rotationSteps)
+  rotationStepsRef.current = rotationSteps
+
   const cmFromMetersInput = (raw: string): number | null => {
     const m = parseFloat(raw.trim().replace(',', '.'))
     if (Number.isNaN(m)) return null
@@ -222,7 +253,12 @@ export default function StepKamerForm({
     setWidthDraftM(null)
     if (raw === '') return
     const cm = cmFromMetersInput(raw)
-    if (cm !== null) setRoomWidth(cm)
+    if (cm !== null) {
+      setRoomWidth(cm)
+      onPreviewChange?.(
+        rotateVerticesBySteps(generateShapeVertices(shape, cm, roomDepth), rotationStepsRef.current),
+      )
+    }
   }
 
   const commitDepthM = () => {
@@ -231,31 +267,68 @@ export default function StepKamerForm({
     setDepthDraftM(null)
     if (raw === '') return
     const cm = cmFromMetersInput(raw)
-    if (cm !== null) setRoomDepth(cm)
+    if (cm !== null) {
+      setRoomDepth(cm)
+      onPreviewChange?.(
+        rotateVerticesBySteps(generateShapeVertices(shape, roomWidth, cm), rotationStepsRef.current),
+      )
+    }
   }
 
   const nudgeWidthCm = (deltaCm: number) => {
     setWidthDraftM(null)
     const base =
       widthDraftM !== null ? (cmFromMetersInput(widthDraftM) ?? roomWidth) : roomWidth
-    setRoomWidth(Math.min(5000, Math.max(50, base + deltaCm)))
+    const next = Math.min(5000, Math.max(50, base + deltaCm))
+    setRoomWidth(next)
+    onPreviewChange?.(
+      rotateVerticesBySteps(generateShapeVertices(shape, next, roomDepth), rotationStepsRef.current),
+    )
   }
 
   const nudgeDepthCm = (deltaCm: number) => {
     setDepthDraftM(null)
     const base =
       depthDraftM !== null ? (cmFromMetersInput(depthDraftM) ?? roomDepth) : roomDepth
-    setRoomDepth(Math.min(5000, Math.max(50, base + deltaCm)))
+    const next = Math.min(5000, Math.max(50, base + deltaCm))
+    setRoomDepth(next)
+    onPreviewChange?.(
+      rotateVerticesBySteps(generateShapeVertices(shape, roomWidth, next), rotationStepsRef.current),
+    )
   }
 
-  const previewVertices = useMemo(
+  const generatedBase = useMemo(
     () => generateShapeVertices(shape, roomWidth, roomDepth),
     [shape, roomWidth, roomDepth],
   )
 
+  const formRotated = useMemo(
+    () => rotateVerticesBySteps(generatedBase, rotationSteps),
+    [generatedBase, rotationSteps],
+  )
+
+  /** Wat we tonen: parent (canvas + canvas-rotatie) of preset uit het formulier. */
+  const previewVertices =
+    parentPreviewVertices && parentPreviewVertices.length >= 3
+      ? parentPreviewVertices
+      : formRotated
+
+  // Sync preset vanuit formulier — niet tijdens canvas-sleep (dimension props volgen dan de sleep).
   useEffect(() => {
-    onPreviewChange?.(previewVertices)
-  }, [previewVertices, onPreviewChange])
+    if (canvasPreviewEdited) return
+    onPreviewChange?.(
+      rotateVerticesBySteps(
+        generateShapeVertices(shape, roomWidth, roomDepth),
+        rotationStepsRef.current,
+      ),
+    )
+  }, [shape, roomWidth, roomDepth, onPreviewChange, canvasPreviewEdited])
+
+  // Alleen preset-modus: rotatie via steps syncen.
+  useEffect(() => {
+    if (canvasPreviewEdited) return
+    onPreviewChange?.(formRotated)
+  }, [canvasPreviewEdited, formRotated, onPreviewChange])
 
   const handleSwitchToPerWall = () => {
     setPerWallHeights(Array(previewVertices.length).fill(wallHeight))
@@ -267,11 +340,16 @@ export default function StepKamerForm({
   }
 
   const handlePlace = useCallback(() => {
+    /** BlueprintPage-preview wint; anders BuilderPanel-state; anders preset. */
     const vertices =
-      (currentPreviewVertices && currentPreviewVertices.length >= 3)
-        ? currentPreviewVertices
-        : generateShapeVertices(shape, roomWidth, roomDepth)
+      parentPreviewVertices && parentPreviewVertices.length >= 3
+        ? parentPreviewVertices
+        : currentPreviewVertices && currentPreviewVertices.length >= 3
+          ? currentPreviewVertices
+          : generateShapeVertices(shape, roomWidth, roomDepth)
     if (vertices.length < 3) return
+
+    const { w: planWidthCm, h: planDepthCm } = axisAlignedBBoxSize(vertices)
 
     const ceiling: RoomCeiling = {
       type: ceilingType,
@@ -286,8 +364,8 @@ export default function StepKamerForm({
       name: roomName || 'Ruimte',
       wallHeight,
       shape,
-      planWidthCm: roomWidth,
-      planDepthCm: roomDepth,
+      planWidthCm,
+      planDepthCm,
       roofType,
       roofPeakHeight,
       ...(wallHeightMode === 'per-wall' ? { wallHeights: perWallHeights } : {}),
@@ -298,7 +376,7 @@ export default function StepKamerForm({
   }, [
     currentPreviewVertices, shape, roomWidth, roomDepth, roomName, wallHeight, roofType, roofPeakHeight,
     wallHeightMode, perWallHeights, ceilingType, ceilingHeight, ceilingRidgeHeight,
-    cassetteGrid, onNext,
+    cassetteGrid, onNext, parentPreviewVertices,
   ])
 
   const showPeakHeight = roofType !== 'plat' && roofType !== 'platband'
@@ -306,7 +384,47 @@ export default function StepKamerForm({
 
   return (
     <div className="space-y-3">
-      <RoomShapePicker selected={shape} onSelect={setShape} />
+      <RoomShapePicker
+        selected={shape}
+        onSelect={s => {
+          setShape(s)
+          setRotationSteps(0)
+          onPreviewChange?.(rotateVerticesBySteps(generateShapeVertices(s, roomWidth, roomDepth), 0))
+        }}
+      />
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (canvasPreviewEdited && parentPreviewVertices && parentPreviewVertices.length >= 3) {
+              onCanvasPreviewChange?.(rotateVertices90CCW(parentPreviewVertices))
+            } else {
+              setRotationSteps(prev => (prev + 3) % 4)
+            }
+          }}
+          title="Links draaien"
+          className="flex w-full items-center justify-center gap-1.5 text-xs text-light/50 hover:text-light border border-dark-border hover:border-accent/40 rounded-lg px-3 py-2 transition-all duration-150"
+        >
+          <RotateCw size={12} className="shrink-0 -scale-x-100" />
+          Links
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (canvasPreviewEdited && parentPreviewVertices && parentPreviewVertices.length >= 3) {
+              onCanvasPreviewChange?.(rotateVertices90CW(parentPreviewVertices))
+            } else {
+              setRotationSteps(prev => (prev + 1) % 4)
+            }
+          }}
+          title="Rechts draaien"
+          className="flex w-full items-center justify-center gap-1.5 text-xs text-light/50 hover:text-light border border-dark-border hover:border-accent/40 rounded-lg px-3 py-2 transition-all duration-150"
+        >
+          <RotateCw size={12} className="shrink-0" />
+          Rechts
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="flex flex-col gap-1">

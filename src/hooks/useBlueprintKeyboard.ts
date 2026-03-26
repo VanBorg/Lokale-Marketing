@@ -1,10 +1,6 @@
 import { useEffect } from 'react'
 import { blueprintStore } from '../store/blueprintStore'
 
-const ZOOM_STEP = 0.1
-const MIN_SCALE = 0.1
-const MAX_SCALE = 5
-
 export function useBlueprintKeyboard() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -54,36 +50,14 @@ export function useBlueprintKeyboard() {
         return
       }
 
-      // Zoom in / out — keep world point under canvas centre fixed (same as wheel zoom)
+      // Zoom — 10% per stap (zelfde als toolbar / muiswiel)
       if (e.key === '+' || e.key === '=') {
-        const { viewport, canvasSize } = store
-        const cx = canvasSize.width / 2
-        const cy = canvasSize.height / 2
-        const oldScale = viewport.scale
-        const newScale = Math.min(MAX_SCALE, oldScale + ZOOM_STEP)
-        const worldX = (cx - viewport.x) / oldScale
-        const worldY = (cy - viewport.y) / oldScale
-        store.setViewport({
-          scale: newScale,
-          x: cx - worldX * newScale,
-          y: cy - worldY * newScale,
-        })
+        store.zoomViewportByPercentDelta(10)
         return
       }
 
       if (e.key === '-') {
-        const { viewport, canvasSize } = store
-        const cx = canvasSize.width / 2
-        const cy = canvasSize.height / 2
-        const oldScale = viewport.scale
-        const newScale = Math.max(MIN_SCALE, oldScale - ZOOM_STEP)
-        const worldX = (cx - viewport.x) / oldScale
-        const worldY = (cy - viewport.y) / oldScale
-        store.setViewport({
-          scale: newScale,
-          x: cx - worldX * newScale,
-          y: cy - worldY * newScale,
-        })
+        store.zoomViewportByPercentDelta(-10)
         return
       }
 

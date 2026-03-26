@@ -113,6 +113,9 @@ interface BlueprintState extends BlueprintDoc {
   setCanvasSize: (size: { width: number; height: number }) => void
   /** World (0,0) centred; scale fits ~12 minor squares vertically (same as S / project open). */
   recenterViewportToOrigin: () => void
+  /** Zoom t.o.v. 100% = standaardschaal voor canvas-hoogte; `deltaPercent` bijv. +10 / −10 per stap. */
+  zoomViewportByPercentDelta: (deltaPercent: number) => void
+  zoomViewportAtCenter: (direction: 'in' | 'out') => void
 }
 
 // ─── Default values ────────────────────────────────────────────────────────
@@ -380,6 +383,33 @@ export const useBlueprintStore = create<BlueprintState>()(
           state.viewport.scale = getDefaultBlueprintScaleForCanvasHeight(height)
         })
       },
+
+      /**
+       * Zoom in stappen van X% t.o.v. 100% (basis = `getDefaultBlueprintScaleForCanvasHeight`).
+       * Alleen viewport — hoort niet in undo-geschiedenis (zie temporal `equality`).
+       */
+      zoomViewportByPercentDelta: (deltaPercent: number) => {
+        set(state => {
+          const { width, height } = state.canvasSize
+          if (width <= 0 || height <= 0) return
+          const base = getDefaultBlueprintScaleForCanvasHeight(height)
+          const cx = width / 2
+          const cy = height / 2
+          const oldScale = state.viewport.scale
+          const currentPercent = (oldScale / base) * 100
+          const nextPercent = Math.max(10, Math.min(800, currentPercent + deltaPercent))
+          const next = clampViewScale(base * (nextPercent / 100))
+          const worldX = (cx - state.viewport.x) / oldScale
+          const worldY = (cy - state.viewport.y) / oldScale
+          state.viewport.scale = next
+          state.viewport.x = cx - worldX * next
+          state.viewport.y = cy - worldY * next
+        })
+      },
+
+      zoomViewportAtCenter: (direction: 'in' | 'out') => {
+        get().zoomViewportByPercentDelta(direction === 'in' ? 10 : -10)
+      },
     })),
     {
       partialize: (state): BlueprintDoc => ({
@@ -387,6 +417,15 @@ export const useBlueprintStore = create<BlueprintState>()(
         roomOrder: state.roomOrder,
         elements: state.elements,
       }),
+      /**
+       * Zonder equality: elke `set` (viewport, selectie, pan, …) duwt een undo-stap,
+       * terwijl `partialize` alleen het document herstelt — dan moet je meerdere keren
+       * undo drukken voordat een kamerwijziging zichtbaar teruggaat.
+       */
+      equality: (past, current) =>
+        past.rooms === current.rooms &&
+        past.roomOrder === current.roomOrder &&
+        past.elements === current.elements,
       limit: 50,
     },
   ),

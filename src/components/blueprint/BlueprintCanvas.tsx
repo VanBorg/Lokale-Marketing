@@ -21,9 +21,6 @@ const ORIGIN_CROSS_HALF = MINOR_GRID * 1.5 // 300 cm
 const ORIGIN_GLOW_OUTER = Math.round(ORIGIN_CROSS_HALF * 1.1)
 const ORIGIN_GLOW_MID = Math.round(ORIGIN_CROSS_HALF * 1.05)
 
-const MIN_SCALE = 0.1
-const MAX_SCALE = 8
-const ZOOM_FACTOR = 1.08
 /** After project open, RO often fires many times as layout settles — recentre on each until quiet, then clear flag. */
 const RECENTER_AFTER_OPEN_MS = 150
 
@@ -187,27 +184,12 @@ export default function BlueprintCanvas() {
     }
   }, [])
 
-  // Wheel zoom — anchor on canvas centre so world (0,0) stays centred after S; no diagonal drift
+  // Wheel zoom — zelfde 10%-stappen als toolbar / toetsenbord (centre-fixed via store)
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault()
-    const stage = stageRef.current
-    if (!stage || size.width <= 0 || size.height <= 0) return
-    const oldScale = stage.scaleX()
-    const cx = size.width / 2
-    const cy = size.height / 2
-
+    if (size.width <= 0 || size.height <= 0) return
     const direction = e.evt.deltaY < 0 ? 1 : -1
-    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, oldScale * Math.pow(ZOOM_FACTOR, direction)))
-
-    const worldAtCentre = {
-      x: (cx - stage.x()) / oldScale,
-      y: (cy - stage.y()) / oldScale,
-    }
-    const newPos = {
-      x: cx - worldAtCentre.x * newScale,
-      y: cy - worldAtCentre.y * newScale,
-    }
-    blueprintStore.getState().setViewport({ scale: newScale, x: newPos.x, y: newPos.y })
+    blueprintStore.getState().zoomViewportByPercentDelta(direction * 10)
   }, [size.width, size.height])
 
   const attachWindowPanListeners = useCallback(

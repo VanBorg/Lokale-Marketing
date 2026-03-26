@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { Point } from '../../utils/blueprintGeometry'
 import StepKamerForm from './StepKamerForm'
 import StepPlafond from './steps/StepPlafond'
@@ -75,14 +75,33 @@ function AccordionHeader({ index, label, isActive, isCompleted, isLocked, onClic
 
 interface BuilderPanelProps {
   onPreviewChange?: (vertices: Point[]) => void
+  /** Updates preview from canvas (drag/rotate); keeps canvas-edited flag. */
+  onCanvasPreviewChange?: (vertices: Point[]) => void
+  canvasPreviewEdited?: boolean
   previewWidth?: number
   previewDepth?: number
   onWidthChange?: (w: number) => void
   onDepthChange?: (d: number) => void
+  onActiveStepChange?: (step: number) => void
+  parentPreviewVertices?: Point[]
 }
 
-export default function BuilderPanel({ onPreviewChange, previewWidth, previewDepth, onWidthChange, onDepthChange }: BuilderPanelProps) {
+export default function BuilderPanel({
+  onPreviewChange,
+  onCanvasPreviewChange,
+  canvasPreviewEdited,
+  previewWidth,
+  previewDepth,
+  onWidthChange,
+  onDepthChange,
+  onActiveStepChange,
+  parentPreviewVertices,
+}: BuilderPanelProps) {
   const [activeStep, setActiveStep] = useState(0)
+
+  useEffect(() => {
+    onActiveStepChange?.(activeStep)
+  }, [activeStep, onActiveStepChange])
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
   const [lastRoomId, setLastRoomId] = useState<string | null>(null)
   const [currentPreviewVertices, setCurrentPreviewVertices] = useState<Point[]>([])
@@ -91,6 +110,11 @@ export default function BuilderPanel({ onPreviewChange, previewWidth, previewDep
     setCurrentPreviewVertices(vertices)
     onPreviewChange?.(vertices)
   }, [onPreviewChange])
+
+  const handleCanvasPreviewChange = useCallback((vertices: Point[]) => {
+    setCurrentPreviewVertices(vertices)
+    onCanvasPreviewChange?.(vertices)
+  }, [onCanvasPreviewChange])
 
   const goPrev = useCallback(() => {
     setActiveStep(prev => Math.max(prev - 1, 0))
@@ -171,11 +195,14 @@ export default function BuilderPanel({ onPreviewChange, previewWidth, previewDep
                     <StepKamerForm
                       onNext={handleStepKamerNext}
                       onPreviewChange={handlePreviewChange}
+                      onCanvasPreviewChange={handleCanvasPreviewChange}
+                      canvasPreviewEdited={canvasPreviewEdited}
                       controlledWidth={previewWidth}
                       controlledDepth={previewDepth}
                       onWidthChange={onWidthChange}
                       onDepthChange={onDepthChange}
                       currentPreviewVertices={currentPreviewVertices}
+                      parentPreviewVertices={parentPreviewVertices}
                     />
                   </div>
                 )}
