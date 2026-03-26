@@ -88,6 +88,18 @@ export default function EditorPage({ project, onUpdateProject, children, undoRed
     blueprintStore.setState({
       canvasTextNotes: {},
       canvasTextNoteOrder: [],
+      editingCanvasTextNoteId: null,
+      selectedCanvasTextNoteIds: [],
+      drawingStrokes: [],
+      selectedDrawingStrokeIndices: [],
+      measureLines: [],
+      measureDraft: null,
+      selectedMeasureLineIds: [],
+      selectedIds: [],
+      elements: {},
+      activeTool: 'select',
+      wallListExpandSeq: 0,
+      wallListExpandRoomId: null,
     })
     blueprintStore.temporal.getState().clear()
   }

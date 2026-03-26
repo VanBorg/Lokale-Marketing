@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useRoom } from '../../../store/blueprintStore'
 import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
-import { polygonArea } from '../../../utils/blueprintGeometry'
+import {
+  clampCmFromMetersField,
+  cmToMeterFieldValue,
+  formatCmAsMeters,
+  polygonArea,
+} from '../../../utils/blueprintGeometry'
 
 const AFWERKING_OPTIONS = [
   'Stucwerk glad',
@@ -45,7 +50,7 @@ export default function StepPlafond({ roomId, onNext, onPrev }: StepPlafondProps
         <div className="flex justify-between text-xs">
           <span className="text-neutral-500 theme-light:text-neutral-600">Wandhoogte</span>
           <span className="text-neutral-300 theme-light:text-neutral-800">
-            {room ? `${room.wallHeight} cm` : '—'}
+            {room ? formatCmAsMeters(room.wallHeight) : '—'}
           </span>
         </div>
         <div className="flex justify-between text-xs">
@@ -81,17 +86,20 @@ export default function StepPlafond({ roomId, onNext, onPrev }: StepPlafondProps
         </label>
         {systeemplafond && (
           <label className="flex flex-col gap-1 pl-6">
-            <span className="ui-label">Verlaagde hoogte (cm)</span>
+            <span className="ui-label">Verlaagde hoogte (m)</span>
             <div className="flex items-center gap-2">
               <input
                 type="number"
-                className="ui-input text-sm py-1.5 flex-1"
-                value={verlaagdeHoogte}
-                min={100}
-                max={500}
-                onChange={e => setVerlaagdeHoogte(Number(e.target.value))}
+                className="ui-input text-sm py-1.5 flex-1 tabular-nums"
+                value={cmToMeterFieldValue(verlaagdeHoogte)}
+                min={1}
+                max={5}
+                step={0.01}
+                onChange={e =>
+                  setVerlaagdeHoogte(clampCmFromMetersField(parseFloat(e.target.value), 100, 500))
+                }
               />
-              <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
+              <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">m</span>
             </div>
           </label>
         )}

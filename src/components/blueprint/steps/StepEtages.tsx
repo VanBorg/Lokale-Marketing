@@ -1,5 +1,6 @@
 import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
 import { nanoid } from 'nanoid'
+import { clampCmFromMetersField, cmToMeterFieldValue } from '../../../utils/blueprintGeometry'
 
 type EtageType = 'begane grond' | 'verdieping' | 'zolder' | 'kelder' | 'dak'
 
@@ -142,17 +143,20 @@ export default function StepEtages({ onNext, onPrev }: StepEtagesProps) {
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="ui-label">Dakoversteekhoogte (cm)</span>
+          <span className="ui-label">Dakoversteekhoogte (m)</span>
           <div className="flex items-center gap-2">
             <input
               type="number"
-              className="ui-input text-sm py-1.5 flex-1"
-              value={dakoversteekhoogte}
+              className="ui-input text-sm py-1.5 flex-1 tabular-nums"
+              value={cmToMeterFieldValue(dakoversteekhoogte)}
               min={0}
-              max={300}
-              onChange={e => setDakoversteekhoogte(Number(e.target.value))}
+              max={3}
+              step={0.01}
+              onChange={e =>
+                setDakoversteekhoogte(clampCmFromMetersField(parseFloat(e.target.value), 0, 300))
+              }
             />
-            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
+            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">m</span>
           </div>
         </label>
       </div>

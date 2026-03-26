@@ -3,19 +3,21 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { blueprintStore, useBlueprintStore, useSelectedIds } from '../../store/blueprintStore'
 import { polygonArea } from '../../utils/blueprintGeometry'
 
+interface RoomListOverlayProps {
+  onStartNewRoom: () => void
+}
+
 /**
  * Floating panel on the floor-plan canvas (top-left) that lists every placed
  * room in placement order.  Clicking a row selects that room, which
  * automatically drives the BuilderPanel into edit mode.
  */
-export default function RoomListOverlay() {
+export default function RoomListOverlay({ onStartNewRoom }: RoomListOverlayProps) {
   const [collapsed, setCollapsed] = useState(false)
 
   const roomOrder = useBlueprintStore(s => s.roomOrder)
   const rooms     = useBlueprintStore(s => s.rooms)
   const selectedIds = useSelectedIds()
-
-  if (roomOrder.length === 0) return null
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
 
@@ -63,8 +65,18 @@ export default function RoomListOverlay() {
         }
       </button>
 
+      <div className="border-b border-dark-border px-2 py-1.5 theme-light:border-neutral-300">
+        <button
+          type="button"
+          onClick={onStartNewRoom}
+          className="w-full rounded-md border border-accent/35 bg-accent/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-accent transition-all duration-200 hover:border-accent/55 hover:bg-accent/15 theme-light:border-accent/40 theme-light:bg-accent/[0.12]"
+        >
+          Nieuwe kamer +
+        </button>
+      </div>
+
       {/* Room rows */}
-      {!collapsed && (
+      {!collapsed && roomOrder.length > 0 && (
         <ul className="py-1">
           {roomOrder.map((id, index) => {
             const room       = rooms[id]
@@ -140,6 +152,12 @@ export default function RoomListOverlay() {
             )
           })}
         </ul>
+      )}
+
+      {!collapsed && roomOrder.length === 0 && (
+        <p className="px-3 py-2 text-[10px] leading-snug text-light/45 theme-light:text-neutral-500">
+          Nog geen kamers op de plattegrond. Gebruik de bouwer om een kamer te tekenen en te plaatsen.
+        </p>
       )}
     </div>
   )

@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useRoom } from '../../../store/blueprintStore'
 import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
-import { polygonArea, formatNlDecimal } from '../../../utils/blueprintGeometry'
+import {
+  clampCmFromMetersField,
+  cmToMeterFieldValue,
+  formatNlDecimal,
+  polygonArea,
+} from '../../../utils/blueprintGeometry'
 
 type Vloertype = 'Betonvloer' | 'Houten vloer' | 'Systeemvloer' | 'Zandcement dekvloer' | 'Overig'
 type Afwerking = 'Tegels' | 'Parket' | 'Laminaat' | 'Gietvloer' | 'Tapijt' | 'Geen / ruwbouw'
@@ -126,17 +131,20 @@ export default function StepVloer({ roomId, onNext, onPrev }: Props) {
 
         {/* Vloerdikte */}
         <label className="flex flex-col gap-1">
-          <span className="ui-label">Vloerdikte (cm)</span>
+          <span className="ui-label">Vloerdikte (m)</span>
           <div className="flex items-center gap-1.5">
             <input
               type="number"
               className="ui-input text-sm py-1.5 flex-1 min-w-0 tabular-nums"
-              value={data.dikte}
-              min={3}
-              max={100}
-              onChange={e => patch({ dikte: Number(e.target.value) })}
+              value={cmToMeterFieldValue(data.dikte)}
+              min={0.03}
+              max={1}
+              step={0.01}
+              onChange={e =>
+                patch({ dikte: clampCmFromMetersField(parseFloat(e.target.value), 3, 100) })
+              }
             />
-            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
+            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">m</span>
           </div>
         </label>
 

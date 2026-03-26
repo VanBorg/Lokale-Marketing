@@ -400,9 +400,36 @@ export function formatNlDecimal(n: number, fractionDigits: number): string {
   return n.toFixed(fractionDigits).replace('.', ',')
 }
 
+/** Weergave van centimeters als meters met NL-decimaal (bijv. "2,50 m"). */
+export function formatCmAsMeters(cm: number, fractionDigits = 2): string {
+  return `${formatNlDecimal(cm / 100, fractionDigits)} m`
+}
+
+/**
+ * Parse invoer in meters ("2,50" of "2.5") naar centimeters (afgerond).
+ * Returns null bij lege of ongeldige invoer.
+ */
+export function parseMetersInputToCm(raw: string): number | null {
+  const t = raw.trim().replace(',', '.')
+  if (t === '') return null
+  const m = parseFloat(t)
+  if (Number.isNaN(m) || m < 0) return null
+  return Math.round(m * 100)
+}
+
+/** Waarde voor `type="number"` velden in meters; data blijft cm. */
+export function cmToMeterFieldValue(cm: number): number {
+  return Math.round(cm) / 100
+}
+
+/** Van meter-veld terug naar cm, begrensd. */
+export function clampCmFromMetersField(m: number, minCm: number, maxCm: number): number {
+  if (Number.isNaN(m)) return minCm
+  return Math.max(minCm, Math.min(maxCm, Math.round(m * 100)))
+}
+
 export function formatLength(cm: number): string {
-  if (cm >= 100) return `${formatNlDecimal(cm / 100, 2)} m`
-  return `${Math.round(cm)} cm`
+  return formatCmAsMeters(cm, 2)
 }
 
 /** Plattegrond: lengte in meters, twee decimalen (bijv. "4,00"). */

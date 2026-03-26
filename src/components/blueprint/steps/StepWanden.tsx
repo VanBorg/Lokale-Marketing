@@ -1,7 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useRoom } from '../../../store/blueprintStore'
 import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
-import { formatNlDecimal } from '../../../utils/blueprintGeometry'
+import {
+  clampCmFromMetersField,
+  cmToMeterFieldValue,
+  formatNlDecimal,
+} from '../../../utils/blueprintGeometry'
 
 type WallMaterial = 'Beton' | 'Kalkzandsteen' | 'Houtskelet' | 'Gipsblok' | 'Overig'
 
@@ -135,17 +139,22 @@ export default function StepWanden({ roomId, onNext, onPrev }: Props) {
 
               {/* Dikte */}
               <label className="flex flex-col gap-1">
-                <span className="ui-label">Dikte (cm)</span>
+                <span className="ui-label">Dikte (m)</span>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="number"
                     className="ui-input text-sm py-1.5 flex-1 min-w-0 tabular-nums"
-                    value={wall.thickness}
-                    min={5}
-                    max={100}
-                    onChange={e => updateWall(i, { thickness: Number(e.target.value) })}
+                    value={cmToMeterFieldValue(wall.thickness)}
+                    min={0.05}
+                    max={1}
+                    step={0.01}
+                    onChange={e =>
+                      updateWall(i, {
+                        thickness: clampCmFromMetersField(parseFloat(e.target.value), 5, 100),
+                      })
+                    }
                   />
-                  <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
+                  <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">m</span>
                 </div>
               </label>
 

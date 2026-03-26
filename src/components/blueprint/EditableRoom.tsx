@@ -177,7 +177,7 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         shadowOpacity={0.3}
       />
 
-      {/* Wall length labels — always shown for selected room */}
+      {/* Muurlengtes op de buitenzijde (maatlijn + label); hoeken alleen bij selectie */}
       <WallLabels roomId={roomId} isSelected={isSelected} />
     </Group>
   )

@@ -9,6 +9,7 @@ import {
   applyWallLengthRespectingLocks,
   axisAlignedBBoxSize,
   formatNlDecimal,
+  generateShapeVertices,
   wallLength,
 } from '../../utils/blueprintGeometry'
 import type { Point } from '../../utils/blueprintGeometry'
@@ -63,6 +64,8 @@ function clonePreviewSnapshot(s: PreviewSnapshot): PreviewSnapshot {
 }
 
 const KAMER_OVERVIEW_EDGE_PADDING_PX = 76
+const DEFAULT_PREVIEW_WIDTH_CM = 400
+const DEFAULT_PREVIEW_DEPTH_CM = 300
 
 export default function BlueprintPage({ project, onUpdateProject, onTabChange }: BlueprintPageProps) {
   useBlueprintKeyboard()
@@ -77,6 +80,8 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const [previewWidth, setPreviewWidth]  = useState(400)
   const [previewDepth, setPreviewDepth]  = useState(300)
   const [builderStep, setBuilderStep] = useState(0)
+  /** Verhoog om BuilderPanel intern te resetten naar “nieuwe kamer” (stap 0). */
+  const [builderResetNonce, setBuilderResetNonce] = useState(0)
   const [selectedWallIndex, setSelectedWallIndex] = useState<number | null>(null)
   const [hoveredWall, setHoveredWall] = useState<{ roomKey: string; wallIndex: number } | null>(null)
   const [canvasHoveredWallIndex, setCanvasHoveredWallIndex] = useState<number | null>(null)
@@ -257,6 +262,20 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
     )
   }, [previewLockedWalls, applyPreviewFromCanvas])
 
+  const startNewRoom = useCallback(() => {
+    blueprintStore.getState().clearSelection()
+    setPreviewPast([])
+    setPreviewFuture([])
+    setPreviewLockedWalls([])
+    setCanvasPreviewEdited(false)
+    setPreviewWidth(DEFAULT_PREVIEW_WIDTH_CM)
+    setPreviewDepth(DEFAULT_PREVIEW_DEPTH_CM)
+    setPreviewVertices(
+      generateShapeVertices('rechthoek', DEFAULT_PREVIEW_WIDTH_CM, DEFAULT_PREVIEW_DEPTH_CM),
+    )
+    setBuilderResetNonce(n => n + 1)
+  }, [])
+
   /** Step 0: nieuwe preview in kolom 2 — ook bij geselecteerde kamer zodat rotatie zichtbaar blijft. */
   const displayedRoomKey = showingNewPreview ? previewRoomKey : (selectedRoomId ?? previewRoomKey)
   const listHoverWallIndex =
@@ -297,7 +316,7 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
         <div className="flex-[5] min-w-0 min-h-0 relative overflow-hidden flex flex-col">
           <PixelCanvas />
 
-          <RoomListOverlay />
+          <RoomListOverlay onStartNewRoom={startNewRoom} />
 
           {selectedCanvasNote && !selectedRoom && (
             <div className="absolute bottom-3 left-3 z-20 flex max-w-[min(100%,20rem)] items-center gap-2 bg-dark-card border border-dark-border rounded-lg px-3 py-2 shadow-lg pointer-events-auto">
@@ -457,6 +476,8 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
             onActiveStepChange={setBuilderStep}
             parentPreviewVertices={previewVertices}
             selectedRoomId={selectedRoomId}
+            builderResetNonce={builderResetNonce}
+            onStartNewRoom={startNewRoom}
           />
         </div>
 

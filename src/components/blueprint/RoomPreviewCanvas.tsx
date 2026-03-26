@@ -388,15 +388,17 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
     if (next !== null && !hideWallDetailPanel) {
       const a = localVerts[i]
       const b = localVerts[(i + 1) % n]
-      setEditingLength(String(Math.round(wallLength(a, b))))
+      const cm = Math.round(wallLength(a, b))
+      setEditingLength(String(cm / 100))
     }
   }
 
   const handleLengthBlur = () => {
     if (selectedWall === null || hideWallDetailPanel) return
     if (isWallLocked(selectedWall)) return
-    const len = parseFloat(editingLength)
-    if (!isNaN(len) && len > 0) {
+    const m = parseFloat(editingLength.replace(',', '.'))
+    if (!isNaN(m) && m > 0) {
+      const len = Math.max(10, Math.round(m * 100))
       const newVerts = applyWallLengthRespectingLocks(localVerts, selectedWall, len, lockedWalls)
       setLocalVerts(newVerts)
       onChange?.(newVerts)
@@ -629,11 +631,13 @@ const RoomPreviewCanvas = memo(function RoomPreviewCanvas({
               onChange={e => setEditingLength(e.target.value)}
               onBlur={handleLengthBlur}
               onKeyDown={e => e.key === 'Enter' && handleLengthBlur()}
-              className="ui-input text-xs py-1 w-20"
-              min={10}
-              max={5000}
+              className="ui-input text-xs py-1 w-20 tabular-nums"
+              min={0.1}
+              max={50}
+              step={0.01}
+              title="Lengte in meters (bijv. 4,12)"
             />
-            <span className="text-xs text-light/40">cm</span>
+            <span className="text-xs text-light/40">m</span>
           </div>
 
           {(onToggleWallLock || onDraftToggleLock) && (

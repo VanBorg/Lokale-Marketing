@@ -3,6 +3,8 @@ import { RotateCw } from 'lucide-react'
 import { blueprintStore } from '../../store/blueprintStore'
 import {
   axisAlignedBBoxSize,
+  clampCmFromMetersField,
+  cmToMeterFieldValue,
   generateShapeVertices,
 } from '../../utils/blueprintGeometry'
 import type { Point, ShapeType, RoofType } from '../../utils/blueprintGeometry'
@@ -28,6 +30,7 @@ function rotateVertices90CCW(verts: Point[]): Point[] {
 
 
 const ROOF_OPTIONS: { id: RoofType; label: string; icon: string }[] = [
+  { id: 'geen',         label: 'Geen',     icon: '—' },
   { id: 'plat',         label: 'Plat',     icon: '▬' },
   { id: 'schuin-enkel', label: 'Schuin',   icon: '◺' },
   { id: 'zadeldak',     label: 'Zadel',    icon: '⋀' },
@@ -61,6 +64,8 @@ export interface StepKamerFormProps {
   onCanvasPreviewChange?: (vertices: Point[]) => void
   /** When set, the form is in edit mode for an existing placed room. */
   editRoomId?: string | null
+  /** Suggested name for a new room (e.g. Kamer1); remount key usually refreshes this. */
+  defaultRoomName?: string
 }
 
 export default function StepKamerForm({
@@ -75,6 +80,7 @@ export default function StepKamerForm({
   currentPreviewVertices,
   parentPreviewVertices,
   editRoomId,
+  defaultRoomName = '',
 }: StepKamerFormProps) {
   const [shape, setShape] = useState<ShapeType>('rechthoek')
   const [localWidth, setLocalWidth] = useState(controlledWidth ?? 400)
@@ -83,9 +89,9 @@ export default function StepKamerForm({
   const roomWidth = editRoomId ? localWidth : (controlledWidth ?? localWidth)
   const roomDepth = editRoomId ? localDepth : (controlledDepth ?? localDepth)
 
-  const [roomName, setRoomName]         = useState('')
+  const [roomName, setRoomName]         = useState(defaultRoomName)
   const [wallHeight, setWallHeight]     = useState(250)
-  const [roofType, setRoofType]         = useState<RoofType>('plat')
+  const [roofType, setRoofType]         = useState<RoofType>('geen')
   const [roofPeakHeight, setRoofPeakHeight] = useState(150)
 
   // Wall height mode
@@ -233,6 +239,22 @@ export default function StepKamerForm({
       ? parentPreviewVertices
       : formRotated
 
+  /** Bij vlak plafond: één hoogte (geen apart veld); gelijk aan wand(en). */
+  const ceilingHeightForBuild = useMemo(() => {
+    if (ceilingType !== 'vlak') return ceilingHeight
+    if (wallHeightMode === 'uniform') return wallHeight
+    const n = previewVertices.length
+    if (n === 0) return wallHeight
+    return Math.max(...Array.from({ length: n }, (_, i) => perWallHeights[i] ?? wallHeight))
+  }, [
+    ceilingType,
+    ceilingHeight,
+    wallHeight,
+    wallHeightMode,
+    perWallHeights,
+    previewVertices.length,
+  ])
+
   // Sync preset vanuit formulier — niet tijdens canvas-sleep en niet in edit mode.
   useEffect(() => {
     if (editRoomId) return
@@ -256,12 +278,30 @@ export default function StepKamerForm({
     const newHeights = Array(previewVertices.length).fill(wallHeight)
     setPerWallHeights(newHeights)
     setWallHeightMode('per-wall')
-    if (editRoomId) applyEditMeta({ wallHeights: newHeights })
+    if (editRoomId) {
+      if (ceilingType === 'vlak') {
+        applyEditMeta({
+          wallHeights: newHeights,
+          ceiling: buildCeiling('vlak', wallHeight, ceilingRidgeHeight, cassetteGrid),
+        })
+      } else {
+        applyEditMeta({ wallHeights: newHeights })
+      }
+    }
   }
 
   const handleSwitchToUniform = () => {
     setWallHeightMode('uniform')
-    if (editRoomId) applyEditMeta({ wallHeights: [] })
+    if (editRoomId) {
+      if (ceilingType === 'vlak') {
+        applyEditMeta({
+          wallHeights: [],
+          ceiling: buildCeiling('vlak', wallHeight, ceilingRidgeHeight, cassetteGrid),
+        })
+      } else {
+        applyEditMeta({ wallHeights: [] })
+      }
+    }
   }
 
   // ─── Ceiling helper ───────────────────────────────────────────────────────
@@ -292,10 +332,15 @@ export default function StepKamerForm({
 
     const { w: planWidthCm, h: planDepthCm } = axisAlignedBBoxSize(vertices)
 
-    const ceiling: RoomCeiling = buildCeiling(ceilingType, ceilingHeight, ceilingRidgeHeight, cassetteGrid)
+    const ceiling: RoomCeiling = buildCeiling(
+      ceilingType,
+      ceilingHeightForBuild,
+      ceilingRidgeHeight,
+      cassetteGrid,
+    )
 
     const id = blueprintStore.getState().addRoom(vertices, {
-      name: roomName || 'Ruimte',
+      name: roomName.trim() || defaultRoomName || 'Ruimte',
       wallHeight,
       shape,
       planWidthCm,
@@ -309,12 +354,43 @@ export default function StepKamerForm({
     onNext(id)
   }, [
     currentPreviewVertices, shape, roomWidth, roomDepth, roomName, wallHeight, roofType, roofPeakHeight,
-    wallHeightMode, perWallHeights, ceilingType, ceilingHeight, ceilingRidgeHeight,
-    cassetteGrid, onNext, parentPreviewVertices,
+    wallHeightMode, perWallHeights, ceilingType, ceilingHeightForBuild, ceilingRidgeHeight,
+    cassetteGrid, onNext, parentPreviewVertices, defaultRoomName,
   ])
 
-  const showPeakHeight = roofType !== 'plat' && roofType !== 'platband'
+  const showPeakHeight = roofType !== 'geen' && roofType !== 'plat' && roofType !== 'platband'
   const ceilingNeedsRidge = ceilingType === 'schuin' || ceilingType === 'gewelfd' || ceilingType === 'open-kap'
+
+  const heightForVlakCeiling = useCallback(() => {
+    if (wallHeightMode === 'uniform') return wallHeight
+    return Math.max(
+      ...Array.from({ length: previewVertices.length }, (_, i) => perWallHeights[i] ?? wallHeight),
+      wallHeight,
+    )
+  }, [wallHeightMode, wallHeight, perWallHeights, previewVertices.length])
+
+  const selectCeilingType = useCallback(
+    (c: (typeof CEILING_OPTIONS)[number]) => {
+      setCeilingType(c.id)
+      if (c.id === 'vlak') {
+        const h = heightForVlakCeiling()
+        setCeilingHeight(h)
+        if (editRoomId) {
+          applyEditMeta({ ceiling: buildCeiling('vlak', h, ceilingRidgeHeight, cassetteGrid) })
+        }
+      } else if (editRoomId) {
+        applyEditMeta({ ceiling: buildCeiling(c.id, ceilingHeight, ceilingRidgeHeight, cassetteGrid) })
+      }
+    },
+    [
+      heightForVlakCeiling,
+      editRoomId,
+      ceilingHeight,
+      ceilingRidgeHeight,
+      cassetteGrid,
+      applyEditMeta,
+    ],
+  )
 
   // ─── Shared render ────────────────────────────────────────────────────────
 
@@ -341,57 +417,9 @@ export default function StepKamerForm({
         }}
       />
 
-      {/* Breedte / Diepte */}
-      <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1">
-          <span className="ui-label">Breedte (cm)</span>
-          <input
-            type="number"
-            className="ui-input text-sm py-1.5"
-            value={Math.round(localWidth)}
-            min={10}
-            max={10000}
-            onChange={e => {
-              const v = Number(e.target.value)
-              setLocalWidth(v)
-              if (!editRoomId) onWidthChange?.(v)
-            }}
-            onBlur={e => {
-              const v = Math.max(10, Number(e.target.value))
-              setLocalWidth(v)
-              if (editRoomId) {
-                applyEditDimensions(shape, v, localDepth)
-              } else {
-                onPreviewChange?.(rotateVerticesBySteps(generateShapeVertices(shape, v, localDepth), rotationStepsRef.current))
-              }
-            }}
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="ui-label">Diepte (cm)</span>
-          <input
-            type="number"
-            className="ui-input text-sm py-1.5"
-            value={Math.round(localDepth)}
-            min={10}
-            max={10000}
-            onChange={e => {
-              const v = Number(e.target.value)
-              setLocalDepth(v)
-              if (!editRoomId) onDepthChange?.(v)
-            }}
-            onBlur={e => {
-              const v = Math.max(10, Number(e.target.value))
-              setLocalDepth(v)
-              if (editRoomId) {
-                applyEditDimensions(shape, localWidth, v)
-              } else {
-                onPreviewChange?.(rotateVerticesBySteps(generateShapeVertices(shape, localWidth, v), rotationStepsRef.current))
-              }
-            }}
-          />
-        </label>
-      </div>
+      <p className="text-[10px] leading-snug text-neutral-500 theme-light:text-neutral-600">
+        Afmetingen stel je in op de kamer-preview (kolom ernaast): wandlengtes en vorm.
+      </p>
 
       <div className="grid grid-cols-2 gap-2">
         <button
@@ -472,7 +500,7 @@ export default function StepKamerForm({
           type="text"
           className="ui-input text-sm py-1.5"
           value={roomName}
-          placeholder="bijv. Woonkamer"
+          placeholder={defaultRoomName || 'Kamer1'}
           onChange={e => setRoomName(e.target.value)}
           onBlur={e => {
             if (!editRoomId) return
@@ -519,17 +547,29 @@ export default function StepKamerForm({
           <div className="flex items-center gap-2">
             <input
               type="number"
-              className="ui-input text-sm py-1.5 flex-1"
-              value={wallHeight}
-              min={100}
-              max={600}
+              className="ui-input text-sm py-1.5 flex-1 tabular-nums"
+              value={cmToMeterFieldValue(wallHeight)}
+              min={1}
+              max={6}
+              step={0.01}
               onChange={e => {
-                const v = Number(e.target.value)
+                const m = parseFloat(e.target.value)
+                if (Number.isNaN(m)) return
+                const v = clampCmFromMetersField(m, 100, 600)
                 setWallHeight(v)
-                if (editRoomId) applyEditMeta({ wallHeight: v })
+                if (editRoomId) {
+                  if (ceilingType === 'vlak') {
+                    applyEditMeta({
+                      wallHeight: v,
+                      ceiling: buildCeiling('vlak', v, ceilingRidgeHeight, cassetteGrid),
+                    })
+                  } else {
+                    applyEditMeta({ wallHeight: v })
+                  }
+                }
               }}
             />
-            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">cm</span>
+            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">m</span>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-x-2 gap-y-1">
@@ -540,15 +580,31 @@ export default function StepKamerForm({
                 </span>
                 <input
                   type="number"
-                  className="ui-input text-xs py-1 flex-1 min-w-0"
-                  value={perWallHeights[i] ?? wallHeight}
-                  min={100}
-                  max={600}
+                  className="ui-input text-xs py-1 flex-1 min-w-0 tabular-nums"
+                  value={cmToMeterFieldValue(perWallHeights[i] ?? wallHeight)}
+                  min={1}
+                  max={6}
+                  step={0.01}
                   onChange={e => {
+                    const m = parseFloat(e.target.value)
+                    if (Number.isNaN(m)) return
                     const next = [...perWallHeights]
-                    next[i] = Number(e.target.value)
+                    next[i] = clampCmFromMetersField(m, 100, 600)
                     setPerWallHeights(next)
-                    if (editRoomId) applyEditMeta({ wallHeights: next })
+                    if (editRoomId) {
+                      if (ceilingType === 'vlak') {
+                        const maxH = Math.max(
+                          ...next.map((h, j) => h ?? wallHeight),
+                          wallHeight,
+                        )
+                        applyEditMeta({
+                          wallHeights: next,
+                          ceiling: buildCeiling('vlak', maxH, ceilingRidgeHeight, cassetteGrid),
+                        })
+                      } else {
+                        applyEditMeta({ wallHeights: next })
+                      }
+                    }
                   }}
                 />
               </label>
@@ -561,7 +617,7 @@ export default function StepKamerForm({
       <label className="flex flex-col gap-1">
         <span className="ui-label">Daktype</span>
         <div className="grid grid-cols-3 gap-1.5">
-          {ROOF_OPTIONS.map(roof => (
+          {ROOF_OPTIONS.map((roof, idx) => (
             <button
               key={roof.id}
               type="button"
@@ -571,6 +627,7 @@ export default function StepKamerForm({
               }}
               className={[
                 'flex flex-col items-center gap-0.5 p-2 rounded-lg border text-xs transition-all duration-150',
+                idx === 0 ? 'col-span-3' : '',
                 roofType === roof.id
                   ? 'border-accent bg-accent/10 text-accent'
                   : 'border-dark-border bg-dark text-neutral-400 hover:border-accent/40 hover:text-neutral-200 theme-light:border-neutral-300 theme-light:bg-neutral-50 theme-light:text-neutral-700 theme-light:hover:text-neutral-900',
@@ -581,23 +638,32 @@ export default function StepKamerForm({
             </button>
           ))}
         </div>
+        <p className="text-[10px] text-neutral-500 theme-light:text-neutral-600">
+          Kies &ldquo;Geen&rdquo; als er geen dak hoort bij deze ruimte (bijv. verdieping erboven).
+        </p>
       </label>
 
       {showPeakHeight && (
         <label className="flex flex-col gap-1">
-          <span className="ui-label">Dakoverstijging (cm)</span>
-          <input
-            type="number"
-            className="ui-input text-sm py-1.5"
-            value={roofPeakHeight}
-            min={10}
-            max={1000}
-            onChange={e => {
-              const v = Number(e.target.value)
-              setRoofPeakHeight(v)
-              if (editRoomId) applyEditMeta({ roofPeakHeight: v })
-            }}
-          />
+          <span className="ui-label">Dakoverstijging (m)</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              className="ui-input text-sm py-1.5 flex-1 tabular-nums"
+              value={cmToMeterFieldValue(roofPeakHeight)}
+              min={0.1}
+              max={10}
+              step={0.01}
+              onChange={e => {
+                const m = parseFloat(e.target.value)
+                if (Number.isNaN(m)) return
+                const v = clampCmFromMetersField(m, 10, 1000)
+                setRoofPeakHeight(v)
+                if (editRoomId) applyEditMeta({ roofPeakHeight: v })
+              }}
+            />
+            <span className="shrink-0 text-xs text-neutral-500 theme-light:text-neutral-600">m</span>
+          </div>
           <span className="text-[10px] text-neutral-500 theme-light:text-neutral-600">
             Hoogte boven de muren tot het hoogste punt
           </span>
@@ -612,10 +678,7 @@ export default function StepKamerForm({
             <button
               key={c.id}
               type="button"
-              onClick={() => {
-                setCeilingType(c.id)
-                if (editRoomId) applyEditMeta({ ceiling: buildCeiling(c.id, ceilingHeight, ceilingRidgeHeight, cassetteGrid) })
-              }}
+              onClick={() => selectCeilingType(c)}
               className={[
                 'flex flex-col items-center gap-0.5 p-2 rounded-lg border text-xs transition-all duration-150',
                 ceilingType === c.id
@@ -633,10 +696,7 @@ export default function StepKamerForm({
             <button
               key={c.id}
               type="button"
-              onClick={() => {
-                setCeilingType(c.id)
-                if (editRoomId) applyEditMeta({ ceiling: buildCeiling(c.id, ceilingHeight, ceilingRidgeHeight, cassetteGrid) })
-              }}
+              onClick={() => selectCeilingType(c)}
               className={[
                 'flex flex-col items-center gap-0.5 p-2 rounded-lg border text-xs transition-all duration-150',
                 ceilingType === c.id
@@ -654,51 +714,73 @@ export default function StepKamerForm({
         {ceilingNeedsRidge ? (
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
-              <span className="ui-label">Hoogte laag (cm)</span>
+              <span className="ui-label">Hoogte laag (m)</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  className="ui-input text-xs py-1 flex-1 tabular-nums"
+                  value={cmToMeterFieldValue(ceilingHeight)}
+                  min={1}
+                  max={6}
+                  step={0.01}
+                  onChange={e => {
+                    const m = parseFloat(e.target.value)
+                    if (Number.isNaN(m)) return
+                    const v = clampCmFromMetersField(m, 100, 600)
+                    setCeilingHeight(v)
+                    if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, v, ceilingRidgeHeight, cassetteGrid) })
+                  }}
+                />
+                <span className="shrink-0 text-[10px] text-neutral-500 theme-light:text-neutral-600">m</span>
+              </div>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="ui-label">Hoogte hoog (m)</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  className="ui-input text-xs py-1 flex-1 tabular-nums"
+                  value={cmToMeterFieldValue(ceilingRidgeHeight)}
+                  min={1}
+                  max={10}
+                  step={0.01}
+                  onChange={e => {
+                    const m = parseFloat(e.target.value)
+                    if (Number.isNaN(m)) return
+                    const v = clampCmFromMetersField(m, 100, 1000)
+                    setCeilingRidgeHeight(v)
+                    if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, ceilingHeight, v, cassetteGrid) })
+                  }}
+                />
+                <span className="shrink-0 text-[10px] text-neutral-500 theme-light:text-neutral-600">m</span>
+              </div>
+            </label>
+          </div>
+        ) : ceilingType === 'vlak' ? (
+          <p className="text-[10px] text-neutral-500 theme-light:text-neutral-600">
+            Vlak plafond gebruikt dezelfde hoogte als &ldquo;Wandhoogte&rdquo; hierboven — geen aparte plafondhoogte nodig.
+          </p>
+        ) : (
+          <label className="flex flex-col gap-1">
+            <span className="ui-label">Plafond hoogte (m)</span>
+            <div className="flex items-center gap-1.5">
               <input
                 type="number"
-                className="ui-input text-xs py-1"
-                value={ceilingHeight}
-                min={100}
-                max={600}
+                className="ui-input text-xs py-1 flex-1 tabular-nums"
+                value={cmToMeterFieldValue(ceilingHeight)}
+                min={1}
+                max={6}
+                step={0.01}
                 onChange={e => {
-                  const v = Number(e.target.value)
+                  const m = parseFloat(e.target.value)
+                  if (Number.isNaN(m)) return
+                  const v = clampCmFromMetersField(m, 100, 600)
                   setCeilingHeight(v)
                   if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, v, ceilingRidgeHeight, cassetteGrid) })
                 }}
               />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="ui-label">Hoogte hoog (cm)</span>
-              <input
-                type="number"
-                className="ui-input text-xs py-1"
-                value={ceilingRidgeHeight}
-                min={100}
-                max={1000}
-                onChange={e => {
-                  const v = Number(e.target.value)
-                  setCeilingRidgeHeight(v)
-                  if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, ceilingHeight, v, cassetteGrid) })
-                }}
-              />
-            </label>
-          </div>
-        ) : (
-          <label className="flex flex-col gap-1">
-            <span className="ui-label">Plafond hoogte (cm)</span>
-            <input
-              type="number"
-              className="ui-input text-xs py-1"
-              value={ceilingHeight}
-              min={100}
-              max={600}
-              onChange={e => {
-                const v = Number(e.target.value)
-                setCeilingHeight(v)
-                if (editRoomId) applyEditMeta({ ceiling: buildCeiling(ceilingType, v, ceilingRidgeHeight, cassetteGrid) })
-              }}
-            />
+              <span className="shrink-0 text-[10px] text-neutral-500 theme-light:text-neutral-600">m</span>
+            </div>
           </label>
         )}
 

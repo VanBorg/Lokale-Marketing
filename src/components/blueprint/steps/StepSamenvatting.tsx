@@ -1,5 +1,5 @@
 import { useRoom } from '../../../store/blueprintStore'
-import { polygonArea, getPerimeter } from '../../../utils/blueprintGeometry'
+import { formatCmAsMeters, polygonArea, getPerimeter } from '../../../utils/blueprintGeometry'
 
 interface StepSamenvattingProps {
   roomId: string | null
@@ -30,6 +30,7 @@ const SHAPE_LABELS: Record<string, string> = {
 }
 
 const ROOF_LABELS: Record<string, string> = {
+  geen: 'Geen (bijv. verdieping erboven)',
   plat: 'Plat dak',
   'schuin-enkel': 'Schuin dak',
   zadeldak: 'Zadeldak',
@@ -76,7 +77,7 @@ export default function StepSamenvatting({ roomId, onFinalize, onPrev }: StepSam
         <SummaryRow label="Vloeroppervlak" value={`${floorM2.toFixed(2)} m²`} />
         <SummaryRow label="Totaal wandoppervlak" value={`${wallM2.toFixed(2)} m²`} />
         <SummaryRow label="Plafondoppervlak" value={`${floorM2.toFixed(2)} m²`} />
-        <SummaryRow label="Wandhoogte" value={`${room.wallHeight} cm`} />
+        <SummaryRow label="Wandhoogte" value={formatCmAsMeters(room.wallHeight)} />
         <SummaryRow label="Daktype" value={roofName} />
         <SummaryRow label="Aantal wanden" value={`${room.vertices.length}`} />
         <SummaryRow label="Aantal etages" value="1" />

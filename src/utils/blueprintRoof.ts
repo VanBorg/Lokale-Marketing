@@ -4,6 +4,7 @@ import type { Point } from './blueprintGeometry'
 // ─── Roof types ───────────────────────────────────────────────────────────────
 
 export type RoofType =
+  | 'geen'
   | 'plat'
   | 'schuin-enkel'
   | 'zadeldak'
@@ -41,6 +42,11 @@ export function calculateRoof(
   let gevelAreaM2 = perimeter * (wallHeight / 100)
 
   switch (roofType) {
+    case 'geen':
+      roofAreaM2 = 0
+      totalVolumeM3 = floorAreaM2 * (wallHeight / 100)
+      break
+
     case 'plat':
     case 'platband':
       roofAreaM2 = floorAreaM2

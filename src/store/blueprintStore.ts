@@ -323,7 +323,7 @@ export const useBlueprintStore = create<BlueprintState>()(
             planWidthCm: meta.planWidthCm ?? bbox.w,
             planDepthCm: meta.planDepthCm ?? bbox.h,
             lockedWalls: meta.lockedWalls ?? [],
-            roofType: meta.roofType ?? 'plat',
+            roofType: meta.roofType ?? 'geen',
             roofPeakHeight: meta.roofPeakHeight,
             wallHeights: meta.wallHeights,
             ceiling: meta.ceiling,

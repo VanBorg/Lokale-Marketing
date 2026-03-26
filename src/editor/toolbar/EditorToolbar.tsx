@@ -131,7 +131,7 @@ export default function EditorToolbar({
     setOverflowOpen(false)
     if (
       window.confirm(
-        'Weet je zeker dat je opnieuw wilt beginnen? Alle kamers worden verwijderd.',
+        'Weet je zeker dat je opnieuw wilt beginnen? Alle kamers, tekeningen, tekstnotities en meetlijnen op de plattegrond worden gewist.',
       )
     ) {
       onResetBlueprint()
@@ -317,7 +317,7 @@ export default function EditorToolbar({
                 ? 'border-accent/50 bg-accent/15 text-accent ring-1 ring-accent/40'
                 : 'border-neutral-600/85 bg-neutral-900/45 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 theme-light:border-neutral-300 theme-light:bg-neutral-100/95 theme-light:text-neutral-700 theme-light:hover:bg-neutral-200',
             ].join(' ')}
-            title="Hand — scroll om te pannen; Spatie of middelste knop om te slepen; klik/sleep op leeg vlak om te selecteren"
+            title="Hand — sleep op leeg vlak om te pannen; scroll; Spatie of middelste knop; klik op kamers om te selecteren"
             aria-label="Canvas verplaatsen"
             aria-pressed={activeTool === 'pan'}
           >
@@ -344,7 +344,7 @@ export default function EditorToolbar({
               type="button"
               onClick={() => setCanvasTool('select')}
               className={`${segmentToolBtn(activeTool === 'select')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
-              title="Selecteren — klik op kamers en objecten; op leeg vlak slepen voor een selectiekader. Hand: zelfde selectie; pannen met scroll, Spatie of middelste knop."
+              title="Selecteren — klik op kamers en objecten; op leeg vlak slepen voor een selectiekader. Hand: pannen op leeg vlak."
               aria-label="Selecteren"
               aria-pressed={activeTool === 'select'}
             >

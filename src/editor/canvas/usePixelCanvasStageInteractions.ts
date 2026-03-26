@@ -239,10 +239,13 @@ export function usePixelCanvasStageInteractions({
       }
 
       if (e.evt.button === 0 && e.target === stageRef.current) {
-        // Select + Hand: op leeg vlak slepen = selectiekader. Hand: pannen doe je met
-        // scrollwiel, Spatie+sleep of middelste muisknop (zie ook space/middle hierboven).
-        if (tool === 'select' || tool === 'pan') {
+        if (tool === 'select') {
           attachMarqueeListeners(e.evt.clientX, e.evt.clientY)
+          return
+        }
+
+        if (tool === 'pan') {
+          attachWindowPanListeners(e.evt.clientX, e.evt.clientY)
           return
         }
 

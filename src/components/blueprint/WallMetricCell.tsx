@@ -121,6 +121,7 @@ export default function WallMetricCell({
           }
         }}
       />
+      <span className="text-[10px] text-light/40 shrink-0 tabular-nums" aria-hidden>m</span>
     </div>
   )
 }

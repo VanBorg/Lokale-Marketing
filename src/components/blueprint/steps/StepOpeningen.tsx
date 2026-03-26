@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { nanoid } from 'nanoid'
 import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
+import { clampCmFromMetersField, cmToMeterFieldValue } from '../../../utils/blueprintGeometry'
 
 type OpeningType = 'deur' | 'raam' | 'schuifdeur' | 'dakraam' | 'overig'
 
@@ -40,22 +41,30 @@ function OpeningRow({ item, onChange, onRemove }: OpeningRowProps) {
       <div className="flex items-center gap-0.5 flex-1 min-w-0">
         <input
           type="number"
-          className="ui-input text-xs py-1 w-14 min-w-0"
-          title="Breedte (cm)"
+          className="ui-input text-xs py-1 w-16 min-w-0 tabular-nums"
+          title="Breedte (m)"
           placeholder="B"
-          value={item.breedte}
-          min={1}
-          onChange={e => set('breedte', Number(e.target.value))}
+          value={cmToMeterFieldValue(item.breedte)}
+          min={0.01}
+          max={6}
+          step={0.01}
+          onChange={e =>
+            set('breedte', clampCmFromMetersField(parseFloat(e.target.value), 1, 600))
+          }
         />
         <span className="text-light/30 text-xs shrink-0">×</span>
         <input
           type="number"
-          className="ui-input text-xs py-1 w-14 min-w-0"
-          title="Hoogte (cm)"
+          className="ui-input text-xs py-1 w-16 min-w-0 tabular-nums"
+          title="Hoogte (m)"
           placeholder="H"
-          value={item.hoogte}
-          min={1}
-          onChange={e => set('hoogte', Number(e.target.value))}
+          value={cmToMeterFieldValue(item.hoogte)}
+          min={0.01}
+          max={6}
+          step={0.01}
+          onChange={e =>
+            set('hoogte', clampCmFromMetersField(parseFloat(e.target.value), 1, 600))
+          }
         />
       </div>
       <input
@@ -159,7 +168,7 @@ export default function StepOpeningen({ roomId, onNext, onPrev }: StepOpeningenP
       {items.length > 0 && (
         <div className="flex items-center gap-1.5 px-0.5">
           <span className="w-24 shrink-0 text-[10px] text-neutral-500 theme-light:text-neutral-600">Type</span>
-          <span className="flex-1 text-[10px] text-neutral-500 theme-light:text-neutral-600">B × H (cm)</span>
+          <span className="flex-1 text-[10px] text-neutral-500 theme-light:text-neutral-600">B × H (m)</span>
           <span className="w-10 shrink-0 text-center text-[10px] text-neutral-500 theme-light:text-neutral-600">
             #
           </span>

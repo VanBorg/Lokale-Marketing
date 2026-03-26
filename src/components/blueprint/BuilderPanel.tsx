@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { Point } from '../../utils/blueprintGeometry'
+import { useBlueprintStore } from '../../store/blueprintStore'
 import StepKamerForm from './StepKamerForm'
 import StepPlafond from './steps/StepPlafond'
 import StepOpeningen from './steps/StepOpeningen'
@@ -19,6 +20,18 @@ const STEPS = [
 ] as const
 
 const LAST_STEP_INDEX = STEPS.length - 1
+
+function nextKamerName(
+  order: string[],
+  roomMap: Record<string, { name: string }>,
+): string {
+  const used = new Set(
+    order.map(id => roomMap[id]?.name).filter((n): n is string => Boolean(n)),
+  )
+  let n = 1
+  while (used.has(`Kamer${n}`)) n += 1
+  return `Kamer${n}`
+}
 
 // ─── Accordion header ─────────────────────────────────────────────────────
 
@@ -91,6 +104,10 @@ interface BuilderPanelProps {
   parentPreviewVertices?: Point[]
   /** Room currently selected on the plattegrond; drives edit mode. */
   selectedRoomId?: string | null
+  /** Verhoog bij “Nieuwe kamer” om stap-voortgang en lastRoomId te resetten. */
+  builderResetNonce?: number
+  /** Start nieuwe kamer: selectie wissen + standaard preview (BlueprintPage). */
+  onStartNewRoom?: () => void
 }
 
 export default function BuilderPanel({
@@ -104,7 +121,11 @@ export default function BuilderPanel({
   onActiveStepChange,
   parentPreviewVertices,
   selectedRoomId,
+  builderResetNonce = 0,
+  onStartNewRoom,
 }: BuilderPanelProps) {
+  const roomOrder = useBlueprintStore(s => s.roomOrder)
+  const rooms = useBlueprintStore(s => s.rooms)
   const [activeStep, setActiveStep] = useState(0)
 
   useEffect(() => {
@@ -153,6 +174,15 @@ export default function BuilderPanel({
     setCompletedSteps([0, 1, 2, 3, 4, 5])
     setActiveStep(0)
   }, [selectedRoomId])
+
+  useEffect(() => {
+    if (builderResetNonce === 0) return
+    setActiveStep(0)
+    setCompletedSteps([])
+    setLastRoomId(null)
+    setIsEditingExisting(false)
+    setCurrentPreviewVertices([])
+  }, [builderResetNonce])
 
   const handlePreviewChange = useCallback((vertices: Point[]) => {
     setCurrentPreviewVertices(vertices)
@@ -212,10 +242,19 @@ export default function BuilderPanel({
 
   return (
     <div className="flex min-h-full flex-col bg-dark-card theme-light:bg-white">
-      <div className="border-b border-dark-border px-3 py-2 theme-light:border-neutral-200">
+      <div className="flex items-center justify-between gap-2 border-b border-dark-border px-3 py-2 theme-light:border-neutral-200">
         <h2 className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 theme-light:text-neutral-600">
           Bouwer
         </h2>
+        {onStartNewRoom && (
+          <button
+            type="button"
+            onClick={onStartNewRoom}
+            className="shrink-0 rounded-md border border-accent/35 bg-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-accent transition-all duration-200 hover:border-accent/55 hover:bg-accent/15 theme-light:border-accent/40 theme-light:bg-accent/[0.12]"
+          >
+            Nieuwe kamer +
+          </button>
+        )}
       </div>
 
       {STEPS.map((step, index) => {
@@ -244,6 +283,8 @@ export default function BuilderPanel({
                 {index === 0 && (
                   <div data-last-room-id={lastRoomId ?? undefined}>
                     <StepKamerForm
+                      key={isEditingExisting ? `edit-${lastRoomId}` : `new-${roomOrder.length}`}
+                      defaultRoomName={nextKamerName(roomOrder, rooms)}
                       onNext={handleStepKamerNext}
                       onPreviewChange={handlePreviewChange}
                       onCanvasPreviewChange={handleCanvasPreviewChange}
