@@ -4,9 +4,12 @@ import { blueprintStore } from '../store/blueprintStore'
 export function useBlueprintKeyboard() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName
-      // Don't fire shortcuts when typing in an input/textarea
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      const el = e.target as HTMLElement | null
+      if (!el) return
+      const tag = el.tagName
+      // Don't fire shortcuts when typing in a field (focus blijft daar na klik op canvas niet meer nodig dankzij stage focus).
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (el.isContentEditable) return
 
       const store = blueprintStore.getState()
       const temporal = blueprintStore.temporal.getState()

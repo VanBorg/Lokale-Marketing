@@ -2,10 +2,13 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { RotateCw } from 'lucide-react'
 import { blueprintStore } from '../../store/blueprintStore'
 import {
+  axisAlignedBBoxCentre,
   axisAlignedBBoxSize,
   clampCmFromMetersField,
   cmToMeterFieldValue,
   generateShapeVertices,
+  translatePolygon,
+  worldPointAtBlueprintStageCentre,
 } from '../../utils/blueprintGeometry'
 import type { Point, ShapeType, RoofType } from '../../utils/blueprintGeometry'
 import type { RoomCeiling } from '../../store/blueprintStore'
@@ -330,7 +333,20 @@ export default function StepKamerForm({
           : generateShapeVertices(shape, roomWidth, roomDepth)
     if (vertices.length < 3) return
 
-    const { w: planWidthCm, h: planDepthCm } = axisAlignedBBoxSize(vertices)
+    /** Midden van de plattegrond-view: na pannen staat (0,0) niet meer in het midden; plaats daarom onder het canvas-midden. */
+    const doc = blueprintStore.getState()
+    const { width: cw, height: ch } = doc.canvasSize
+    const vp = doc.viewport
+    let placedVertices = vertices
+    if (cw > 0 && ch > 0 && vp.scale > 0) {
+      const aim = worldPointAtBlueprintStageCentre(cw, ch, vp)
+      const cur = axisAlignedBBoxCentre(vertices)
+      if (cur) {
+        placedVertices = translatePolygon(vertices, aim.x - cur.x, aim.y - cur.y)
+      }
+    }
+
+    const { w: planWidthCm, h: planDepthCm } = axisAlignedBBoxSize(placedVertices)
 
     const ceiling: RoomCeiling = buildCeiling(
       ceilingType,
@@ -339,7 +355,7 @@ export default function StepKamerForm({
       cassetteGrid,
     )
 
-    const id = blueprintStore.getState().addRoom(vertices, {
+    const id = blueprintStore.getState().addRoom(placedVertices, {
       name: roomName.trim() || defaultRoomName || 'Ruimte',
       wallHeight,
       shape,

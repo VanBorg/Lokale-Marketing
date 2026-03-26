@@ -98,6 +98,36 @@ export function axisAlignedBBoxSize(vertices: Point[]): { w: number; h: number }
   return { w: w || 1, h: h || 1 }
 }
 
+/** Middelpunt van de as-gealigneerde bbox van het grondplan (zelfde eenheid als hoekpunten). */
+export function axisAlignedBBoxCentre(vertices: Point[]): Point | null {
+  const b = roomAxisAlignedBounds(vertices)
+  if (!b) return null
+  return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }
+}
+
+export function translatePolygon(vertices: Point[], dx: number, dy: number): Point[] {
+  return vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
+}
+
+/**
+ * Wereldcoördinaat (cm) onder het midden van het blueprint-stage, gegeven de Konva-viewport
+ * zoals in `blueprintStore` (zelfde formule als zoomViewportByPercentDelta).
+ */
+export function worldPointAtBlueprintStageCentre(
+  canvasWidth: number,
+  canvasHeight: number,
+  viewport: { x: number; y: number; scale: number },
+): Point {
+  const cx = canvasWidth / 2
+  const cy = canvasHeight / 2
+  const s = viewport.scale
+  if (s === 0 || !Number.isFinite(s)) return { x: 0, y: 0 }
+  return {
+    x: (cx - viewport.x) / s,
+    y: (cy - viewport.y) / s,
+  }
+}
+
 // ─── Point on segment ────────────────────────────────────────────────────────
 
 export function pointOnSegment(t: number, a: Point, b: Point): Point {

@@ -84,6 +84,8 @@ export default function PixelCanvas() {
           scaleY={viewport.scale}
           x={viewport.x}
           y={viewport.y}
+          tabIndex={-1}
+          className="outline-none focus:outline-none"
           onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}

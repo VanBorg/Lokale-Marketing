@@ -230,6 +230,11 @@ export function usePixelCanvasStageInteractions({
 
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
+      // Zodat plattegrond-sneltoetsen (zoals S = centreren) werken na een klik op het canvas:
+      // focus blijft anders op een invoerveld in de zijpanelen.
+      const container = stageRef.current?.container()
+      container?.focus?.()
+
       const store = blueprintStore.getState()
       const tool = store.activeTool
 

@@ -10,6 +10,7 @@ import {
   axisAlignedBBoxSize,
   formatNlDecimal,
   generateShapeVertices,
+  parseMetersInputToCm,
   wallLength,
 } from '../../utils/blueprintGeometry'
 import type { Point } from '../../utils/blueprintGeometry'
@@ -64,8 +65,108 @@ function clonePreviewSnapshot(s: PreviewSnapshot): PreviewSnapshot {
 }
 
 const KAMER_OVERVIEW_EDGE_PADDING_PX = 76
-const DEFAULT_PREVIEW_WIDTH_CM = 400
-const DEFAULT_PREVIEW_DEPTH_CM = 300
+const DEFAULT_PREVIEW_WIDTH_CM = 800
+const DEFAULT_PREVIEW_DEPTH_CM = 800
+/** Snelle L×B-invoer op de kamerkaart (cm). */
+const QUICK_KAMER_MIN_CM = 10
+const QUICK_KAMER_MAX_CM = 5000
+
+function QuickKamerAfmetingenFields({
+  widthCm,
+  depthCm,
+  resetNonce,
+  onApply,
+}: {
+  widthCm: number
+  depthCm: number
+  resetNonce: number
+  onApply: (wCm: number, dCm: number) => void
+}) {
+  const [lDraft, setLDraft] = useState<string | null>(null)
+  const [bDraft, setBDraft] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLDraft(null)
+    setBDraft(null)
+  }, [resetNonce, widthCm, depthCm])
+
+  const commitL = () => {
+    if (lDraft === null) return
+    const raw = lDraft.trim()
+    if (raw === '') {
+      setLDraft(null)
+      return
+    }
+    const cm = parseMetersInputToCm(raw)
+    if (cm === null) {
+      setLDraft(null)
+      return
+    }
+    const w = Math.max(QUICK_KAMER_MIN_CM, Math.min(QUICK_KAMER_MAX_CM, cm))
+    onApply(w, depthCm)
+    setLDraft(null)
+  }
+
+  const commitB = () => {
+    if (bDraft === null) return
+    const raw = bDraft.trim()
+    if (raw === '') {
+      setBDraft(null)
+      return
+    }
+    const cm = parseMetersInputToCm(raw)
+    if (cm === null) {
+      setBDraft(null)
+      return
+    }
+    const d = Math.max(QUICK_KAMER_MIN_CM, Math.min(QUICK_KAMER_MAX_CM, cm))
+    onApply(widthCm, d)
+    setBDraft(null)
+  }
+
+  const lenShown = lDraft !== null ? lDraft : formatNlDecimal(widthCm / 100, 2)
+  const breShown = bDraft !== null ? bDraft : formatNlDecimal(depthCm / 100, 2)
+
+  const fieldClass =
+    'ui-input w-full text-sm py-1.5 tabular-nums theme-light:bg-white'
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <label className="flex flex-col gap-1 min-w-0">
+        <span className="ui-label">Lengte in m</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          className={fieldClass}
+          value={lenShown}
+          onChange={e => setLDraft(e.target.value)}
+          onBlur={commitL}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur()
+            }
+          }}
+        />
+      </label>
+      <label className="flex flex-col gap-1 min-w-0">
+        <span className="ui-label">Breedte in m</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          className={fieldClass}
+          value={breShown}
+          onChange={e => setBDraft(e.target.value)}
+          onBlur={commitB}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur()
+            }
+          }}
+        />
+      </label>
+    </div>
+  )
+}
 
 export default function BlueprintPage({ project, onUpdateProject, onTabChange }: BlueprintPageProps) {
   useBlueprintKeyboard()
@@ -77,8 +178,8 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const [previewPast, setPreviewPast] = useState<PreviewSnapshot[]>([])
   const [previewFuture, setPreviewFuture] = useState<PreviewSnapshot[]>([])
   const skipPreviewHistoryRef = useRef(false)
-  const [previewWidth, setPreviewWidth]  = useState(400)
-  const [previewDepth, setPreviewDepth]  = useState(300)
+  const [previewWidth, setPreviewWidth]  = useState(DEFAULT_PREVIEW_WIDTH_CM)
+  const [previewDepth, setPreviewDepth]  = useState(DEFAULT_PREVIEW_DEPTH_CM)
   const [builderStep, setBuilderStep] = useState(0)
   /** Verhoog om BuilderPanel intern te resetten naar “nieuwe kamer” (stap 0). */
   const [builderResetNonce, setBuilderResetNonce] = useState(0)
@@ -298,6 +399,20 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
     : previewDepth
 
   const showMuren = (previewVertices.length >= 3 && !selectedRoom) || roomOrder.length > 0
+  const showQuickKamerMaat = previewVertices.length >= 3 && !selectedRoom
+
+  const applyQuickKamerAfmetingen = useCallback(
+    (wCm: number, dCm: number) => {
+      if (wCm === previewWidth && dCm === previewDepth) return
+      pushPreviewHistory()
+      setPreviewLockedWalls([])
+      setCanvasPreviewEdited(false)
+      setPreviewWidth(wCm)
+      setPreviewDepth(dCm)
+      setPreviewVertices(generateShapeVertices('rechthoek', wCm, dCm))
+    },
+    [previewWidth, previewDepth, pushPreviewHistory],
+  )
 
   return (
     <EditorPage
@@ -407,6 +522,17 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
               onHoverWall={setCanvasHoveredWallIndex}
             />
           </div>
+
+          {showQuickKamerMaat && (
+            <div className="px-5 pb-3 border-b border-dark-border shrink-0">
+              <QuickKamerAfmetingenFields
+                widthCm={previewWidth}
+                depthCm={previewDepth}
+                resetNonce={builderResetNonce}
+                onApply={applyQuickKamerAfmetingen}
+              />
+            </div>
+          )}
 
           {/* Geselecteerde wand detail voor geplaatste kamer */}
           {selectedRoom &&

@@ -23,13 +23,13 @@ const SHAPES: ShapeOption[] = [
   {
     id: 'l-vorm',
     label: 'L-vorm',
-    /** h13 i.p.v. h14: anders raakt de rechterrand x=32 en wordt de stroke door de viewBox afgeknipt. */
-    path: 'M4 4h14v12h13v12H4z',
+    /** Zelfde 6px been als I/T (24×24 werkveld binnen 4…28). */
+    path: 'M4 28h24v-24h-6v18h-18v6z',
   },
   {
     id: 't-vorm',
     label: 'T-vorm',
-    path: 'M4 4h24v8H18v16h-4V12H4z',
+    path: 'M4 4h24v6h-6v18h-12v-18h-6v-6z',
   },
   {
     id: 'u-vorm',
@@ -39,7 +39,7 @@ const SHAPES: ShapeOption[] = [
   {
     id: 'i-vorm',
     label: 'I-vorm',
-    path: 'M4 4h24v6H19v12h9v6H4v-6h9V10H4z',
+    path: 'M4 4h24v6h-6v12h6v6h-24v-6h6v-12h-6v-6z',
   },
   {
     id: 'plus-vorm',
@@ -99,7 +99,7 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
               strokeWidth={1.5}
               strokeLinejoin="round"
             >
-              {s.id === 'i-vorm' || s.id === 'plus-vorm' ? (
+              {s.id === 'plus-vorm' ? (
                 <g transform="translate(16,16) scale(1.18) translate(-16,-16)">
                   <path d={s.path} />
                 </g>
