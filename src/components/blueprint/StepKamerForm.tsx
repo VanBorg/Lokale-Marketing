@@ -140,6 +140,18 @@ export default function StepKamerForm({
     setRotationSteps(0)
   }, [editRoomId])
 
+  // ─── Non-edit mode: sync controlled width/depth from parent (preview canvas drag etc.) ───
+
+  useEffect(() => {
+    if (editRoomId) return
+    if (controlledWidth !== undefined) setLocalWidth(controlledWidth)
+  }, [controlledWidth, editRoomId])
+
+  useEffect(() => {
+    if (editRoomId) return
+    if (controlledDepth !== undefined) setLocalDepth(controlledDepth)
+  }, [controlledDepth, editRoomId])
+
   // ─── Edit mode: apply dimension/shape change to the placed room ─────────
 
   /**
@@ -319,6 +331,58 @@ export default function StepKamerForm({
           }
         }}
       />
+
+      {/* Breedte / Diepte */}
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="ui-label">Breedte (cm)</span>
+          <input
+            type="number"
+            className="ui-input text-sm py-1.5"
+            value={Math.round(localWidth)}
+            min={10}
+            max={10000}
+            onChange={e => {
+              const v = Number(e.target.value)
+              setLocalWidth(v)
+              if (!editRoomId) onWidthChange?.(v)
+            }}
+            onBlur={e => {
+              const v = Math.max(10, Number(e.target.value))
+              setLocalWidth(v)
+              if (editRoomId) {
+                applyEditDimensions(shape, v, localDepth)
+              } else {
+                onPreviewChange?.(rotateVerticesBySteps(generateShapeVertices(shape, v, localDepth), rotationStepsRef.current))
+              }
+            }}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="ui-label">Diepte (cm)</span>
+          <input
+            type="number"
+            className="ui-input text-sm py-1.5"
+            value={Math.round(localDepth)}
+            min={10}
+            max={10000}
+            onChange={e => {
+              const v = Number(e.target.value)
+              setLocalDepth(v)
+              if (!editRoomId) onDepthChange?.(v)
+            }}
+            onBlur={e => {
+              const v = Math.max(10, Number(e.target.value))
+              setLocalDepth(v)
+              if (editRoomId) {
+                applyEditDimensions(shape, localWidth, v)
+              } else {
+                onPreviewChange?.(rotateVerticesBySteps(generateShapeVertices(shape, localWidth, v), rotationStepsRef.current))
+              }
+            }}
+          />
+        </label>
+      </div>
 
       <div className="grid grid-cols-2 gap-2">
         <button

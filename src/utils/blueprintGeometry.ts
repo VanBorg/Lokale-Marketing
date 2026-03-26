@@ -299,6 +299,35 @@ export function findVertexSnap(
   return best
 }
 
+/**
+ * Corner-to-corner snap for whole-room drag.
+ * Checks every vertex of the dragged room against every vertex of other rooms and returns
+ * the smallest offset that snaps the closest pair of corners together.
+ * Takes priority over wall-to-wall edge snap.
+ */
+export function findRoomCornerSnap(
+  draggedVerts: Point[],
+  otherRooms: SnapRoom[],
+  threshold: number = 30,
+): { offset: Point } | null {
+  let bestDist = threshold
+  let bestOffset: Point | null = null
+  for (const myVert of draggedVerts) {
+    for (const room of otherRooms) {
+      for (const v of room.vertices) {
+        const ddx = v.x - myVert.x
+        const ddy = v.y - myVert.y
+        const dist = Math.hypot(ddx, ddy)
+        if (dist < bestDist) {
+          bestDist = dist
+          bestOffset = { x: ddx, y: ddy }
+        }
+      }
+    }
+  }
+  return bestOffset ? { offset: bestOffset } : null
+}
+
 export function findEdgeSnap(
   draggedVerts: Point[],
   otherRooms: SnapRoom[],

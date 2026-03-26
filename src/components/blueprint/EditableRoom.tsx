@@ -1,5 +1,5 @@
 import { memo, useRef, useCallback } from 'react'
-import { Group, Line, Circle } from 'react-konva'
+import { Group, Line } from 'react-konva'
 import type Konva from 'konva'
 import {
   useBlueprintStore,
@@ -9,22 +9,16 @@ import {
 } from '../../store/blueprintStore'
 import {
   snapPointToGrid,
-  findVertexSnap,
-  isVertexPinnedByGeometryWallLock,
+  findEdgeSnap,
+  findRoomCornerSnap,
 } from '../../utils/blueprintGeometry'
 import { useTheme } from '../../hooks/useTheme'
-import { snapValue } from '../../editor/canvas/useCanvasControls'
 import WallLabels from './WallLabels'
 
 interface EditableRoomProps {
   roomId: string
   stageRef: React.RefObject<Konva.Stage | null>
 }
-
-const VERTEX_RADIUS = 5
-const VERTEX_FILL = '#35B4D3'
-/** Zelfde als Kamer Overview: muur-geometrie-slot. */
-const ORANGE_GEOM_PIN = '#f97316'
 
 const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRoomProps) {
   const room = useBlueprintStore(s => s.rooms[roomId])
@@ -40,7 +34,6 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
   const strokeSelected = isLight ? '#0891b2' : '#5ecde8'
   const fillSelected   = isLight ? 'rgba(14,116,144,0.18)' : 'rgba(53,180,211,0.18)'
 
-  const lineRef = useRef<Konva.Line>(null)
   const groupRef = useRef<Konva.Group>(null)
 
   const handleSelect = useCallback(() => {
@@ -64,13 +57,33 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
       const currentRoom = store.rooms[roomId]
       if (!currentRoom) return
 
-      // Snap the moved first vertex to grid; derive dx/dy from that
-      if (store.snapEnabled && currentRoom.vertices.length > 0) {
-        const v0 = currentRoom.vertices[0]
-        const snappedX = snapValue(v0.x + dx, true)
-        const snappedY = snapValue(v0.y + dy, true)
-        dx = snappedX - v0.x
-        dy = snappedY - v0.y
+      if (currentRoom.vertices.length > 0) {
+        const otherRooms = Object.values(store.rooms).filter(r => r.id !== roomId)
+
+        // Priority 1: corner-to-corner snap on RAW drag offset (before grid snap).
+        // Grid snap moves v0 to the nearest 20-cm grid point which can push corners
+        // *further* from the target, so corner snap must run first on the unsnapped position.
+        // 40 cm tolerance: generous enough to catch near-misses yet precise on release.
+        const rawVerts = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
+        const cornerSnap = findRoomCornerSnap(rawVerts, otherRooms, 40)
+        if (cornerSnap) {
+          dx += cornerSnap.offset.x
+          dy += cornerSnap.offset.y
+        } else if (store.snapEnabled) {
+          // Priority 2: grid snap (coarse 20 cm alignment)
+          const v0 = currentRoom.vertices[0]
+          const snapped = snapPointToGrid({ x: v0.x + dx, y: v0.y + dy })
+          dx = snapped.x - v0.x
+          dy = snapped.y - v0.y
+
+          // Priority 3: wall-to-wall edge snap (flush parallel walls, 100 cm tolerance)
+          const tentativeVerts = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
+          const edgeSnap = findEdgeSnap(tentativeVerts, otherRooms, 100)
+          if (edgeSnap) {
+            dx += edgeSnap.offset.x
+            dy += edgeSnap.offset.y
+          }
+        }
       }
 
       const newVertices = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
@@ -80,68 +93,11 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
     [roomId],
   )
 
-  // Vertex drag
-  const handleVertexDragMove = useCallback(
-    (index: number, e: Konva.KonvaEventObject<DragEvent>) => {
-      const circle = e.target as Konva.Circle
-      const store = blueprintStore.getState()
-      const room = store.rooms[roomId]
-      if (!room) return
-
-      const raw = { x: circle.x(), y: circle.y() }
-      let pt = store.snapEnabled ? snapPointToGrid(raw) : raw
-
-      // Vertex-to-vertex snap against other rooms
-      const otherRooms = Object.values(store.rooms).filter(r => r.id !== roomId)
-      const snapped = findVertexSnap(pt, otherRooms)
-      if (snapped) {
-        pt = snapped
-        circle.position(pt)
-      }
-
-      // Update the line imperatively
-      const line = lineRef.current
-      if (!line) return
-      const pts = [...room.vertices]
-      pts[index] = pt
-      const flat = pts.flatMap(v => [v.x, v.y])
-      line.points(flat)
-      line.getLayer()?.batchDraw()
-    },
-    [roomId],
-  )
-
-  const handleVertexDragEnd = useCallback(
-    (index: number, e: Konva.KonvaEventObject<DragEvent>) => {
-      const circle = e.target as Konva.Circle
-      const store = blueprintStore.getState()
-      const room = store.rooms[roomId]
-      if (!room) return
-
-      const raw = { x: circle.x(), y: circle.y() }
-      let pt = store.snapEnabled ? snapPointToGrid(raw) : raw
-
-      const otherRooms = Object.values(store.rooms).filter(r => r.id !== roomId)
-      const snapped = findVertexSnap(pt, otherRooms)
-      if (snapped) pt = snapped
-
-      store.updateRoomVertex(roomId, index, pt)
-      blueprintStore.temporal.getState().resume()
-    },
-    [roomId],
-  )
-
-  const handleVertexDragStart = useCallback(() => {
-    blueprintStore.temporal.getState().pause()
-  }, [])
-
   if (!room) return null
 
   const flatPoints = room.vertices.flatMap(v => [v.x, v.y])
-  const n = room.vertices.length
-  const geometryLockedWalls = room.lockedWalls ?? []
-  /** Only allow drag when select tool is active and no geometry locks are set. */
-  const allowRoomDrag = isSelected && geometryLockedWalls.length === 0 && activeTool === 'select'
+  /** Only allow drag when select tool is active. */
+  const allowRoomDrag = isSelected && activeTool === 'select'
 
   return (
     <Group
@@ -153,7 +109,6 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
       onDragEnd={handleGroupDragEnd}
     >
       <Line
-        ref={lineRef}
         points={flatPoints}
         closed
         fill={isSelected ? fillSelected : fillIdle}
@@ -166,27 +121,6 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
 
       {/* Wall length labels — always shown for selected room */}
       <WallLabels roomId={roomId} isSelected={isSelected} />
-
-      {/* Vertex handles — only when selected */}
-      {isSelected &&
-        room.vertices.map((v, i) => {
-          const geomPinned = isVertexPinnedByGeometryWallLock(i, n, geometryLockedWalls)
-          return (
-            <Circle
-              key={i}
-              x={v.x}
-              y={v.y}
-              radius={VERTEX_RADIUS}
-              fill={geomPinned ? '#1a1a22' : VERTEX_FILL}
-              stroke={geomPinned ? ORANGE_GEOM_PIN : '#fff'}
-              strokeWidth={1.5}
-              draggable={!geomPinned}
-              onDragStart={handleVertexDragStart}
-              onDragMove={e => handleVertexDragMove(i, e)}
-              onDragEnd={e => handleVertexDragEnd(i, e)}
-            />
-          )
-        })}
     </Group>
   )
 })

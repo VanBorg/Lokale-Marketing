@@ -113,6 +113,76 @@ export default function PixelCanvas() {
   const lastProjectIdRef = useRef<string | null>(null)
   const recenterSettledTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // ── Auto-pan while dragging a room near the canvas edge ────────────────────
+  const isDraggingRoomRef = useRef(false)
+  const autoPanRafRef = useRef<number | null>(null)
+  const pointerScreenRef = useRef({ x: 0, y: 0 })
+
+  /** Maps pointer proximity to a canvas edge into a pan speed (screen px/frame). */
+  const AUTO_PAN_EDGE = 100  // px zone near each edge
+  const AUTO_PAN_MAX  = 18   // max screen px per frame (~1080 px/sec at 60 fps)
+
+  const runAutoPan = useCallback(() => {
+    if (!isDraggingRoomRef.current) {
+      autoPanRafRef.current = null
+      return
+    }
+    const el = containerRef.current
+    const stage = stageRef.current
+    if (el && stage) {
+      const rect = el.getBoundingClientRect()
+      const { x: px, y: py } = pointerScreenRef.current
+
+      /**
+       * Quadratic ramp: 0 at edge-zone boundary → MAX at the very edge.
+       * Sign convention: near LOW edge → positive delta (stage moves right/down,
+       * revealing content that was off-screen to the left/top).
+       * Near HIGH edge → negative delta (stage moves left/up, revealing right/bottom).
+       */
+      const edgeDelta = (pos: number, lo: number, hi: number): number => {
+        const dLo = pos - lo
+        const dHi = hi - pos
+        if (dLo < AUTO_PAN_EDGE && dLo >= 0) {
+          const f = 1 - dLo / AUTO_PAN_EDGE
+          return AUTO_PAN_MAX * f * f   // near left/top  → pan right/down (+)
+        }
+        if (dHi < AUTO_PAN_EDGE && dHi >= 0) {
+          const f = 1 - dHi / AUTO_PAN_EDGE
+          return -AUTO_PAN_MAX * f * f  // near right/bottom → pan left/up  (-)
+        }
+        return 0
+      }
+
+      const panX = edgeDelta(px, rect.left, rect.right)
+      const panY = edgeDelta(py, rect.top, rect.bottom)
+
+      if (panX !== 0 || panY !== 0) {
+        // Update Konva stage imperatively first — zero render-cycle lag.
+        const newX = stage.x() + panX
+        const newY = stage.y() + panY
+        stage.x(newX)
+        stage.y(newY)
+        stage.batchDraw()
+        // Keep store in sync so snap/commit logic sees the correct viewport.
+        blueprintStore.getState().setViewport({ x: newX, y: newY })
+      }
+    }
+    autoPanRafRef.current = requestAnimationFrame(runAutoPan)
+  }, [])
+
+  const handleChildDragStart = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+    if ((e.target as unknown) === stageRef.current) return
+    isDraggingRoomRef.current = true
+    if (autoPanRafRef.current === null) {
+      autoPanRafRef.current = requestAnimationFrame(runAutoPan)
+    }
+  }, [runAutoPan])
+
+  const handleChildDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+    if ((e.target as unknown) === stageRef.current) return
+    isDraggingRoomRef.current = false
+  }, [])
+
   const scheduleRecenterSettled = useCallback(() => {
     if (recenterSettledTimerRef.current) clearTimeout(recenterSettledTimerRef.current)
     recenterSettledTimerRef.current = setTimeout(() => {
@@ -175,6 +245,21 @@ export default function PixelCanvas() {
       }
     }
   }, [scheduleRecenterSettled])
+
+  // Track pointer position for auto-pan (passive — no re-renders)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      pointerScreenRef.current = { x: e.clientX, y: e.clientY }
+    }
+    window.addEventListener('mousemove', onMove, { passive: true })
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      if (autoPanRafRef.current !== null) {
+        cancelAnimationFrame(autoPanRafRef.current)
+        autoPanRafRef.current = null
+      }
+    }
+  }, [])
 
   // Space key for pan mode
   useEffect(() => {
@@ -427,6 +512,8 @@ export default function PixelCanvas() {
           onMouseUp={handleMouseUp}
           onClick={handleStageClick}
           onDblClick={handleStageDblClick}
+          onDragStart={handleChildDragStart}
+          onDragEnd={handleChildDragEnd}
         >
           {/* Layer 0: World origin (0,0) — accent cross */}
           <Layer listening={false}>

@@ -142,13 +142,20 @@ export default function EditorToolbar({
     void navigator.clipboard?.writeText(text)
   }, [lastSaved])
 
-  const toolBtn = (active: boolean) =>
+  const toolSegmentIndex =
+    activeTool === 'select' ? 0 : activeTool === 'draw' ? 1 : 2
+
+  const segmentToolBtn = (active: boolean) =>
     [
-      'editor-toolbar-icon-btn shrink-0 transition-all duration-200',
+      'relative z-10 flex min-w-0 flex-1 items-center justify-center rounded-none px-2',
+      'transition-colors duration-200 ease-out',
+      'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-0',
       active
-        ? 'bg-accent/15 text-accent ring-1 ring-accent/40 hover:bg-accent/20 hover:text-accent'
-        : '',
+        ? 'text-white'
+        : 'text-neutral-400 hover:text-neutral-100 theme-light:text-neutral-600 theme-light:hover:text-neutral-900',
     ].join(' ')
+
+  const toolBtn = segmentToolBtn
 
   const toggleBtn = (on: boolean) =>
     [
@@ -281,37 +288,51 @@ export default function EditorToolbar({
 
         <ToolbarDivider />
 
-        {/* Groep 4 — canvas-tools */}
-        <button
-          type="button"
-          onClick={() => setCanvasTool('select')}
-          className={toolBtn(activeTool === 'select')}
-          title="Selectie"
-          aria-label="Selectie"
-          aria-pressed={activeTool === 'select'}
+        {/* Groep 4 — canvas-tools: één groep met dunne rand; zachte vulling op selectie */}
+        <div
+          className="relative flex h-8 min-w-[6.75rem] shrink-0 items-stretch overflow-hidden rounded-lg border border-neutral-600/85 bg-neutral-900/45 theme-light:border-neutral-300 theme-light:bg-neutral-100/95"
+          role="group"
+          aria-label="Canvas-gereedschap"
         >
-          <MousePointer2 size={15} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setCanvasTool('draw')}
-          className={toolBtn(activeTool === 'draw')}
-          title="Tekenen"
-          aria-label="Tekenen"
-          aria-pressed={activeTool === 'draw'}
-        >
-          <Pencil size={15} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setCanvasTool('measure')}
-          className={toolBtn(activeTool === 'measure')}
-          title="Meten"
-          aria-label="Meten"
-          aria-pressed={activeTool === 'measure'}
-        >
-          <Ruler size={15} />
-        </button>
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 rounded-none bg-accent/40 transition-transform duration-200 ease-out theme-light:bg-accent/45"
+            style={{
+              width: 'calc(100% / 3)',
+              transform: `translateX(${toolSegmentIndex * 100}%)`,
+            }}
+            aria-hidden
+          />
+          <button
+            type="button"
+            onClick={() => setCanvasTool('select')}
+            className={`${segmentToolBtn(activeTool === 'select')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
+            title="Selectie"
+            aria-label="Selectie"
+            aria-pressed={activeTool === 'select'}
+          >
+            <MousePointer2 size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setCanvasTool('draw')}
+            className={`${segmentToolBtn(activeTool === 'draw')} border-r border-neutral-700/45 theme-light:border-neutral-200`}
+            title="Tekenen"
+            aria-label="Tekenen"
+            aria-pressed={activeTool === 'draw'}
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setCanvasTool('measure')}
+            className={segmentToolBtn(activeTool === 'measure')}
+            title="Meten"
+            aria-label="Meten"
+            aria-pressed={activeTool === 'measure'}
+          >
+            <Ruler size={15} />
+          </button>
+        </div>
 
         {/* Midden — spacer */}
         <div className="min-w-4 flex-1" aria-hidden />
