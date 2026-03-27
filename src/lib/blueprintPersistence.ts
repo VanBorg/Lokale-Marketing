@@ -2,6 +2,8 @@ import type { BlueprintDoc } from '../store/blueprintStore'
 
 export interface RoomDetail {
   roomId: string
+  /** Optioneel: bestemming (WC, berging, CV-ruimte, …) voor offerte/materiaal. */
+  ruimteFunctie?: string
   wanden: WandData[]
   vloer: VloerData | null
   plafond: PlafondData | null

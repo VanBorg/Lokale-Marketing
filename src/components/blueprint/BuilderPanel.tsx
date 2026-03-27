@@ -8,9 +8,11 @@ import StepEtages from './steps/StepEtages'
 import StepSamenvatting from './steps/StepSamenvatting'
 import StepWanden from './steps/StepWanden'
 import StepVloer from './steps/StepVloer'
+import StepElementen from './steps/StepElementen'
 
 const STEPS = [
   'Kamer',
+  'Elementen',
   'Wanden',
   'Vloer',
   'Plafond',
@@ -171,7 +173,7 @@ export default function BuilderPanel({
     // New or previously-placed room selected → load it into the builder
     setLastRoomId(selectedRoomId)
     setIsEditingExisting(true)
-    setCompletedSteps([0, 1, 2, 3, 4, 5])
+    setCompletedSteps([0, 1, 2, 3, 4, 5, 6])
     setActiveStep(0)
   }, [selectedRoomId])
 
@@ -206,10 +208,14 @@ export default function BuilderPanel({
     setCompletedSteps(prev => {
       const next = [...prev]
       if (!next.includes(0)) next.push(0)
-      if (!next.includes(1)) next.push(1)
       return next
     })
     setActiveStep(1)
+  }, [])
+
+  const handleElementenNext = useCallback(() => {
+    setCompletedSteps(prev => (prev.includes(1) ? prev : [...prev, 1]))
+    setActiveStep(2)
   }, [])
 
   const handleStepNext = useCallback((fromIndex: number) => {
@@ -231,13 +237,13 @@ export default function BuilderPanel({
   }, [])
 
   const handleWandenNext = useCallback(() => {
-    setCompletedSteps(prev => prev.includes(1) ? prev : [...prev, 1])
-    setActiveStep(2)
+    setCompletedSteps(prev => (prev.includes(2) ? prev : [...prev, 2]))
+    setActiveStep(3)
   }, [])
 
   const handleVloerNext = useCallback(() => {
-    setCompletedSteps(prev => prev.includes(2) ? prev : [...prev, 2])
-    setActiveStep(3)
+    setCompletedSteps(prev => (prev.includes(3) ? prev : [...prev, 3]))
+    setActiveStep(4)
   }, [])
 
   return (
@@ -300,40 +306,47 @@ export default function BuilderPanel({
                   </div>
                 )}
                 {index === 1 && (
+                  <StepElementen
+                    roomId={lastRoomId}
+                    onNext={handleElementenNext}
+                    onPrev={goPrev}
+                  />
+                )}
+                {index === 2 && (
                   <StepWanden
                     roomId={lastRoomId}
                     onNext={handleWandenNext}
                     onPrev={goPrev}
                   />
                 )}
-                {index === 2 && (
+                {index === 3 && (
                   <StepVloer
                     roomId={lastRoomId}
                     onNext={handleVloerNext}
                     onPrev={goPrev}
                   />
                 )}
-                {index === 3 && (
-                  <StepPlafond
-                    roomId={lastRoomId}
-                    onNext={() => handleStepNext(3)}
-                    onPrev={goPrev}
-                  />
-                )}
                 {index === 4 && (
-                  <StepOpeningen
+                  <StepPlafond
                     roomId={lastRoomId}
                     onNext={() => handleStepNext(4)}
                     onPrev={goPrev}
                   />
                 )}
                 {index === 5 && (
-                  <StepEtages
+                  <StepOpeningen
+                    roomId={lastRoomId}
                     onNext={() => handleStepNext(5)}
                     onPrev={goPrev}
                   />
                 )}
                 {index === 6 && (
+                  <StepEtages
+                    onNext={() => handleStepNext(6)}
+                    onPrev={goPrev}
+                  />
+                )}
+                {index === 7 && (
                   <StepSamenvatting
                     roomId={lastRoomId}
                     onFinalize={handleFinalize}

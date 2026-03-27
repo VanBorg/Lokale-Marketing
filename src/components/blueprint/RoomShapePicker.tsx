@@ -23,13 +23,14 @@ const SHAPES: ShapeOption[] = [
   {
     id: 'l-vorm',
     label: 'L-vorm',
-    /** Zelfde 6px been als I/T (24×24 werkveld binnen 4…28). */
-    path: 'M4 28h24v-24h-6v18h-18v6z',
+    /** Beide armen gelijk 12px dik (zelfde maat als het “dikke” stuk in de T). */
+    path: 'M4 28h24v-24h-12v12h-12v12z',
   },
   {
     id: 't-vorm',
     label: 'T-vorm',
-    path: 'M4 4h24v6h-6v18h-12v-18h-6v-6z',
+    /** Dwarsbalk 12px dik, zelfde als verticale stam (12px); symmetrische zij-armen. */
+    path: 'M4 4h24v12h-6v12h-12v-12h-6v-12z',
   },
   {
     id: 'u-vorm',
@@ -92,12 +93,14 @@ const RoomShapePicker = memo(function RoomShapePicker({ selected, onSelect }: Ro
           >
             <svg
               viewBox="0 0 32 32"
-              width={22}
-              height={22}
+              width={24}
+              height={24}
               fill={isSelected ? svgColors.fillSelected : svgColors.fillIdle}
               stroke={isSelected ? svgColors.strokeSelected : svgColors.strokeIdle}
               strokeWidth={1.5}
               strokeLinejoin="round"
+              strokeLinecap="round"
+              shapeRendering="geometricPrecision"
             >
               {s.id === 'plus-vorm' ? (
                 <g transform="translate(16,16) scale(1.18) translate(-16,-16)">

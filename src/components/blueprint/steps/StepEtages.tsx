@@ -125,9 +125,9 @@ export default function StepEtages({ onNext, onPrev }: StepEtagesProps) {
       <div className="border-t border-dark-border pt-3 space-y-2">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-light/40">Dakgegevens</p>
         <div className="rounded-lg bg-white/5 border border-dark-border px-3 py-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-light/50">Daktype (kamer stap 1)</span>
-            <span className="text-light/30 italic">Zie stap Kamer</span>
+          <div className="flex justify-between text-xs gap-2">
+            <span className="text-light/50">Dakvorm per kamer</span>
+            <span className="text-light/70 text-right">Stap Wanden (3)</span>
           </div>
         </div>
         <label className="flex flex-col gap-1">

@@ -20,6 +20,7 @@ interface RoomDetailsState {
   setVloer: (roomId: string, vloer: VloerData) => void
   setPlafond: (roomId: string, plafond: PlafondData) => void
   setOpeningen: (roomId: string, openingen: OpeningItem[]) => void
+  setRuimteFunctie: (roomId: string, ruimteFunctie: string) => void
   setEtages: (etages: EtageData[]) => void
   setDakbedekking: (value: string) => void
   setDakoversteekhoogte: (value: number) => void
@@ -67,6 +68,12 @@ export const useRoomDetailsStore = create<RoomDetailsState>()(
         state.details[roomId].openingen = openingen
       }),
 
+    setRuimteFunctie: (roomId, ruimteFunctie) =>
+      set(state => {
+        if (!state.details[roomId]) state.details[roomId] = { roomId }
+        state.details[roomId].ruimteFunctie = ruimteFunctie || undefined
+      }),
+
     setEtages: etages =>
       set(state => {
         state.etages = etages
@@ -102,6 +109,7 @@ export const useRoomDetailsStore = create<RoomDetailsState>()(
       const { details } = get()
       return Object.values(details).map(d => ({
         roomId: d.roomId ?? '',
+        ruimteFunctie: d.ruimteFunctie,
         wanden: d.wanden ?? [],
         vloer: d.vloer ?? null,
         plafond: d.plafond ?? null,

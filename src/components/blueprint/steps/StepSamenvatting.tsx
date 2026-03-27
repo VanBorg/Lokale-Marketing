@@ -1,5 +1,18 @@
 import { useRoom } from '../../../store/blueprintStore'
+import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
 import { formatCmAsMeters, polygonArea, getPerimeter } from '../../../utils/blueprintGeometry'
+
+const RUIMTE_FUNCTIE_LABELS: Record<string, string> = {
+  woon: 'Woonkamer / algemeen',
+  slaapkamer: 'Slaapkamer',
+  keuken: 'Keuken',
+  badkamer: 'Badkamer',
+  wc: 'WC',
+  gang: 'Hal / gang',
+  berging: 'Berging / voorraad',
+  'cv-techniek': 'CV / boiler / techniek',
+  overig: 'Overig',
+}
 
 interface StepSamenvattingProps {
   roomId: string | null
@@ -41,6 +54,9 @@ const ROOF_LABELS: Record<string, string> = {
 
 export default function StepSamenvatting({ roomId, onFinalize, onPrev }: StepSamenvattingProps) {
   const room = useRoom(roomId ?? '')
+  const ruimteFunctie = useRoomDetailsStore(s =>
+    roomId ? s.details[roomId]?.ruimteFunctie : undefined,
+  )
 
   if (!room) {
     return (
@@ -73,6 +89,12 @@ export default function StepSamenvatting({ roomId, onFinalize, onPrev }: StepSam
       {/* Summary table */}
       <div className="rounded-lg border border-dark-border px-3 py-1 theme-light:border-neutral-200">
         <SummaryRow label="Naam" value={room.name} />
+        {ruimteFunctie ? (
+          <SummaryRow
+            label="Ruimtefunctie"
+            value={RUIMTE_FUNCTIE_LABELS[ruimteFunctie] ?? ruimteFunctie}
+          />
+        ) : null}
         <SummaryRow label="Vorm" value={shapeName} />
         <SummaryRow label="Vloeroppervlak" value={`${floorM2.toFixed(2)} m²`} />
         <SummaryRow label="Totaal wandoppervlak" value={`${wallM2.toFixed(2)} m²`} />
