@@ -64,7 +64,7 @@ export function lVormVertices(w: number, d: number): Point[] {
   ]
 }
 
-/** I-vorm: I-balk met brede horizontale flensen boven en onder, smal middenstuk */
+/** I-vorm: brede horizontale flensen, smalle verticale staander (`centerHalfAlong` = zelfde maat als T-stam). */
 export function iVormVertices(w: number, d: number): Point[] {
   const hw = w / 2, hd = d / 2
   const hs = centerHalfAlong(w)

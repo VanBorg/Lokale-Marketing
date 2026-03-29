@@ -171,7 +171,6 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
       const otherRooms = Object.values(store.rooms).filter(r => !movingSet.has(r.id))
 
       if (currentRoom.vertices.length > 0) {
-        // Priority 1: corner-to-corner snap on RAW drag offset (before grid snap).
         const rawVerts = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
         const cornerSnap = findRoomCornerSnap(rawVerts, otherRooms, 40)
         if (cornerSnap) {

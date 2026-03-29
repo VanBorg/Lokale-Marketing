@@ -126,6 +126,31 @@ export function polygonCentroid(vertices: Point[]): Point | null {
   return { x: cx / three, y: cy / three }
 }
 
+/** Draaipunt voor hele kamer: vlak-zwaartepunt, anders bbox-midden (niet hoekpunten-gemiddelde — dat wobbelt bij I/T/U). */
+export function polygonRotationCentre(vertices: Point[]): Point {
+  return polygonCentroid(vertices) ?? axisAlignedBBoxCentre(vertices) ?? { x: 0, y: 0 }
+}
+
+/** 90° CW in schermcoördinaten (y naar beneden), om `polygonRotationCentre`. */
+export function rotateRoomPolygon90CW(vertices: Point[]): Point[] {
+  const c = polygonRotationCentre(vertices)
+  return vertices.map(p => {
+    const dx = p.x - c.x
+    const dy = p.y - c.y
+    return { x: c.x - dy, y: c.y + dx }
+  })
+}
+
+/** 90° CCW om hetzelfde draaipunt. */
+export function rotateRoomPolygon90CCW(vertices: Point[]): Point[] {
+  const c = polygonRotationCentre(vertices)
+  return vertices.map(p => {
+    const dx = p.x - c.x
+    const dy = p.y - c.y
+    return { x: c.x + dy, y: c.y - dx }
+  })
+}
+
 export function translatePolygon(vertices: Point[], dx: number, dy: number): Point[] {
   return vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
 }

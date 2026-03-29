@@ -5,6 +5,8 @@ import {
   axisAlignedBBoxCentre,
   axisAlignedBBoxSize,
   generateShapeVertices,
+  rotateRoomPolygon90CCW,
+  rotateRoomPolygon90CW,
   translatePolygon,
   worldPointAtBlueprintStageCentre,
 } from '../../utils/blueprintGeometry'
@@ -19,14 +21,6 @@ function rotateVerticesBySteps(verts: Point[], steps: number): Point[] {
     v = v.map(p => ({ x: -p.y, y: p.x }))
   }
   return v
-}
-
-function rotateVertices90CW(verts: Point[]): Point[] {
-  return verts.map(p => ({ x: -p.y, y: p.x }))
-}
-
-function rotateVertices90CCW(verts: Point[]): Point[] {
-  return verts.map(p => ({ x: p.y, y: -p.x }))
 }
 
 export interface StepKamerFormProps {
@@ -280,14 +274,7 @@ export default function StepKamerForm({
             if (editRoomId) {
               const room = blueprintStore.getState().rooms[editRoomId]
               if (room) {
-                // Rotate around centroid so the room stays in place on the plattegrond
-                const n = room.vertices.length
-                const cx = room.vertices.reduce((s, v) => s + v.x, 0) / n
-                const cy = room.vertices.reduce((s, v) => s + v.y, 0) / n
-                const newVerts = room.vertices.map(v => {
-                  const dx = v.x - cx; const dy = v.y - cy
-                  return { x: cx + dy, y: cy - dx } // 90° CCW around centroid
-                })
+                const newVerts = rotateRoomPolygon90CCW(room.vertices)
                 const bbox = axisAlignedBBoxSize(newVerts)
                 blueprintStore.getState().updateRoom(editRoomId, {
                   vertices: newVerts,
@@ -298,7 +285,7 @@ export default function StepKamerForm({
                 setLocalDepth(bbox.h)
               }
             } else if (canvasPreviewEdited && parentPreviewVertices && parentPreviewVertices.length >= 3) {
-              onCanvasPreviewChange?.(rotateVertices90CCW(parentPreviewVertices))
+              onCanvasPreviewChange?.(rotateRoomPolygon90CCW(parentPreviewVertices))
             } else {
               setRotationSteps(prev => (prev + 3) % 4)
             }
@@ -315,14 +302,7 @@ export default function StepKamerForm({
             if (editRoomId) {
               const room = blueprintStore.getState().rooms[editRoomId]
               if (room) {
-                // Rotate around centroid so the room stays in place on the plattegrond
-                const n = room.vertices.length
-                const cx = room.vertices.reduce((s, v) => s + v.x, 0) / n
-                const cy = room.vertices.reduce((s, v) => s + v.y, 0) / n
-                const newVerts = room.vertices.map(v => {
-                  const dx = v.x - cx; const dy = v.y - cy
-                  return { x: cx - dy, y: cy + dx } // 90° CW around centroid
-                })
+                const newVerts = rotateRoomPolygon90CW(room.vertices)
                 const bbox = axisAlignedBBoxSize(newVerts)
                 blueprintStore.getState().updateRoom(editRoomId, {
                   vertices: newVerts,
@@ -333,7 +313,7 @@ export default function StepKamerForm({
                 setLocalDepth(bbox.h)
               }
             } else if (canvasPreviewEdited && parentPreviewVertices && parentPreviewVertices.length >= 3) {
-              onCanvasPreviewChange?.(rotateVertices90CW(parentPreviewVertices))
+              onCanvasPreviewChange?.(rotateRoomPolygon90CW(parentPreviewVertices))
             } else {
               setRotationSteps(prev => (prev + 1) % 4)
             }
