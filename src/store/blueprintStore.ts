@@ -134,6 +134,8 @@ interface BlueprintState extends BlueprintDoc {
   // Actions — document (undo-able)
   addRoom: (vertices: Point[], meta?: Partial<Omit<Room, 'id' | 'vertices'>>) => string
   updateRoomVertices: (id: string, vertices: Point[]) => void
+  /** Eén undo-stap: alle opgegeven kamers met dezelfde delta (multi-select verplaatsen). */
+  applyRoomTranslationDelta: (roomIds: string[], dx: number, dy: number) => void
   updateRoomVertex: (id: string, index: number, point: Point) => void
   updateRoom: (id: string, updates: Partial<Room>) => void
   deleteRoom: (id: string) => void
@@ -341,6 +343,21 @@ export const useBlueprintStore = create<BlueprintState>()(
           const { w, h } = axisAlignedBBoxSize(vertices)
           room.planWidthCm = w
           room.planDepthCm = h
+        })
+      },
+
+      applyRoomTranslationDelta: (roomIds, dx, dy) => {
+        if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return
+        set(state => {
+          for (const id of roomIds) {
+            const room = state.rooms[id]
+            if (!room) continue
+            const newVertices = room.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
+            room.vertices = newVertices
+            const { w, h } = axisAlignedBBoxSize(newVertices)
+            room.planWidthCm = w
+            room.planDepthCm = h
+          }
         })
       },
 

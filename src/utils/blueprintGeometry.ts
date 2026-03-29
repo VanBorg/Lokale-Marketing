@@ -105,6 +105,27 @@ export function axisAlignedBBoxCentre(vertices: Point[]): Point | null {
   return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }
 }
 
+/** Zwaartepunt van het polygoon (vlak); geschikt om labels in de kamer te centreren. */
+export function polygonCentroid(vertices: Point[]): Point | null {
+  const n = vertices.length
+  if (n < 3) return null
+  let twiceArea = 0
+  let cx = 0
+  let cy = 0
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    const cross = vertices[i].x * vertices[j].y - vertices[j].x * vertices[i].y
+    twiceArea += cross
+    cx += (vertices[i].x + vertices[j].x) * cross
+    cy += (vertices[i].y + vertices[j].y) * cross
+  }
+  if (Math.abs(twiceArea) < 1e-9) {
+    return axisAlignedBBoxCentre(vertices)
+  }
+  const three = 3 * twiceArea
+  return { x: cx / three, y: cy / three }
+}
+
 export function translatePolygon(vertices: Point[], dx: number, dy: number): Point[] {
   return vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
 }

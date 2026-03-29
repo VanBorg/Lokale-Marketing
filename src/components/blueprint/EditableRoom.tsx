@@ -1,6 +1,6 @@
 import { memo, useRef, useCallback } from 'react'
 import { Group, Line } from 'react-konva'
-import type Konva from 'konva'
+import Konva from 'konva'
 import {
   useBlueprintStore,
   useSelectedIds,
@@ -13,11 +13,21 @@ import {
   findRoomCornerSnap,
 } from '../../utils/blueprintGeometry'
 import { useTheme } from '../../hooks/useTheme'
+import { useRoomDetailsStore } from '../../store/roomDetailsStore'
+import { getRuimteFunctiePlanStyle } from '../../utils/ruimteFunctiePlanStyle'
 import WallLabels from './WallLabels'
+import RoomPlanLabel from './RoomPlanLabel'
 
 interface EditableRoomProps {
   roomId: string
   stageRef: React.RefObject<Konva.Stage | null>
+}
+
+function findRoomGroupOnStage(stage: Konva.Stage, roomId: string): Konva.Group | null {
+  const found = stage.findOne(
+    (n: Konva.Node) => n.id() === roomId && n.getClassName() === 'Group',
+  )
+  return found ? (found as Konva.Group) : null
 }
 
 const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRoomProps) {
@@ -29,10 +39,13 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
   const { theme } = useTheme()
   const isLight = theme === 'light'
 
-  const strokeIdle     = isLight ? '#0e7490' : '#35B4D3'
-  const fillIdle       = isLight ? 'rgba(14,116,144,0.08)' : 'rgba(53,180,211,0.07)'
-  const strokeSelected = isLight ? '#0891b2' : '#5ecde8'
-  const fillSelected   = isLight ? 'rgba(14,116,144,0.18)' : 'rgba(53,180,211,0.18)'
+  const ruimteFunctie = useRoomDetailsStore(s => s.details[roomId]?.ruimteFunctie ?? '')
+  const planStyle = getRuimteFunctiePlanStyle(ruimteFunctie, isLight)
+
+  const strokeIdle = planStyle.strokeIdle
+  const fillIdle = planStyle.fillIdle
+  const strokeSelected = planStyle.strokeSelected
+  const fillSelected = planStyle.fillSelected
 
   const groupRef = useRef<Konva.Group>(null)
 
@@ -98,43 +111,78 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
     store.select([roomId])
   }, [roomId])
 
+  const handleGroupDragMove = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      const store = blueprintStore.getState()
+      const fromSelection = store.selectedIds.filter(id => store.rooms[id])
+      const movingRoomIds =
+        fromSelection.length > 0 ? fromSelection : [roomId].filter(id => store.rooms[id])
+      if (movingRoomIds.length <= 1) return
+      const leader = e.target as Konva.Group
+      const x = leader.x()
+      const y = leader.y()
+      const stage = stageRef.current
+      if (!stage) return
+      for (const id of movingRoomIds) {
+        if (id === roomId) continue
+        const node = findRoomGroupOnStage(stage, id)
+        if (node) node.position({ x, y })
+      }
+    },
+    [roomId, stageRef],
+  )
+
   const handleGroupDragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
-      const group = e.target as Konva.Group
-      let dx = group.x()
-      let dy = group.y()
-      group.position({ x: 0, y: 0 })
+      const leader = e.target as Konva.Group
+      let dx = leader.x()
+      let dy = leader.y()
+
+      const store = blueprintStore.getState()
+      const fromSelection = store.selectedIds.filter(id => store.rooms[id])
+      const movingRoomIds =
+        fromSelection.length > 0 ? fromSelection : [roomId].filter(id => store.rooms[id])
+
+      const resetAllMovingGroups = () => {
+        leader.position({ x: 0, y: 0 })
+        const st = stageRef.current
+        if (!st) return
+        for (const id of movingRoomIds) {
+          if (id === roomId) continue
+          const g = findRoomGroupOnStage(st, id)
+          if (g) g.position({ x: 0, y: 0 })
+        }
+      }
 
       // Konva kan dragEnd afvuren na klik op een al geselecteerde kamer (nul verplaatsing).
-      // updateRoomVertices zou dan toch Immer muteren → valse undo-stap; overslaan.
+      // applyRoomTranslationDelta overslaan — wel alle groep-offsets terug naar 0.
       if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
+        resetAllMovingGroups()
         return
       }
 
-      const store = blueprintStore.getState()
       const currentRoom = store.rooms[roomId]
-      if (!currentRoom) return
+      if (!currentRoom) {
+        resetAllMovingGroups()
+        return
+      }
+
+      const movingSet = new Set(movingRoomIds)
+      const otherRooms = Object.values(store.rooms).filter(r => !movingSet.has(r.id))
 
       if (currentRoom.vertices.length > 0) {
-        const otherRooms = Object.values(store.rooms).filter(r => r.id !== roomId)
-
         // Priority 1: corner-to-corner snap on RAW drag offset (before grid snap).
-        // Grid snap moves v0 to the nearest 20-cm grid point which can push corners
-        // *further* from the target, so corner snap must run first on the unsnapped position.
-        // 40 cm tolerance: generous enough to catch near-misses yet precise on release.
         const rawVerts = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
         const cornerSnap = findRoomCornerSnap(rawVerts, otherRooms, 40)
         if (cornerSnap) {
           dx += cornerSnap.offset.x
           dy += cornerSnap.offset.y
         } else if (store.snapEnabled) {
-          // Priority 2: grid snap (coarse 20 cm alignment)
           const v0 = currentRoom.vertices[0]
           const snapped = snapPointToGrid({ x: v0.x + dx, y: v0.y + dy })
           dx = snapped.x - v0.x
           dy = snapped.y - v0.y
 
-          // Priority 3: wall-to-wall edge snap (flush parallel walls, 100 cm tolerance)
           const tentativeVerts = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
           const edgeSnap = findEdgeSnap(tentativeVerts, otherRooms, 100)
           if (edgeSnap) {
@@ -144,10 +192,10 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         }
       }
 
-      const newVertices = currentRoom.vertices.map(v => ({ x: v.x + dx, y: v.y + dy }))
-      store.updateRoomVertices(roomId, newVertices)
+      store.applyRoomTranslationDelta(movingRoomIds, dx, dy)
+      resetAllMovingGroups()
     },
-    [roomId],
+    [roomId, stageRef],
   )
 
   if (!room) return null
@@ -160,10 +208,12 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
   return (
     <Group
       ref={groupRef}
+      id={roomId}
       draggable={allowRoomDrag}
       onMouseDown={handleGroupPointerDown}
       onTap={handleGroupTap}
       onDragStart={handleGroupDragStart}
+      onDragMove={handleGroupDragMove}
       onDragEnd={handleGroupDragEnd}
     >
       <Line
@@ -176,6 +226,8 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         shadowBlur={isSelected ? 6 : 0}
         shadowOpacity={0.3}
       />
+
+      <RoomPlanLabel vertices={room.vertices} roomName={room.name} icon={planStyle.icon} />
 
       {/* Muurlengtes op de buitenzijde (maatlijn + label); hoeken alleen bij selectie */}
       <WallLabels roomId={roomId} isSelected={isSelected} />

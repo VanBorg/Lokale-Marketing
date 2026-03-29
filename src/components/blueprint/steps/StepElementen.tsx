@@ -1,18 +1,6 @@
 import { useRoomDetailsStore } from '../../../store/roomDetailsStore'
 import { useRoom } from '../../../store/blueprintStore'
-
-const RUIMTE_FUNCTIES: { value: string; label: string }[] = [
-  { value: '', label: 'Niet gekozen' },
-  { value: 'woon', label: 'Woonkamer / algemeen' },
-  { value: 'slaapkamer', label: 'Slaapkamer' },
-  { value: 'keuken', label: 'Keuken' },
-  { value: 'badkamer', label: 'Badkamer' },
-  { value: 'wc', label: 'WC' },
-  { value: 'gang', label: 'Hal / gang' },
-  { value: 'berging', label: 'Berging / voorraad' },
-  { value: 'cv-techniek', label: 'CV / boiler / techniek' },
-  { value: 'overig', label: 'Overig' },
-]
+import { RUIMTE_FUNCTIE_OPTIONS } from '../../../utils/ruimteFunctiePlanStyle'
 
 interface StepElementenProps {
   roomId: string | null
@@ -64,7 +52,7 @@ export default function StepElementen({ roomId, onNext, onPrev }: StepElementenP
             if (roomId) setRuimteFunctie(roomId, v)
           }}
         >
-          {RUIMTE_FUNCTIES.map(opt => (
+          {RUIMTE_FUNCTIE_OPTIONS.map(opt => (
             <option key={opt.value || '—'} value={opt.value}>
               {opt.label}
             </option>
