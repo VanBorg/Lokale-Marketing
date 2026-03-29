@@ -9,6 +9,7 @@ import StepSamenvatting from './steps/StepSamenvatting'
 import StepWanden from './steps/StepWanden'
 import StepVloer from './steps/StepVloer'
 import StepElementen from './steps/StepElementen'
+import { nextGenericKamerName } from '../../utils/roomDefaultName'
 
 const STEPS = [
   'Kamer',
@@ -24,18 +25,6 @@ const STEPS = [
 const LAST_STEP_INDEX = STEPS.length - 1
 /** Geen harmonica-open: geen kamer op plattegrond en geen actieve nieuwe-kamer-flow. */
 const NO_ACTIVE_STEP = -1
-
-function nextKamerName(
-  order: string[],
-  roomMap: Record<string, { name: string }>,
-): string {
-  const used = new Set(
-    order.map(id => roomMap[id]?.name).filter((n): n is string => Boolean(n)),
-  )
-  let n = 1
-  while (used.has(`Kamer${n}`)) n += 1
-  return `Kamer${n}`
-}
 
 // ─── Accordion header ─────────────────────────────────────────────────────
 
@@ -305,7 +294,7 @@ export default function BuilderPanel({
                   <div data-last-room-id={lastRoomId ?? undefined}>
                     <StepKamerForm
                       key={isEditingExisting ? `edit-${lastRoomId}` : `new-${roomOrder.length}`}
-                      defaultRoomName={nextKamerName(roomOrder, rooms)}
+                      defaultRoomName={nextGenericKamerName(roomOrder, rooms)}
                       onNext={handleStepKamerNext}
                       onPreviewChange={handlePreviewChange}
                       onCanvasPreviewChange={handleCanvasPreviewChange}

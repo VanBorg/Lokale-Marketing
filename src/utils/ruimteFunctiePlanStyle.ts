@@ -2,6 +2,27 @@
  * Plattegrond: kleur en icoon per ruimtefunctie (zelfde waarden als Elementen-stap).
  */
 
+/**
+ * Korte naam voor standaard kamernaam (bijv. "Slaapkamer 1"), los van het lange dropdown-label.
+ */
+export const RUIMTE_FUNCTIE_NAAM_PREFIX: Record<string, string> = {
+  woon: 'Woonkamer',
+  slaapkamer: 'Slaapkamer',
+  keuken: 'Keuken',
+  badkamer: 'Badkamer',
+  wc: 'WC',
+  gang: 'Hal',
+  berging: 'Berging',
+  garage: 'Garage',
+  schuur: 'Schuur',
+  kelder: 'Kelder',
+  zolder: 'Zolder',
+  wasruimte: 'Wasruimte',
+  kantoor: 'Kantoor',
+  'cv-techniek': 'Techniekruimte',
+  overig: 'Ruimte',
+}
+
 export const RUIMTE_FUNCTIE_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'Niet gekozen' },
   { value: 'woon', label: 'Woonkamer / algemeen' },

@@ -15,6 +15,7 @@ import RoomShapePicker from './RoomShapePicker'
 import { DEFAULT_ROOM_WALL_HEIGHT_CM } from './roomStructureHelpers'
 import { useRoomDetailsStore } from '../../store/roomDetailsStore'
 import { RUIMTE_FUNCTIE_OPTIONS } from '../../utils/ruimteFunctiePlanStyle'
+import { suggestedRoomNameForFunctie } from '../../utils/roomDefaultName'
 
 /** 90° CW in schermcoördinaten (y naar beneden): (x,y) → (-y, x) per stap. */
 function rotateVerticesBySteps(verts: Point[], steps: number): Point[] {
@@ -40,7 +41,7 @@ export interface StepKamerFormProps {
   onCanvasPreviewChange?: (vertices: Point[]) => void
   /** When set, the form is in edit mode for an existing placed room. */
   editRoomId?: string | null
-  /** Suggested name for a new room (e.g. Kamer1); remount key usually refreshes this. */
+  /** Suggested name for a new room (e.g. Kamer 1); remount key usually refreshes this. */
   defaultRoomName?: string
 }
 
@@ -227,8 +228,16 @@ export default function StepKamerForm({
 
     const { w: planWidthCm, h: planDepthCm } = axisAlignedBBoxSize(placedVertices)
 
+    const details = useRoomDetailsStore.getState().details
+    const fallbackName = suggestedRoomNameForFunctie(
+      pendingRuimteFunctie,
+      doc.roomOrder,
+      doc.rooms,
+      details,
+      null,
+    )
     const id = blueprintStore.getState().addRoom(placedVertices, {
-      name: roomName.trim() || defaultRoomName || 'Ruimte',
+      name: roomName.trim() || fallbackName,
       shape,
       planWidthCm,
       planDepthCm,
@@ -245,7 +254,6 @@ export default function StepKamerForm({
     roomName,
     onNext,
     parentPreviewVertices,
-    defaultRoomName,
     pendingRuimteFunctie,
     setRuimteFunctie,
   ])
@@ -328,23 +336,6 @@ export default function StepKamerForm({
       </div>
 
       <label className="flex flex-col gap-1">
-        <span className="ui-label">Naam</span>
-        <input
-          type="text"
-          className="ui-input text-sm py-1.5"
-          value={roomName}
-          placeholder={defaultRoomName || 'Kamer1'}
-          onChange={e => setRoomName(e.target.value)}
-          onBlur={e => {
-            if (!editRoomId) return
-            const name = e.target.value
-            const room = blueprintStore.getState().rooms[editRoomId]
-            if (room && room.name !== name) applyEditMeta({ name })
-          }}
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
         <span className="ui-label">Functie van deze kamer</span>
         <select
           className="ui-input text-sm py-1.5"
@@ -356,6 +347,17 @@ export default function StepKamerForm({
             } else {
               setPendingRuimteFunctie(v)
             }
+            const doc = blueprintStore.getState()
+            const details = useRoomDetailsStore.getState().details
+            const name = suggestedRoomNameForFunctie(
+              v,
+              doc.roomOrder,
+              doc.rooms,
+              details,
+              editRoomId ?? null,
+            )
+            setRoomName(name)
+            if (editRoomId) applyEditMeta({ name })
           }}
         >
           {RUIMTE_FUNCTIE_OPTIONS.map(opt => (
@@ -364,6 +366,23 @@ export default function StepKamerForm({
             </option>
           ))}
         </select>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="ui-label">Naam</span>
+        <input
+          type="text"
+          className="ui-input text-sm py-1.5"
+          value={roomName}
+          placeholder={defaultRoomName || 'Kamer 1'}
+          onChange={e => setRoomName(e.target.value)}
+          onBlur={e => {
+            if (!editRoomId) return
+            const name = e.target.value
+            const room = blueprintStore.getState().rooms[editRoomId]
+            if (room && room.name !== name) applyEditMeta({ name })
+          }}
+        />
       </label>
 
       {/* Add mode: place button. Edit mode: changes are live — no button needed. */}
