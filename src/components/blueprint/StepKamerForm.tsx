@@ -13,6 +13,8 @@ import {
 import type { Point, ShapeType } from '../../utils/blueprintGeometry'
 import RoomShapePicker from './RoomShapePicker'
 import { DEFAULT_ROOM_WALL_HEIGHT_CM } from './roomStructureHelpers'
+import { useRoomDetailsStore } from '../../store/roomDetailsStore'
+import { RUIMTE_FUNCTIE_OPTIONS } from '../../utils/ruimteFunctiePlanStyle'
 
 /** 90° CW in schermcoördinaten (y naar beneden): (x,y) → (-y, x) per stap. */
 function rotateVerticesBySteps(verts: Point[], steps: number): Point[] {
@@ -64,6 +66,13 @@ export default function StepKamerForm({
   const roomDepth = editRoomId ? localDepth : (controlledDepth ?? localDepth)
 
   const [roomName, setRoomName] = useState(defaultRoomName)
+  /** Voor plaatsing: functie wordt na addRoom in roomDetails gezet. */
+  const [pendingRuimteFunctie, setPendingRuimteFunctie] = useState('')
+
+  const setRuimteFunctie = useRoomDetailsStore(s => s.setRuimteFunctie)
+  const ruimteFunctieStored = useRoomDetailsStore(s =>
+    editRoomId ? (s.details[editRoomId]?.ruimteFunctie ?? '') : '',
+  )
 
   const [rotationSteps, setRotationSteps] = useState(0) // 0–3, elke stap = 90° CW (alleen preset-modus)
   const rotationStepsRef = useRef(rotationSteps)
@@ -225,6 +234,7 @@ export default function StepKamerForm({
       planDepthCm,
       ceiling: { type: 'vlak', height: DEFAULT_ROOM_WALL_HEIGHT_CM },
     })
+    setRuimteFunctie(id, pendingRuimteFunctie)
     blueprintStore.getState().select([id])
     onNext(id)
   }, [
@@ -236,19 +246,14 @@ export default function StepKamerForm({
     onNext,
     parentPreviewVertices,
     defaultRoomName,
+    pendingRuimteFunctie,
+    setRuimteFunctie,
   ])
 
   // ─── Shared render ────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-3">
-
-      {/* Edit mode indicator */}
-      {editRoomId && (
-        <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/10 px-2 py-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">Kamer bewerken</span>
-        </div>
-      )}
 
       <RoomShapePicker
         selected={shape}
@@ -262,10 +267,6 @@ export default function StepKamerForm({
           }
         }}
       />
-
-      <p className="text-[10px] leading-snug text-neutral-500 theme-light:text-neutral-600">
-        Afmetingen stel je in op de kamer-preview (kolom ernaast): wandlengtes en vorm.
-      </p>
 
       <div className="grid grid-cols-2 gap-2">
         <button
@@ -343,11 +344,27 @@ export default function StepKamerForm({
         />
       </label>
 
-      <p className="text-[10px] leading-snug text-neutral-500 theme-light:text-neutral-600">
-        Extra ruimtes label je in <span className="font-medium text-light/70 theme-light:text-neutral-700">Elementen</span> (stap 2). Wandhoogte, dak en plafondtype stel je in bij{' '}
-        <span className="font-medium text-light/70 theme-light:text-neutral-700">Wanden</span> (stap 3) en{' '}
-        <span className="font-medium text-light/70 theme-light:text-neutral-700">Plafond</span> (stap 5).
-      </p>
+      <label className="flex flex-col gap-1">
+        <span className="ui-label">Functie van deze kamer</span>
+        <select
+          className="ui-input text-sm py-1.5"
+          value={editRoomId ? ruimteFunctieStored : pendingRuimteFunctie}
+          onChange={e => {
+            const v = e.target.value
+            if (editRoomId) {
+              setRuimteFunctie(editRoomId, v)
+            } else {
+              setPendingRuimteFunctie(v)
+            }
+          }}
+        >
+          {RUIMTE_FUNCTIE_OPTIONS.map(opt => (
+            <option key={opt.value || '—'} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {/* Add mode: place button. Edit mode: changes are live — no button needed. */}
       {!editRoomId && (
@@ -358,12 +375,6 @@ export default function StepKamerForm({
         >
           Plaatsen op plattegrond ↓
         </button>
-      )}
-
-      {editRoomId && (
-        <p className="pt-1 text-center text-[10px] text-neutral-500 theme-light:text-neutral-600">
-          Wijzigingen worden direct doorgevoerd op de plattegrond.
-        </p>
       )}
     </div>
   )

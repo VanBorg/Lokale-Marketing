@@ -18,11 +18,14 @@ import { MARQUEE_DRAG_THRESHOLD_PX, STROKE_SAMPLE_MIN_CM } from './pixelCanvasCo
 interface UsePixelCanvasStageInteractionsArgs {
   stageRef: RefObject<Konva.Stage | null>
   size: { width: number; height: number }
+  /** Na clearSelection vanaf het canvas (lege klik / marquee zonder selectie). */
+  onCanvasSelectionCleared?: () => void
 }
 
 export function usePixelCanvasStageInteractions({
   stageRef,
   size,
+  onCanvasSelectionCleared,
 }: UsePixelCanvasStageInteractionsArgs) {
   const activeTool = useActiveTool()
 
@@ -192,6 +195,7 @@ export function usePixelCanvasStageInteractions({
         const store = blueprintStore.getState()
         if (!marqueeActive) {
           store.clearSelection()
+          onCanvasSelectionCleared?.()
           suppressNextClickRef.current = true
           return
         }
@@ -225,7 +229,7 @@ export function usePixelCanvasStageInteractions({
         setMarqueeWorld(null)
       }
     },
-    [stageRef],
+    [stageRef, onCanvasSelectionCleared],
   )
 
   const handleMouseDown = useCallback(
@@ -255,6 +259,7 @@ export function usePixelCanvasStageInteractions({
         }
 
         store.clearSelection()
+        onCanvasSelectionCleared?.()
 
         if (tool === 'measure') {
           return
@@ -280,7 +285,7 @@ export function usePixelCanvasStageInteractions({
         }
       }
     },
-    [attachWindowPanListeners, attachDrawStrokeListeners, attachMarqueeListeners, stageRef],
+    [attachWindowPanListeners, attachDrawStrokeListeners, attachMarqueeListeners, stageRef, onCanvasSelectionCleared],
   )
 
   useEffect(() => {

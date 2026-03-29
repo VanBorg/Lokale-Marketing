@@ -1,7 +1,14 @@
 import { useEffect } from 'react'
 import { blueprintStore } from '../store/blueprintStore'
 
-export function useBlueprintKeyboard() {
+export interface UseBlueprintKeyboardOptions {
+  /** Runt vóór clearSelection bij Escape (bijv. Kamerkaart-‘nieuwe kamer’-concept sluiten). */
+  onEscapeBeforeClearSelection?: () => void
+}
+
+export function useBlueprintKeyboard(options?: UseBlueprintKeyboardOptions) {
+  const onEscapeBeforeClearSelection = options?.onEscapeBeforeClearSelection
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const el = e.target as HTMLElement | null
@@ -34,6 +41,7 @@ export function useBlueprintKeyboard() {
 
       // Escape — deselect / cancel
       if (e.key === 'Escape') {
+        onEscapeBeforeClearSelection?.()
         store.clearSelection()
         store.cancelDrawing()
         store.clearMeasureDraft()
@@ -69,5 +77,5 @@ export function useBlueprintKeyboard() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [onEscapeBeforeClearSelection])
 }

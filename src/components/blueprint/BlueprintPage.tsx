@@ -169,7 +169,16 @@ function QuickKamerAfmetingenFields({
 }
 
 export default function BlueprintPage({ project, onUpdateProject, onTabChange }: BlueprintPageProps) {
-  useBlueprintKeyboard()
+  /** True na “Nieuwe kamer” tot deselect / Escape / lege canvas-klik — geen kamer op plattegrond geselecteerd. */
+  const [newRoomDraftActive, setNewRoomDraftActive] = useState(false)
+
+  const dismissKamerkaartDraft = useCallback(() => {
+    setNewRoomDraftActive(false)
+  }, [])
+
+  useBlueprintKeyboard({
+    onEscapeBeforeClearSelection: dismissKamerkaartDraft,
+  })
 
   const [previewVertices, setPreviewVertices] = useState<Point[]>([])
   /** True na slepen in preview / wandlengte; false na sync vanuit formulier — nodig om draaien niet naar preset te resetten. */
@@ -193,6 +202,8 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const selectedIds    = useSelectedIds()
   const selectedRoomId = selectedIds.length === 1 ? selectedIds[0] : null
   const selectedRoom   = useBlueprintStore(s => selectedRoomId ? s.rooms[selectedRoomId] : null)
+
+  const showKamerkaartContent = Boolean(selectedRoomId) || newRoomDraftActive
   const selectedCanvasNote = useBlueprintStore(s => {
     const first = s.selectedCanvasTextNoteIds[0]
     return first ? s.canvasTextNotes[first] : null
@@ -201,7 +212,11 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   const rooms          = useBlueprintStore(s => s.rooms)
 
   // When a room is selected we never show the stale new-room draft — always prefer the placed room.
-  const showingNewPreview = builderStep === 0 && previewVertices.length >= 3 && !selectedRoom
+  const showingNewPreview =
+    builderStep === 0 &&
+    previewVertices.length >= 3 &&
+    !selectedRoom &&
+    newRoomDraftActive
   /** Alleen nieuwe-kamer-preview (geen geselecteerde plattegrond-kamer), anders Kamerkaart → temporal. */
   const isPreviewDraftUndoActive = showingNewPreview && !selectedRoom
 
@@ -299,7 +314,15 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
   useEffect(() => {
     setPreviewPast([])
     setPreviewFuture([])
+    setNewRoomDraftActive(false)
   }, [project.id])
+
+  /** Geplaatste kamer gekozen op plattegrond → geen losse nieuwe-kamer-preview meer. */
+  useEffect(() => {
+    if (selectedRoomId) {
+      setNewRoomDraftActive(false)
+    }
+  }, [selectedRoomId])
 
   useEffect(() => {
     const el = previewWrapRef.current
@@ -374,6 +397,7 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
     setPreviewVertices(
       generateShapeVertices('rechthoek', DEFAULT_PREVIEW_WIDTH_CM, DEFAULT_PREVIEW_DEPTH_CM),
     )
+    setNewRoomDraftActive(true)
     setBuilderResetNonce(n => n + 1)
   }, [])
 
@@ -398,8 +422,11 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
     ? (selectedRoom.planDepthCm ?? axisAlignedBBoxSize(selectedRoom.vertices).h)
     : previewDepth
 
-  const showMuren = (previewVertices.length >= 3 && !selectedRoom) || roomOrder.length > 0
-  const showQuickKamerMaat = previewVertices.length >= 3 && !selectedRoom
+  const showMuren =
+    showKamerkaartContent &&
+    ((previewVertices.length >= 3 && !selectedRoom && newRoomDraftActive) || Boolean(selectedRoom))
+  const showQuickKamerMaat =
+    showKamerkaartContent && previewVertices.length >= 3 && !selectedRoom && newRoomDraftActive
 
   const applyQuickKamerAfmetingen = useCallback(
     (wCm: number, dCm: number) => {
@@ -426,10 +453,10 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
         onRedo: handleKamerkaartRedo,
       }}
     >
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 gap-2">
         {/* Column 1 — Plattegrond */}
         <div className="flex-[5] min-w-0 min-h-0 relative overflow-hidden flex flex-col">
-          <PixelCanvas />
+          <PixelCanvas onCanvasSelectionCleared={dismissKamerkaartDraft} />
 
           <RoomListOverlay onStartNewRoom={startNewRoom} />
 
@@ -466,8 +493,14 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
           )}
         </div>
 
-        {/* Column 2 — Kamer Overview */}
-        <div className="flex-[3] min-w-0 min-h-0 border-l border-dark-border bg-dark flex flex-col overflow-y-auto">
+        {/* Column 2 — Kamer Overview (duidelijke rand t.o.v. plattegrond in donkere modus) */}
+        <div
+          className={[
+            'flex-[3] min-w-0 min-h-0 flex flex-col overflow-y-auto rounded-lg',
+            'border border-neutral-600/50 bg-dark',
+            'theme-light:border-neutral-200 theme-light:bg-white',
+          ].join(' ')}
+        >
 
           <div className="flex shrink-0 items-center border-b border-dark-border px-3 py-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-light/40">
@@ -475,117 +508,141 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
             </span>
           </div>
 
-          <div
-            ref={previewWrapRef}
-            className="w-full min-w-0 px-5 pt-3 pb-3 border-b border-dark-border shrink-0 flex justify-center"
-          >
-            <RoomPreviewCanvas
-              edgePaddingPx={KAMER_OVERVIEW_EDGE_PADDING_PX}
-              planSpanWidthCm={planSpanW}
-              planSpanDepthCm={planSpanH}
-              vertices={showingNewPreview ? previewVertices : (selectedRoom ? selectedRoom.vertices : previewVertices)}
-              onChange={showingNewPreview
-                ? applyPreviewFromCanvas
-                : selectedRoom
-                ? (verts) => blueprintStore.getState().updateRoomVertices(selectedRoom.id, verts)
-                : applyPreviewFromCanvas
-              }
-              onDimensionChange={showingNewPreview || !selectedRoom
-                ? (w, d) => {
-                    pushPreviewHistory()
-                    setPreviewWidth(w)
-                    setPreviewDepth(d)
-                  }
-                : undefined
-              }
-              width={previewStageSize.w}
-              height={previewStageSize.h}
-              room={showingNewPreview ? null : selectedRoom}
-              onToggleWallLock={!showingNewPreview && selectedRoom
-                ? (wallIndex) => blueprintStore.getState().toggleWallLock(selectedRoom.id, wallIndex)
-                : undefined
-              }
-              draftLockedWalls={showingNewPreview || !selectedRoom ? previewLockedWalls : undefined}
-              onDraftToggleLock={showingNewPreview || !selectedRoom ? togglePreviewLock : undefined}
-              selectedWallIndex={
-                !showingNewPreview && selectedRoom
-                  ? selectedWallIndex
-                  : (previewVertices.length >= 3 ? selectedWallIndex : undefined)
-              }
-              onSelectWall={
-                !showingNewPreview && selectedRoom
-                  ? setSelectedWallIndex
-                  : (previewVertices.length >= 3 ? setSelectedWallIndex : undefined)
-              }
-              hideWallDetailPanel={(!showingNewPreview && !!selectedRoom) || (previewVertices.length >= 3 && (showingNewPreview || !selectedRoom))}
-              listHoverWallIndex={listHoverWallIndex}
-              onHoverWall={setCanvasHoveredWallIndex}
-            />
-          </div>
+          <div ref={previewWrapRef} className="w-full min-w-0 shrink-0">
+            {showKamerkaartContent ? (
+              <>
+                <div className="w-full min-w-0 px-5 pt-3 pb-3 border-b border-dark-border flex justify-center">
+                  <RoomPreviewCanvas
+                    edgePaddingPx={KAMER_OVERVIEW_EDGE_PADDING_PX}
+                    planSpanWidthCm={planSpanW}
+                    planSpanDepthCm={planSpanH}
+                    vertices={
+                      showingNewPreview
+                        ? previewVertices
+                        : selectedRoom
+                          ? selectedRoom.vertices
+                          : previewVertices
+                    }
+                    onChange={
+                      showingNewPreview
+                        ? applyPreviewFromCanvas
+                        : selectedRoom
+                          ? verts => blueprintStore.getState().updateRoomVertices(selectedRoom.id, verts)
+                          : applyPreviewFromCanvas
+                    }
+                    onDimensionChange={
+                      showingNewPreview || !selectedRoom
+                        ? (w, d) => {
+                            pushPreviewHistory()
+                            setPreviewWidth(w)
+                            setPreviewDepth(d)
+                          }
+                        : undefined
+                    }
+                    width={previewStageSize.w}
+                    height={previewStageSize.h}
+                    room={showingNewPreview ? null : selectedRoom}
+                    onToggleWallLock={
+                      !showingNewPreview && selectedRoom
+                        ? wallIndex => blueprintStore.getState().toggleWallLock(selectedRoom.id, wallIndex)
+                        : undefined
+                    }
+                    draftLockedWalls={showingNewPreview || !selectedRoom ? previewLockedWalls : undefined}
+                    onDraftToggleLock={showingNewPreview || !selectedRoom ? togglePreviewLock : undefined}
+                    selectedWallIndex={
+                      !showingNewPreview && selectedRoom
+                        ? selectedWallIndex
+                        : previewVertices.length >= 3
+                          ? selectedWallIndex
+                          : undefined
+                    }
+                    onSelectWall={
+                      !showingNewPreview && selectedRoom
+                        ? setSelectedWallIndex
+                        : previewVertices.length >= 3
+                          ? setSelectedWallIndex
+                          : undefined
+                    }
+                    hideWallDetailPanel={
+                      (!showingNewPreview && !!selectedRoom) ||
+                      (previewVertices.length >= 3 && (showingNewPreview || !selectedRoom))
+                    }
+                    listHoverWallIndex={listHoverWallIndex}
+                    onHoverWall={setCanvasHoveredWallIndex}
+                  />
+                </div>
 
-          {showQuickKamerMaat && (
-            <div className="px-5 pb-3 border-b border-dark-border shrink-0">
-              <QuickKamerAfmetingenFields
-                widthCm={previewWidth}
-                depthCm={previewDepth}
-                resetNonce={builderResetNonce}
-                onApply={applyQuickKamerAfmetingen}
-              />
-            </div>
-          )}
+                {showQuickKamerMaat && (
+                  <div className="px-5 pb-3 border-b border-dark-border shrink-0">
+                    <QuickKamerAfmetingenFields
+                      widthCm={previewWidth}
+                      depthCm={previewDepth}
+                      resetNonce={builderResetNonce}
+                      onApply={applyQuickKamerAfmetingen}
+                    />
+                  </div>
+                )}
 
-          {/* Geselecteerde wand detail voor geplaatste kamer */}
-          {selectedRoom &&
-            selectedWallIndex !== null &&
-            selectedWallIndex >= 0 &&
-            selectedWallIndex < selectedRoom.vertices.length && (
-              <div className="px-5 pb-3 border-b border-dark-border shrink-0 space-y-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    blueprintStore.getState().toggleWallLock(selectedRoom.id, selectedWallIndex)
-                  }
-                  className={[
-                    'w-full text-xs py-2 rounded-lg border transition-all duration-200 flex items-center justify-center gap-1.5',
-                    selectedRoom.lockedWalls.includes(selectedWallIndex)
-                      ? 'border-orange-500/50 bg-orange-500/10 text-orange-400'
-                      : 'border-dark-border text-light/55 hover:border-orange-500/40 hover:text-orange-400/90 hover:bg-orange-500/5',
-                  ].join(' ')}
-                >
-                  {selectedRoom.lockedWalls.includes(selectedWallIndex) ? '🔒 ' : '🔓 '}
-                  Wand vergrendelen
-                </button>
-                <p className="text-center text-xs text-light/45 tabular-nums">
-                  {formatNlDecimal(
-                    wallLength(
-                      selectedRoom.vertices[selectedWallIndex],
-                      selectedRoom.vertices[(selectedWallIndex + 1) % selectedRoom.vertices.length],
-                    ) / 100,
-                    2,
-                  )}{' '}
-                  m · wand {selectedWallIndex + 1}
+                {selectedRoom &&
+                  selectedWallIndex !== null &&
+                  selectedWallIndex >= 0 &&
+                  selectedWallIndex < selectedRoom.vertices.length && (
+                    <div className="px-5 pb-3 border-b border-dark-border shrink-0 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          blueprintStore.getState().toggleWallLock(selectedRoom.id, selectedWallIndex)
+                        }
+                        className={[
+                          'w-full text-xs py-2 rounded-lg border transition-all duration-200 flex items-center justify-center gap-1.5',
+                          selectedRoom.lockedWalls.includes(selectedWallIndex)
+                            ? 'border-orange-500/50 bg-orange-500/10 text-orange-400'
+                            : 'border-dark-border text-light/55 hover:border-orange-500/40 hover:text-orange-400/90 hover:bg-orange-500/5',
+                        ].join(' ')}
+                      >
+                        {selectedRoom.lockedWalls.includes(selectedWallIndex) ? '🔒 ' : '🔓 '}
+                        Wand vergrendelen
+                      </button>
+                      <p className="text-center text-xs text-light/45 tabular-nums">
+                        {formatNlDecimal(
+                          wallLength(
+                            selectedRoom.vertices[selectedWallIndex],
+                            selectedRoom.vertices[(selectedWallIndex + 1) % selectedRoom.vertices.length],
+                          ) / 100,
+                          2,
+                        )}{' '}
+                        m · wand {selectedWallIndex + 1}
+                      </p>
+                    </div>
+                  )}
+
+                {showMuren && (
+                  <WallList
+                    previewVertices={previewVertices}
+                    previewLockedWalls={previewLockedWalls}
+                    onTogglePreviewLock={togglePreviewLock}
+                    onPreviewWallLengthChange={handlePreviewWallLengthChange}
+                    rooms={rooms}
+                    roomOrder={roomOrder}
+                    selectedRoomId={selectedRoomId}
+                    selectedWallIndex={selectedWallIndex}
+                    canvasHoveredWallIndex={canvasHoveredWallIndex}
+                    displayedRoomKey={displayedRoomKey}
+                    onSetHoveredWall={setHoveredWall}
+                    onSetSelectedWallIndex={setSelectedWallIndex}
+                    onRoomWallLengthChange={handleWallLengthChange}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="px-5 py-12 border-b border-dark-border flex flex-col items-center justify-center min-h-[min(40vh,280px)]">
+                <p className="text-sm text-center text-light/45 theme-light:text-neutral-500 max-w-[20rem] leading-relaxed">
+                  Geen kamer geselecteerd. Klik een kamer op de plattegrond of kies{' '}
+                  <span className="text-light/60 theme-light:text-neutral-600">Nieuwe kamer +</span> in de bouwer.
                 </p>
               </div>
             )}
-
-          {/* Wandraster */}
-          {showMuren && (
-            <WallList
-              previewVertices={previewVertices}
-              previewLockedWalls={previewLockedWalls}
-              onTogglePreviewLock={togglePreviewLock}
-              onPreviewWallLengthChange={handlePreviewWallLengthChange}
-              rooms={rooms}
-              roomOrder={roomOrder}
-              selectedRoomId={selectedRoomId}
-              selectedWallIndex={selectedWallIndex}
-              canvasHoveredWallIndex={canvasHoveredWallIndex}
-              displayedRoomKey={displayedRoomKey}
-              onSetHoveredWall={setHoveredWall}
-              onSetSelectedWallIndex={setSelectedWallIndex}
-              onRoomWallLengthChange={handleWallLengthChange}
-            />
-          )}
+          </div>
 
         </div>
 
@@ -602,6 +659,7 @@ export default function BlueprintPage({ project, onUpdateProject, onTabChange }:
             onActiveStepChange={setBuilderStep}
             parentPreviewVertices={previewVertices}
             selectedRoomId={selectedRoomId}
+            builderFlowActive={showKamerkaartContent}
             builderResetNonce={builderResetNonce}
             onStartNewRoom={startNewRoom}
           />

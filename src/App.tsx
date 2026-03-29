@@ -37,6 +37,8 @@ export default function App() {
               <Route path="blauwdruk" element={<BlauwdrukStartPage />} />
               <Route path="archief" element={<ArchiefPlaceholder />} />
               <Route path="tools/:toolId" element={<ComingSoonToolPage />} />
+              {/* Exact /project zonder id → projectenlijst (voorkomt “No routes matched”) */}
+              <Route path="project" element={<Navigate to="/projects" replace />} />
               <Route path="project/:id" element={<ProjectDetail />} />
             </Route>
           </Routes>

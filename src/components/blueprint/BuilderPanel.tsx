@@ -22,6 +22,8 @@ const STEPS = [
 ] as const
 
 const LAST_STEP_INDEX = STEPS.length - 1
+/** Geen harmonica-open: geen kamer op plattegrond en geen actieve nieuwe-kamer-flow. */
+const NO_ACTIVE_STEP = -1
 
 function nextKamerName(
   order: string[],
@@ -78,7 +80,7 @@ function AccordionHeader({ index, label, isActive, isCompleted, isLocked, onClic
       </div>
       {!isLocked && (
         <svg
-          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isActive ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${isActive ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -106,6 +108,8 @@ interface BuilderPanelProps {
   parentPreviewVertices?: Point[]
   /** Room currently selected on the plattegrond; drives edit mode. */
   selectedRoomId?: string | null
+  /** Zelfde als Kamerkaart: kamer gekozen of “Nieuwe kamer” actief — anders harmonica dicht. */
+  builderFlowActive: boolean
   /** Verhoog bij “Nieuwe kamer” om stap-voortgang en lastRoomId te resetten. */
   builderResetNonce?: number
   /** Start nieuwe kamer: selectie wissen + standaard preview (BlueprintPage). */
@@ -123,12 +127,13 @@ export default function BuilderPanel({
   onActiveStepChange,
   parentPreviewVertices,
   selectedRoomId,
+  builderFlowActive,
   builderResetNonce = 0,
   onStartNewRoom,
 }: BuilderPanelProps) {
   const roomOrder = useBlueprintStore(s => s.roomOrder)
   const rooms = useBlueprintStore(s => s.rooms)
-  const [activeStep, setActiveStep] = useState(0)
+  const [activeStep, setActiveStep] = useState(NO_ACTIVE_STEP)
 
   useEffect(() => {
     onActiveStepChange?.(activeStep)
@@ -146,15 +151,21 @@ export default function BuilderPanel({
   /** Set by handleStepKamerNext to prevent the selectedRoomId effect from overriding the placement flow. */
   const justPlacedIdRef = useRef<string | null>(null)
 
+  useEffect(() => {
+    if (!builderFlowActive) {
+      setActiveStep(NO_ACTIVE_STEP)
+    }
+  }, [builderFlowActive])
+
   // ─── Sync canvas selection → builder ──────────────────────────────────
   useEffect(() => {
     if (!selectedRoomId) {
-      // Selection cleared while editing → reset to new-room mode
+      // Selection cleared while editing → geen open harmonica (geen kamer / geen nieuwe flow)
       if (isEditingExistingRef.current) {
         setIsEditingExisting(false)
         setLastRoomId(null)
         setCompletedSteps([])
-        setActiveStep(0)
+        setActiveStep(NO_ACTIVE_STEP)
       }
       return
     }
@@ -197,7 +208,7 @@ export default function BuilderPanel({
   }, [onCanvasPreviewChange])
 
   const goPrev = useCallback(() => {
-    setActiveStep(prev => Math.max(prev - 1, 0))
+    setActiveStep(prev => Math.max(prev - 1, NO_ACTIVE_STEP))
   }, [])
 
   const handleStepKamerNext = useCallback((roomId: string) => {
@@ -266,9 +277,12 @@ export default function BuilderPanel({
       {STEPS.map((step, index) => {
         const isActive = activeStep === index
         const isCompleted = completedSteps.includes(index)
-        const isLocked = index === LAST_STEP_INDEX
-          ? !completedSteps.includes(0)
-          : index > activeStep && !isCompleted
+        const isLocked =
+          index === LAST_STEP_INDEX
+            ? !completedSteps.includes(0)
+            : activeStep === NO_ACTIVE_STEP
+              ? true
+              : index > activeStep && !isCompleted
 
         return (
           <div key={step} className="border-b border-dark-border theme-light:border-neutral-200">
@@ -282,11 +296,12 @@ export default function BuilderPanel({
             />
 
             <div
-              className="overflow-hidden transition-[max-height] duration-300 ease-in-out"
-              style={{ maxHeight: isActive ? '1400px' : '0px' }}
+              className="grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none motion-reduce:duration-0"
+              style={{ gridTemplateRows: isActive ? '1fr' : '0fr' }}
             >
-              <div className="px-3 pb-3 pt-1.5">
-                {index === 0 && (
+              <div className="min-h-0 overflow-hidden">
+                <div className="px-3 pb-3 pt-1.5">
+                {index === 0 && activeStep !== NO_ACTIVE_STEP && (
                   <div data-last-room-id={lastRoomId ?? undefined}>
                     <StepKamerForm
                       key={isEditingExisting ? `edit-${lastRoomId}` : `new-${roomOrder.length}`}
@@ -353,6 +368,7 @@ export default function BuilderPanel({
                     onPrev={goPrev}
                   />
                 )}
+                </div>
               </div>
             </div>
           </div>

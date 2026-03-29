@@ -226,7 +226,12 @@ const EditableRoom = memo(function EditableRoom({ roomId, stageRef }: EditableRo
         shadowOpacity={0.3}
       />
 
-      <RoomPlanLabel vertices={room.vertices} roomName={room.name} icon={planStyle.icon} />
+      <RoomPlanLabel
+        vertices={room.vertices}
+        roomName={room.name}
+        icon={planStyle.icon}
+        shape={room.shape}
+      />
 
       {/* Muurlengtes op de buitenzijde (maatlijn + label); hoeken alleen bij selectie */}
       <WallLabels roomId={roomId} isSelected={isSelected} />

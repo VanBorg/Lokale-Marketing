@@ -131,6 +131,97 @@ export function polygonRotationCentre(vertices: Point[]): Point {
   return polygonCentroid(vertices) ?? axisAlignedBBoxCentre(vertices) ?? { x: 0, y: 0 }
 }
 
+/** Ray-casting: punt strikt binnen eenvoudig polygoon (niet op rand). */
+export function pointInPolygonXY(x: number, y: number, vertices: Point[]): boolean {
+  const n = vertices.length
+  if (n < 3) return false
+  let inside = false
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = vertices[i].x
+    const yi = vertices[i].y
+    const xj = vertices[j].x
+    const yj = vertices[j].y
+    const denom = yj - yi
+    if (Math.abs(denom) < 1e-12) continue
+    const intersects =
+      (yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / denom + xi
+    if (intersects) inside = !inside
+  }
+  return inside
+}
+
+function pointInPolygonPt(p: Point, vertices: Point[]): boolean {
+  return pointInPolygonXY(p.x, p.y, vertices)
+}
+
+/**
+ * Anker voor het kamerlabel (icoon + tekst gecentreerd op dit punt).
+ * Holle vormen (U): onder de voorkeur; L/T/I/plus: midden van de vulling waar mogelijk.
+ */
+export function roomPlanLabelAnchor(vertices: Point[], shape?: string): Point | null {
+  const b = roomAxisAlignedBounds(vertices)
+  if (!b) return axisAlignedBBoxCentre(vertices)
+
+  const cx = (b.minX + b.maxX) / 2
+  const cy = (b.minY + b.maxY) / 2
+  const w = b.maxX - b.minX
+  const h = b.maxY - b.minY
+  if (w < 1 || h < 1) return { x: cx, y: cy }
+
+  const pc = polygonCentroid(vertices)
+  const tryPt = (p: Point): boolean => pointInPolygonPt(p, vertices)
+
+  const nonConvex =
+    shape === 'u-vorm' ||
+    shape === 't-vorm' ||
+    shape === 'l-vorm' ||
+    shape === 'i-vorm' ||
+    shape === 'plus-vorm'
+
+  if (!nonConvex && pc && tryPt(pc)) return pc
+
+  const edge = Math.min(w, h) * 0.06
+  /** U: dieper in de onderbalk zodat het label niet tegen de onderrand hangt. */
+  const uBottomY = b.maxY - Math.min(h * 0.14, edge * 2.5)
+
+  const candidates: Point[] = []
+
+  switch (shape) {
+    case 'u-vorm':
+      candidates.push(
+        { x: cx, y: uBottomY },
+        { x: cx, y: cy },
+        { x: cx, y: b.maxY - edge },
+      )
+      break
+    case 't-vorm':
+    case 'l-vorm':
+      candidates.push({ x: cx, y: cy })
+      break
+    case 'i-vorm':
+    case 'plus-vorm':
+      candidates.push({ x: cx, y: cy })
+      break
+    default:
+      candidates.push({ x: cx, y: cy }, { x: cx, y: b.minY + h * 0.22 }, { x: cx, y: b.maxY - h * 0.22 })
+  }
+
+  for (const p of candidates) {
+    if (tryPt(p)) return p
+  }
+
+  if (nonConvex && pc && tryPt(pc)) return pc
+
+  for (let gy = 0.12; gy <= 0.88; gy += 0.08) {
+    for (let gx = 0.15; gx <= 0.85; gx += 0.1) {
+      const p = { x: b.minX + w * gx, y: b.minY + h * gy }
+      if (tryPt(p)) return p
+    }
+  }
+
+  return { x: cx, y: cy }
+}
+
 /** 90° CW in schermcoördinaten (y naar beneden), om `polygonRotationCentre`. */
 export function rotateRoomPolygon90CW(vertices: Point[]): Point[] {
   const c = polygonRotationCentre(vertices)

@@ -10,6 +10,12 @@ const RUIMTE_FUNCTIE_LABELS: Record<string, string> = {
   wc: 'WC',
   gang: 'Hal / gang',
   berging: 'Berging / voorraad',
+  garage: 'Garage',
+  schuur: 'Schuur / tuinhuis',
+  kelder: 'Kelder',
+  zolder: 'Zolder',
+  wasruimte: 'Wasruimte',
+  kantoor: 'Kantoor / werkplek',
   'cv-techniek': 'CV / boiler / techniek',
   overig: 'Overig',
 }

@@ -11,6 +11,12 @@ export const RUIMTE_FUNCTIE_OPTIONS: { value: string; label: string }[] = [
   { value: 'wc', label: 'WC' },
   { value: 'gang', label: 'Hal / gang' },
   { value: 'berging', label: 'Berging / voorraad' },
+  { value: 'garage', label: 'Garage' },
+  { value: 'schuur', label: 'Schuur / tuinhuis' },
+  { value: 'kelder', label: 'Kelder' },
+  { value: 'zolder', label: 'Zolder' },
+  { value: 'wasruimte', label: 'Wasruimte' },
+  { value: 'kantoor', label: 'Kantoor / werkplek' },
   { value: 'cv-techniek', label: 'CV / boiler / techniek' },
   { value: 'overig', label: 'Overig' },
 ]
@@ -23,12 +29,15 @@ export interface RuimteFunctiePlanStyle {
   icon: string
 }
 
+/** Bij geen / onbekende functie: nog steeds een icoon naast de kamernaam op de plattegrond. */
+const DEFAULT_ROOM_ICON = '🏠'
+
 const DEFAULT: RuimteFunctiePlanStyle = {
   fillIdle: '',
   fillSelected: '',
   strokeIdle: '',
   strokeSelected: '',
-  icon: '',
+  icon: DEFAULT_ROOM_ICON,
 }
 
 /** Per functie: vulkleur, rand, emoji-icoon (plattegrond). */
@@ -82,6 +91,48 @@ const BY_KEY: Record<string, RuimteFunctiePlanStyle> = {
     strokeIdle: '#92400e',
     strokeSelected: '#b45309',
   },
+  garage: {
+    icon: '🚗',
+    fillIdle: 'rgba(148, 163, 184, 0.28)',
+    fillSelected: 'rgba(148, 163, 184, 0.4)',
+    strokeIdle: '#475569',
+    strokeSelected: '#64748b',
+  },
+  schuur: {
+    icon: '🛖',
+    fillIdle: 'rgba(120, 113, 95, 0.3)',
+    fillSelected: 'rgba(120, 113, 95, 0.42)',
+    strokeIdle: '#57534e',
+    strokeSelected: '#78716c',
+  },
+  kelder: {
+    icon: '🪜',
+    fillIdle: 'rgba(100, 116, 139, 0.3)',
+    fillSelected: 'rgba(100, 116, 139, 0.42)',
+    strokeIdle: '#334155',
+    strokeSelected: '#475569',
+  },
+  zolder: {
+    icon: '🔝',
+    fillIdle: 'rgba(214, 188, 150, 0.26)',
+    fillSelected: 'rgba(214, 188, 150, 0.38)',
+    strokeIdle: '#a16207',
+    strokeSelected: '#ca8a04',
+  },
+  wasruimte: {
+    icon: '🧺',
+    fillIdle: 'rgba(125, 211, 252, 0.22)',
+    fillSelected: 'rgba(125, 211, 252, 0.36)',
+    strokeIdle: '#0369a1',
+    strokeSelected: '#0284c7',
+  },
+  kantoor: {
+    icon: '💼',
+    fillIdle: 'rgba(167, 139, 250, 0.24)',
+    fillSelected: 'rgba(167, 139, 250, 0.38)',
+    strokeIdle: '#6d28d9',
+    strokeSelected: '#7c3aed',
+  },
   'cv-techniek': {
     icon: '⚙️',
     fillIdle: 'rgba(220, 120, 110, 0.28)',
@@ -111,7 +162,7 @@ export function getRuimteFunctiePlanStyle(
         fillSelected: 'rgba(14,116,144,0.18)',
         strokeIdle: '#0e7490',
         strokeSelected: '#0891b2',
-        icon: '',
+        icon: DEFAULT_ROOM_ICON,
       }
     }
     return {
@@ -120,7 +171,7 @@ export function getRuimteFunctiePlanStyle(
       fillSelected: 'rgba(53,180,211,0.18)',
       strokeIdle: '#35B4D3',
       strokeSelected: '#5ecde8',
-      icon: '',
+      icon: DEFAULT_ROOM_ICON,
     }
   }
   const s = BY_KEY[key]

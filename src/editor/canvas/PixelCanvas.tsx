@@ -27,7 +27,11 @@ import { usePixelCanvasViewport } from './usePixelCanvasViewport'
 import { usePixelCanvasStageInteractions } from './usePixelCanvasStageInteractions'
 import { getGridPatternStrokeColors, getOriginCrossPalette } from './pixelCanvasTheme'
 
-export default function PixelCanvas() {
+interface PixelCanvasProps {
+  onCanvasSelectionCleared?: () => void
+}
+
+export default function PixelCanvas({ onCanvasSelectionCleared }: PixelCanvasProps) {
   const { containerRef, stageRef, size, handleChildDragStart, handleChildDragEnd } =
     usePixelCanvasViewport()
 
@@ -40,7 +44,7 @@ export default function PixelCanvas() {
     handleMouseUp,
     handleStageClick,
     handleStageDblClick,
-  } = usePixelCanvasStageInteractions({ stageRef, size })
+  } = usePixelCanvasStageInteractions({ stageRef, size, onCanvasSelectionCleared })
 
   const roomIds = useRoomIds()
   const viewport = useViewport()
